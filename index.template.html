@@ -42,6 +42,11 @@
   footer { background:var(--panel); border-top:1px solid var(--line); text-align:center; color:var(--muted); font-size:12px; letter-spacing:.12em; padding:6px 12px; }
   main { flex:1; min-height:0; position:relative; }
   canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #fpop { position:absolute; z-index:6; display:none; align-items:center; gap:5px; background:#0b0e1c; border:1px solid var(--accent); border-radius:10px; padding:6px 8px; box-shadow:0 6px 20px rgba(0,0,0,.5); }
+  #fpop .sep { width:1px; align-self:stretch; background:var(--line); margin:0 3px; }
+  #fpop button { padding:4px 10px; min-width:30px; }
+  #fpop button.on { background:var(--accent); border-color:var(--accent); font-weight:700; }
+  button.pressed { background:var(--accent); border-color:var(--accent); }
   #drop { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(91,124,255,.25);
           border:3px dashed var(--accent); font-size:22px; z-index:5; pointer-events:none; }
   body.dragging #drop { display:flex; }
@@ -77,11 +82,17 @@
       <button id="tempoReset" title="Revenir au tempo du fichier">↺</button>
     </div>
     <div class="grp">
+      <button id="fing" title="Afficher / masquer les doigtés. Pour en saisir un : cliquer sur une note puis choisir 1 à 5.">🖐 Doigtés</button>
+      <button id="fingExp" title="Exporter les doigtés de ce morceau dans un fichier">⤓</button>
+      <button id="fingImp" title="Importer des doigtés depuis un fichier (remplace les actuels)">⤒</button>
+      <input id="fingFile" type="file" accept=".json,application/json">
+    </div>
+    <div class="grp">
       <label for="vis">Mesures visibles</label>
       <select id="vis"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
     </div>
-    <span class="legend"><span class="sw" style="background:var(--R)"></span>clé de sol
-      <span class="sw" style="background:var(--L);margin-left:10px"></span>clé de fa</span>
+    <span class="legend" title="La couleur suit la main du doigté : par défaut clé de sol = main droite, clé de fa = main gauche ; modifiable note par note"><span class="sw" style="background:var(--R)"></span>M.D. (clé de sol)
+      <span class="sw" style="background:var(--L);margin-left:10px"></span>M.G. (clé de fa)</span>
   </div>
   <div class="row">
     <span id="title">Aucun morceau</span>
@@ -92,6 +103,7 @@
 </header>
 <main>
   <canvas id="cv"></canvas>
+  <div id="fpop"><button data-h="R" title="Main droite (touche D)">M.D.</button><button data-h="L" title="Main gauche (touche G)">M.G.</button><span class="sep"></span><button data-f="1">1</button><button data-f="2">2</button><button data-f="3">3</button><button data-f="4">4</button><button data-f="5">5</button><button data-f="0" title="Effacer le doigté">✕</button></div>
   <div id="drop">Déposez un fichier .mid / .musicxml / .mxl</div>
 </main>
 <footer>SEB-ROULPIANO · Octobre 2026</footer>
@@ -106,11 +118,16 @@ const cv = $('cv'); let ctx = cv.getContext('2d'); const screenCtx = ctx;
 let song = null, pos = 0, playing = false, speed = 1, visMeasures = 2, nextIdx = 0, lastTs = 0, seeking = false;
 
 // ---------- Clavier 88 touches ----------
-const FIRST = 21, LAST = 108;
+let FIRST = 21, LAST = 108; // étendue affichée : tout le piano tant qu'aucun morceau n'est chargé, puis adaptée au morceau
 const BLACK = new Set([1, 3, 6, 8, 10]);
 const isBlack = m => BLACK.has(m % 12);
 const whiteIdx = {}; let NW = 0;
-for (let m = FIRST; m <= LAST; m++) if (!isBlack(m)) whiteIdx[m] = NW++;
+function setRange(first, last) {
+  FIRST = first; LAST = last; NW = 0;
+  for (const k in whiteIdx) delete whiteIdx[k];
+  for (let m = FIRST; m <= LAST; m++) if (!isBlack(m)) whiteIdx[m] = NW++;
+}
+setRange(21, 108);
 function keyRect(m, W) {
   const ww = W / NW;
   if (!isBlack(m)) return { x: whiteIdx[m] * ww, w: ww, black: false };
@@ -119,7 +136,7 @@ function keyRect(m, W) {
 }
 const NOMS = ['Do', 'Do♯', 'Ré', 'Ré♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
 
-// ---------- Couleurs : clé de sol (main droite) = orange, clé de fa (main gauche) = bleu ----------
+// ---------- Couleurs : main droite (M.D.) = orange, main gauche (M.G.) = bleu ; la main est celle du doigté (par défaut : clé de sol = M.D., clé de fa = M.G.) ----------
 const COL = {
   R: { note: '#ff9a2e', noteB: '#d9690a', lit: '#ffd08a', key: '#ffb04d', keyB: '#ff8a1f' },
   L: { note: '#3b9cff', noteB: '#1f66c9', lit: '#a9d3ff', key: '#6bb2ff', keyB: '#3b86ee' },
@@ -191,12 +208,12 @@ async function play() {
   if (pos >= song.durationSec - 0.01) pos = 0;
   try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
   nextIdx = lowerBoundSec(pos - 1e-6);
-  lastTs = performance.now(); playing = true; refreshButtons();
+  hideFpop(); lastTs = performance.now(); playing = true; refreshButtons();
 }
 function pause() { if (!playing) return; playing = false; releaseAll(); refreshButtons(); }
 function seek(sec) {
   if (!song) return;
-  pos = Math.min(Math.max(0, sec), song.durationSec);
+  pos = Math.min(Math.max(0, sec), song.durationSec); hideFpop();
   releaseAll(); nextIdx = lowerBoundSec(pos - 1e-6);
 }
 function rewind() { pause(); seek(0); }
@@ -215,6 +232,7 @@ function refreshButtons() {
   $('play').disabled = !song || playing || x; $('stop').disabled = !playing || x; $('rew').disabled = !song || x;
   $('progress').disabled = !song || x; $('speed').disabled = x; $('speed1').disabled = x; $('demo').disabled = x;
   $('file').disabled = x; $('export').disabled = !song; $('xres').disabled = x;
+  $('fing').disabled = !song; $('fingExp').disabled = !song; $('fingImp').disabled = !song || x;
   $('tempo').disabled = !song || x; $('tempoReset').disabled = !song || x;
   $('export').textContent = x ? '⏹ Annuler l\'export' : '🎬 Export vidéo';
 }
@@ -228,6 +246,96 @@ function clearError() { delete $('status').dataset.err; refreshStatus(); }
 $('play').onclick = play; $('stop').onclick = pause; $('rew').onclick = rewind;
 $('speed').oninput = e => setSpeed(parseFloat(e.target.value));
 $('speed1').onclick = () => setSpeed(1);
+// ---------- Doigtés ----------
+// Source : doigtés inscrits dans le MusicXML (n.fileFinger) + saisie manuelle (song.manual, mémorisée par morceau dans le navigateur).
+let showFing = true, selNote = null; const hit = [];
+try { const v = localStorage.getItem('seb-roulpiano-doigtes-affiches'); if (v !== null) showFing = v === '1'; } catch (e) {}
+const noteKey = n => n.tick + ':' + n.midi;
+const noteHand = n => n.fh || n.hand; // main du doigté : par défaut la clé (sol = droite, fa = gauche), modifiable note par note
+const handTxt = n => (noteHand(n) === 'L' ? 'M.G.' : 'M.D.');
+const storeKey = () => 'seb-roulpiano-doigtes:' + song.title + '|' + song.notes.length + '|' + song.endTick;
+function loadFingerings() {
+  song.manual = { f: {}, h: {} }; // f : doigts saisis (0 = effacé), h : main du doigté si différente de la clé
+  try {
+    const raw = JSON.parse(localStorage.getItem(storeKey()) || 'null');
+    if (raw) song.manual = (raw.f || raw.h) ? { f: raw.f || {}, h: raw.h || {} } : { f: raw, h: {} }; // ancien format : doigts seuls
+  } catch (e) {}
+  song.notes.forEach(n => {
+    n.fileFinger = n.finger || 0; const m = song.manual.f[noteKey(n)]; n.finger = m !== undefined ? m : n.fileFinger;
+    const h = song.manual.h[noteKey(n)]; n.fh = h === 'L' || h === 'R' ? h : undefined;
+  });
+}
+function saveManual() { try { localStorage.setItem(storeKey(), JSON.stringify(song.manual)); } catch (e) {} }
+function setFinger(n, f) {
+  n.finger = f;
+  if (f === n.fileFinger) delete song.manual.f[noteKey(n)]; else song.manual.f[noteKey(n)] = f;
+  saveManual();
+}
+function setHand(n, h) {
+  n.fh = h === n.hand ? undefined : h;
+  if (n.fh) song.manual.h[noteKey(n)] = n.fh; else delete song.manual.h[noteKey(n)];
+  saveManual();
+}
+function refreshFingButton() { $('fing').textContent = showFing ? '🖐 Masquer les doigtés' : '🖐 Afficher les doigtés'; $('fing').classList.toggle('pressed', showFing); }
+function markFpop() {
+  const n = selNote, p = $('fpop');
+  p.querySelectorAll('button[data-f]').forEach(b => b.classList.toggle('on', parseInt(b.dataset.f, 10) === (n.finger || 0) && b.dataset.f !== '0'));
+  p.querySelectorAll('button[data-h]').forEach(b => b.classList.toggle('on', b.dataset.h === noteHand(n)));
+}
+function chooseHand(h) { if (!selNote) return; setHand(selNote, h); markFpop(); }
+function hideFpop() { selNote = null; $('fpop').style.display = 'none'; }
+function showFpop(h) {
+  const p = $('fpop'); selNote = h.n;
+  markFpop();
+  p.style.display = 'flex';
+  const pw = p.offsetWidth, ph = p.offsetHeight;
+  p.style.left = Math.max(4, Math.min(cssW - pw - 4, h.x + h.w / 2 - pw / 2)) + 'px';
+  p.style.top = Math.max(4, Math.min(cssH - ph - 4, h.top - ph - 8)) + 'px';
+}
+function chooseFinger(f) {
+  if (!selNote) return;
+  setFinger(selNote, f);
+  if (f && !showFing) { showFing = true; refreshFingButton(); try { localStorage.setItem('seb-roulpiano-doigtes-affiches', '1'); } catch (e) {} }
+  hideFpop();
+}
+$('fpop').addEventListener('click', e => {
+  const b = e.target.closest('button[data-f]'); if (b) return chooseFinger(parseInt(b.dataset.f, 10));
+  const h = e.target.closest('button[data-h]'); if (h) chooseHand(h.dataset.h);
+});
+$('fing').onclick = () => { showFing = !showFing; refreshFingButton(); try { localStorage.setItem('seb-roulpiano-doigtes-affiches', showFing ? '1' : '0'); } catch (e) {} };
+cv.addEventListener('click', e => {
+  if (!song || exp.active) return;
+  const r = cv.getBoundingClientRect(), px = (e.clientX - r.left) * cssW / r.width, py = (e.clientY - r.top) * cssH / r.height;
+  for (let i = hit.length - 1; i >= 0; i--) {
+    const h = hit[i];
+    if ((px >= h.x && px <= h.x + h.w && py >= h.top && py <= h.bottom) || (h.pw && px >= h.px && px <= h.px + h.pw && py >= h.py && py <= h.py + h.ph)) {
+      pause(); showFpop(h); return;
+    }
+  }
+  hideFpop();
+});
+$('fingExp').onclick = () => {
+  const fingerings = {}, mains = {};
+  song.notes.forEach(n => { if (n.finger) fingerings[noteKey(n)] = n.finger; if (n.fh) mains[noteKey(n)] = n.fh; });
+  const blob = new Blob([JSON.stringify({ version: 2, titre: song.title, doigtes: fingerings, mains }, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (song.title || 'morceau').replace(/[\\/:*?"<>|]+/g, '_') + '.doigtes.json';
+  document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+};
+$('fingImp').onclick = () => $('fingFile').click();
+$('fingFile').onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f || !song) return;
+  try {
+    const obj = JSON.parse(await f.text()); const d = obj && obj.doigtes;
+    if (!d || typeof d !== 'object') throw new Error('Fichier de doigtés invalide.');
+    hideFpop(); song.manual = { f: {}, h: {} }; const mh = (obj.mains && typeof obj.mains === 'object') ? obj.mains : {};
+    song.notes.forEach(n => {
+      const k = noteKey(n), v = parseInt(d[k], 10) || 0; n.finger = v >= 1 && v <= 5 ? v : 0; if (n.finger !== n.fileFinger) song.manual.f[k] = n.finger;
+      n.fh = (mh[k] === 'L' || mh[k] === 'R') && mh[k] !== n.hand ? mh[k] : undefined; if (n.fh) song.manual.h[k] = n.fh;
+    });
+    saveManual(); clearError();
+  } catch (err) { showError(err.message || 'Fichier de doigtés illisible.'); }
+};
+
 // ---------- Tempo de départ ----------
 const fmtBpm = b => String(Math.round(b * 10) / 10);
 function applyTempo(bpm) {
@@ -245,6 +353,13 @@ $('vis').onchange = e => { visMeasures = parseInt(e.target.value, 10); };
 $('progress').oninput = e => { seeking = true; seek(parseFloat(e.target.value) * song.durationSec); };
 $('progress').onchange = () => { seeking = false; };
 addEventListener('keydown', e => {
+  if (selNote && !(e.target.tagName === 'INPUT' && e.target.type === 'number')) {
+    if (/^[1-5]$/.test(e.key)) { e.preventDefault(); chooseFinger(parseInt(e.key, 10)); return; }
+    if (e.key === '0' || e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); chooseFinger(0); return; }
+    if (e.key === 'd' || e.key === 'D') { e.preventDefault(); chooseHand('R'); return; }
+    if (e.key === 'g' || e.key === 'G') { e.preventDefault(); chooseHand('L'); return; }
+    if (e.key === 'Escape') { hideFpop(); return; }
+  }
   if (exp.active) { if (e.code === 'Escape') stopExport(true); return; }
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
   if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); }
@@ -259,7 +374,7 @@ addEventListener('keydown', e => {
 async function openBuffer(name, buf) {
   try {
     const s = await PianoCore.loadSong(name, new Uint8Array(buf));
-    pause(); song = s; pos = 0; nextIdx = 0; clearError(); $('tempo').value = fmtBpm(s.fileBpm);
+    pause(); song = s; pos = 0; nextIdx = 0; clearError(); $('tempo').value = fmtBpm(s.fileBpm); hideFpop(); loadFingerings(); { const r = PianoCore.keyboardRange(s.lo, s.hi); setRange(r.first, r.last); }
     $('title').textContent = s.title; $('title').title = s.title;
     const modes = { 'pistes': 'sol/fa = 2 pistes', 'portées': 'sol/fa = 2 portées', 'parties': 'sol/fa = 2 parties', 'do-central': 'sol/fa = coupure au Do central' };
     setSoundStatusExtra(modes[s.handMode] || '');
@@ -331,8 +446,9 @@ function renderScene(c, W, H, k) {
   try { scene(W, H, k); } finally { ctx = prev; }
 }
 function scene(W, H, dpr) {
+  const onScreen = ctx === screenCtx; if (onScreen) hit.length = 0;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const kbH = Math.min(170, Math.max(80, H * 0.2)), rollH = H - kbH;
+  const kbH = Math.min(255, Math.max(120, H * 0.3)), rollH = H - kbH; // clavier : 1,5 × la hauteur d'origine
   const g = ctx.createLinearGradient(0, 0, 0, rollH); g.addColorStop(0, '#0b0e1c'); g.addColorStop(1, '#161b34');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, rollH);
 
@@ -345,7 +461,7 @@ function scene(W, H, dpr) {
     ctx.fillRect(Math.round(x), 0, 1, rollH);
   }
 
-  const active = new Map(); // midi -> main
+  const active = new Map(); // midi -> note en cours
   if (!song) {
     ctx.fillStyle = '#8d94b3'; ctx.font = '600 18px -apple-system, sans-serif'; ctx.textAlign = 'center';
     ctx.fillText('Ouvrez un fichier MIDI / MusicXML (ou glissez-le ici), ou cliquez sur « Exemple »', W / 2, rollH / 2);
@@ -384,12 +500,12 @@ function scene(W, H, dpr) {
     const n = song.notes[i];
     if (n.tick + n.dur <= posTick) continue;
     vis.push(n);
-    if (n.tick <= posTick) active.set(n.midi, n.hand);
+    if (n.tick <= posTick) active.set(n.midi, n);
   }
   [false, true].forEach(blackPass => {
     vis.forEach(n => {
       const kr = keyRect(n.midi, W); if (kr.black !== blackPass) return;
-      const c = COL[n.hand], lit = n.tick <= posTick;
+      const c = COL[noteHand(n)], lit = n.tick <= posTick;
       const y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5);
       const x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
       ctx.save();
@@ -404,6 +520,24 @@ function scene(W, H, dpr) {
       }
     });
   });
+  // doigtés (au-dessus de chaque note ; dans la note si elle touche le haut de la zone)
+  const hr = [];
+  vis.forEach(n => {
+    const kr = keyRect(n.midi, W), y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
+    const rec = { n, x, w, top: y0, bottom };
+    if (showFing && n.finger) {
+      const label = handTxt(n) + ' ' + n.finger;
+      ctx.font = '700 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
+      const pw = Math.ceil(ctx.measureText(label).width) + 8, ph = 14;
+      const px = Math.max(2, Math.min(W - pw - 2, x + w / 2 - pw / 2));
+      const py = y0 >= 18 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3);
+      ctx.fillStyle = 'rgba(8,10,24,.94)'; rrect(px, py, pw, ph, 7); ctx.fill();
+      ctx.lineWidth = 1.2; ctx.strokeStyle = COL[noteHand(n)].note; ctx.stroke();
+      ctx.fillStyle = '#fff'; ctx.fillText(label, px + pw / 2, py + 10.5);
+      Object.assign(rec, { px, py, pw, ph });
+    }
+    if (onScreen) { hit.push(rec); if (n === selNote) { ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; rrect(x - 1, y0 - 1, w + 2, bottom - y0 + 2, 6); ctx.stroke(); } }
+  });
   ctx.restore();
 
   // ligne de jeu
@@ -416,7 +550,7 @@ function drawKeyboard(W, top, kbH, active) {
   ctx.fillStyle = '#05060d'; ctx.fillRect(0, top, W, kbH);
   for (let m = FIRST; m <= LAST; m++) {
     if (isBlack(m)) continue;
-    const r = keyRect(m, W), hand = active.get(m);
+    const r = keyRect(m, W), an = active.get(m), hand = an && noteHand(an);
     const gr = ctx.createLinearGradient(0, top, 0, top + kbH);
     if (hand) { gr.addColorStop(0, COL[hand].key); gr.addColorStop(1, COL[hand].lit); } else { gr.addColorStop(0, '#f7f7f9'); gr.addColorStop(1, '#d9dbe3'); }
     ctx.fillStyle = gr; rrect(r.x + .5, top + 2, r.w - 1, kbH - 3, 3); ctx.fill();
@@ -424,13 +558,22 @@ function drawKeyboard(W, top, kbH, active) {
       ctx.fillStyle = hand ? '#1b1b2a' : '#6a6f88'; ctx.font = '600 11px -apple-system, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('Do' + (Math.floor(m / 12) - 1), r.x + r.w / 2, top + kbH - 9);
     }
+    if (an && showFing && an.finger && ww >= 14) { // doigté sur la touche : « M.D. » puis le chiffre
+      ctx.fillStyle = '#10121f'; ctx.textAlign = 'center';
+      ctx.font = '800 17px -apple-system, sans-serif'; ctx.fillText(String(an.finger), r.x + r.w / 2, top + kbH - 24);
+      if (kbH >= 100) { ctx.font = '700 9px -apple-system, sans-serif'; ctx.fillText(handTxt(an), r.x + r.w / 2, top + kbH - 40); }
+    }
   }
   for (let m = FIRST; m <= LAST; m++) {
     if (!isBlack(m)) continue;
-    const r = keyRect(m, W), hand = active.get(m);
+    const r = keyRect(m, W), an = active.get(m), hand = an && noteHand(an);
     ctx.fillStyle = hand ? COL[hand].keyB : '#15161f';
     rrect(r.x, top + 2, r.w, bh, 3); ctx.fill();
     ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+    if (an && showFing && an.finger && r.w >= 9) { // touche noire : chiffre seul (la touche est trop étroite pour « M.D. »)
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '800 13px -apple-system, sans-serif';
+      ctx.fillText(String(an.finger), r.x + r.w / 2, top + bh - 6);
+    }
   }
   ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(0, top, W, 2);
 }
@@ -516,7 +659,7 @@ function frame(ts) {
 }
 
 // ---------- Démarrage ----------
-setSpeed(1); refreshButtons(); initSampler();
+setSpeed(1); refreshFingButton(); refreshButtons(); initSampler();
 requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
 // accès pour les tests automatiques
 window.__app = { stats, get song() { return song; }, get pos() { return pos; }, get playing() { return playing; }, get speed() { return speed; } };

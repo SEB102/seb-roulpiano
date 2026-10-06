@@ -8,8 +8,12 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 - **Commandes** : ⏮ Début · ▶ Lecture · ⏸ Pause (garde la position) · vitesse 0 à 3 (1× = tempo du fichier)
   · **Tempo ♩ =** (noires/min) : par défaut celui du fichier (60 pour l'exemple), modifiable (20–300), ↺ pour revenir au tempo du fichier
   · barre de progression cliquable. Clavier : Espace = lecture/arrêt, Début = retour, ← → = mesure précédente/suivante, ↑ ↓ = vitesse.
-- **Couleurs** : orange = clé de sol (main droite), bleu = clé de fa (main gauche) ; teinte plus foncée = touche noire. Pas de doigtés.
+- **Couleurs** : orange = main droite (M.D.), bleu = main gauche (M.G.) ; par défaut clé de sol = M.D. et clé de fa = M.G., mais la couleur suit la main du doigté : une note de clé de fa déclarée M.D. devient orange. Teinte plus foncée = touche noire. Pas de doigtés.
   Mains : 2 pistes/parties/portées si le fichier en a deux (la plus aiguë = droite), sinon coupure au Do central.
+- **Clavier** : adapté à l'étendue du morceau (octaves entières, 3 minimum) : moins d'octaves = touches plus larges.
+- **Doigtés** : bouton « Afficher/Masquer les doigtés ». Affichés au format « M.D. 1 » / « M.G. 4 » au-dessus des notes qui défilent et sur les touches du clavier quand elles sont jouées. Par défaut clé de sol = M.D., clé de fa = M.G. ; la main d'une note se change dans la fenêtre de saisie (boutons M.D. / M.G., ou touches D / G) ; la couleur de la note suit ce choix. Ceux d'un MusicXML (MuseScore : clic droit sur une note → Doigté) sont lus automatiquement.
+  Pour en saisir/corriger : cliquer sur une note (la lecture se met en pause) puis 1 à 5 (souris ou clavier), 0 / Suppr pour effacer, Échap pour fermer.
+  Mémorisés par morceau dans le navigateur ; ⤓ exporte dans un fichier .doigtes.json, ⤒ le recharge (remplace les doigtés actuels).
 - **Mesures visibles** : 1 à 4 (2 par défaut), numéros de mesure sur les barres.
 - **Export vidéo** : bouton « 🎬 Export vidéo » (720p ou 1080p). Enregistre en temps réel image + son, à la vitesse
   réglée (durée = durée du morceau ÷ vitesse), puis télécharge un .mp4 (ou .webm selon le navigateur ; Chrome recommandé).

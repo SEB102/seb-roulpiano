@@ -114,5 +114,28 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${
     assert.throws(() => C.retime(s, 0), /invalide/);
   });
 
+  await t('MusicXML : doigtés lus (1-5), valeurs absurdes ignorées, notes liées', () => {
+    const xml = E.XML_TEST.replace('<note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><staff>1</staff><tie type="start"/></note>',
+      '<note><pitch><step>C</step><octave>5</octave></pitch><duration>4</duration><staff>1</staff><tie type="start"/><notations><technical><fingering>3</fingering></technical></notations></note>')
+      .replace('<note><pitch><step>C</step><octave>3</octave></pitch><duration>8</duration><staff>2</staff></note>',
+      '<note><pitch><step>C</step><octave>3</octave></pitch><duration>8</duration><staff>2</staff><notations><technical><fingering>9</fingering></technical></notations></note>');
+    const s = C.parseMusicXml(xml);
+    assert.strictEqual(s.notes.find(x => x.midi === 72).finger, 3);
+    assert.strictEqual(s.notes.find(x => x.midi === 48).finger, undefined); // 9 hors 1-5
+    assert.strictEqual(s.notes.filter(x => x.finger).length, 1);
+  });
+
+  await t('Étendue du clavier : octaves entières adaptées au morceau', () => {
+    const R = (lo, hi) => { const r = C.keyboardRange(lo, hi); return [r.first, r.last]; };
+    assert.deepStrictEqual(R(43, 79), [36, 83]);   // Ode : Sol2..Sol5 → Do2..Si5 (4 octaves)
+    assert.deepStrictEqual(R(36, 88), [36, 95]);   // Élise : Do2..Mi6 → Do2..Si6 (5 octaves)
+    const small = C.keyboardRange(60, 64); assert.strictEqual((small.last - small.first + 1) % 12, 0); assert.ok(small.last - small.first + 1 >= 36);
+    assert.ok(small.first <= 60 && small.last >= 64 && small.first % 12 === 0);
+    assert.deepStrictEqual(R(21, 108), [21, 108]);  // piano entier
+    const low = C.keyboardRange(21, 30); assert.strictEqual(low.first, 21); assert.ok(low.last >= 30);
+    const high = C.keyboardRange(100, 108); assert.strictEqual(high.last, 108); assert.ok(high.first <= 100);
+    for (let lo = 21; lo <= 108; lo += 3) for (let hi = lo; hi <= 108; hi += 7) { const r = C.keyboardRange(lo, hi); assert.ok(r.first <= lo && r.last >= hi && r.first >= 21 && r.last <= 108, lo + '-' + hi); }
+  });
+
   console.log(`\n${n} tests passés`);
 })();

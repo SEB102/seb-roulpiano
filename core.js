@@ -229,6 +229,8 @@
               return;
             }
             const n = { midi, tick: tickAbs, dur: Math.max(1, durT), vel: 80, staff };
+            const fg = parseInt(txt(kid(kid(e, 'notations') || { children: [] }, 'technical') || { children: [] }, 'fingering'), 10);
+            if (fg >= 1 && fg <= 5) n.finger = fg; // doigté inscrit dans la partition
             notes.push(n);
             if (tieTypes.includes('start')) open.set(key, { n, mi });
           }
@@ -318,6 +320,16 @@
     return song;
   }
 
-  const API = { retime, parseMidi, parseMusicXml, parseMxl, parseXml, loadSong, makeTimeline, unzip };
+  // Étendue du clavier adaptée au morceau : octaves entières (Do → Si), au moins 3, bornées au piano (La0 = 21 … Do8 = 108).
+  function keyboardRange(lo, hi, minOctaves = 3) {
+    let c0 = Math.floor(lo / 12), c1 = Math.floor(hi / 12); // octaves (Do = 12·c)
+    c0 = Math.max(c0, 1); c1 = Math.min(c1, 9);              // l'octave « 1 » démarre à La0 (21) ; l'octave « 9 » ne contient que Do8 (108)
+    while (c1 - c0 + 1 < minOctaves) { // élargir en alternant haut / bas
+      if (c1 < 9 && (c1 - c0) % 2 === 0) c1++; else if (c0 > 1) c0--; else if (c1 < 9) c1++; else break;
+    }
+    return { first: Math.max(21, c0 * 12), last: Math.min(108, c1 * 12 + 11) };
+  }
+
+  const API = { keyboardRange, retime, parseMidi, parseMusicXml, parseMxl, parseXml, loadSong, makeTimeline, unzip };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.PianoCore = API;
 })(typeof self !== 'undefined' ? self : this);
