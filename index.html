@@ -47,7 +47,13 @@
   #fpop { position:absolute; z-index:6; display:none; align-items:center; gap:5px; background:#0b0e1c; border:1px solid var(--accent); border-radius:10px; padding:6px 8px; box-shadow:0 6px 20px rgba(0,0,0,.5); }
   #fpop .sep { width:1px; align-self:stretch; background:var(--line); margin:0 3px; }
   #fpop button { padding:4px 10px; min-width:30px; }
+  #fpop #nums { display:none; gap:5px; }
+  #fpop #rake { display:flex; line-height:0; } #fpop .fk { cursor:pointer; } #fpop .fk:hover circle { stroke:#fff; }
   #fpop button.on { background:var(--accent); border-color:var(--accent); font-weight:700; }
+  .seg { display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:#1e2340; }
+  .seg .seglab { padding:0 8px; color:var(--muted); }
+  .seg button { border:0; border-left:1px solid var(--line); border-radius:0; background:transparent; padding:7px 11px; }
+  .seg button.pressed { background:var(--accent); font-weight:600; }
   button.pressed { background:var(--accent); border-color:var(--accent); }
   #drop { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(91,124,255,.25);
           border:3px dashed var(--accent); font-size:22px; z-index:5; pointer-events:none; }
@@ -84,7 +90,7 @@
       <button id="tempoReset" title="Revenir au tempo du fichier">↺</button>
     </div>
     <div class="grp">
-      <button id="fing" title="Afficher / masquer les doigtés. Pour en saisir un : cliquer sur une note puis choisir 1 à 5.">🖐 Doigtés</button>
+      <div id="fingMode" class="seg" role="group" aria-label="Affichage des doigtés" title="Pour saisir un doigté : cliquer sur une note."><span class="seglab">🖐</span><button data-m="off">Masquer les doigtés</button><button data-m="simple">Doigtés simples</button><button data-m="illus">Doigtés illustrés</button></div>
       <button id="fingExp" title="Exporter les doigtés de ce morceau dans un fichier">⤓</button>
       <button id="fingImp" title="Importer des doigtés depuis un fichier (remplace les actuels)">⤒</button>
       <input id="fingFile" type="file" accept=".json,application/json">
@@ -110,7 +116,7 @@
 </header>
 <main>
   <canvas id="cv"></canvas>
-  <div id="fpop"><button data-h="R" title="Main droite (touche D)">M.D.</button><button data-h="L" title="Main gauche (touche G)">M.G.</button><span class="sep"></span><button data-f="1">1</button><button data-f="2">2</button><button data-f="3">3</button><button data-f="4">4</button><button data-f="5">5</button><button data-f="0" title="Effacer le doigté">✕</button></div>
+  <div id="fpop"><button data-h="R" title="Main droite (touche D)">M.D.</button><button data-h="L" title="Main gauche (touche G)">M.G.</button><span class="sep"></span><span id="rake"></span><span id="nums"><button data-f="1">1</button><button data-f="2">2</button><button data-f="3">3</button><button data-f="4">4</button><button data-f="5">5</button></span><button data-f="0" title="Effacer le doigté">✕</button></div>
   <div id="drop">Déposez un fichier .mid / .musicxml / .mxl</div>
 </main>
 <footer>SEB-ROULPIANO · Octobre 2026 · <a href="MODE-D-EMPLOI.html" target="_blank" rel="noopener">Mode d'emploi</a></footer>
@@ -254,7 +260,7 @@ function refreshButtons() {
   $('play').disabled = !song || playing || x; $('stop').disabled = !playing || x; $('rew').disabled = !song || x;
   $('progress').disabled = !song || x; $('speed').disabled = x; $('speed1').disabled = x; $('demo').disabled = x;
   $('file').disabled = x; $('export').disabled = !song; $('xres').disabled = x;
-  $('fing').disabled = !song; $('fingExp').disabled = !song; $('fingImp').disabled = !song || x;
+  refreshFingButton(); $('fingExp').disabled = !song; $('fingImp').disabled = !song || x;
   $('tempo').disabled = !song || x; $('tempoReset').disabled = !song || x;
   $('export').textContent = x ? '⏹ Annuler l\'export' : '🎬 Export vidéo';
 }
@@ -270,8 +276,12 @@ $('speed').oninput = e => setSpeed(parseFloat(e.target.value));
 $('speed1').onclick = () => setSpeed(1);
 // ---------- Doigtés ----------
 // Source : doigtés inscrits dans le MusicXML (n.fileFinger) + saisie manuelle (song.manual, mémorisée par morceau dans le navigateur).
-let showFing = true, selNote = null; const hit = [];
-try { const v = localStorage.getItem('seb-roulpiano-doigtes-affiches'); if (v !== null) showFing = v === '1'; } catch (e) {}
+let fingMode = 'illus', lastOn = 'illus', showFing = true, fingIllus = true, selNote = null; const hit = [];
+function setFingMode(m, save = true) {
+  fingMode = m; if (m !== 'off') lastOn = m; showFing = m !== 'off'; fingIllus = m === 'illus'; refreshFingButton();
+  if (save) { try { localStorage.setItem('seb-roulpiano-doigtes-mode', m); } catch (e) {} }
+}
+try { const v = localStorage.getItem('seb-roulpiano-doigtes-mode'); if (v === 'off' || v === 'simple' || v === 'illus') setFingMode(v, false); } catch (e) {}
 const noteKey = n => n.tick + ':' + n.midi;
 const noteHand = n => n.fh || n.hand; // main du doigté : par défaut celle déduite de la partition (portée haute = droite, basse = gauche), modifiable note par note
 const handTxt = n => (noteHand(n) === 'L' ? 'M.G.' : 'M.D.');
@@ -286,10 +296,12 @@ function loadFingerings() {
     n.fileFinger = n.finger || 0; const m = song.manual.f[noteKey(n)]; n.finger = m !== undefined ? m : n.fileFinger;
     const h = song.manual.h[noteKey(n)]; n.fh = h === 'L' || h === 'R' ? h : undefined;
   });
+  refreshHF();
 }
+function refreshHF() { song.hf = song.notes.some(n => n.finger > 0); }
 function saveManual() { try { localStorage.setItem(storeKey(), JSON.stringify(song.manual)); } catch (e) {} }
 function setFinger(n, f) {
-  n.finger = f;
+  n.finger = f; refreshHF();
   if (f === n.fileFinger) delete song.manual.f[noteKey(n)]; else song.manual.f[noteKey(n)] = f;
   saveManual();
 }
@@ -298,13 +310,16 @@ function setHand(n, h) {
   if (n.fh) song.manual.h[noteKey(n)] = n.fh; else delete song.manual.h[noteKey(n)];
   saveManual();
 }
-function refreshFingButton() { $('fing').textContent = showFing ? '🖐 Masquer les doigtés' : '🖐 Afficher les doigtés'; $('fing').classList.toggle('pressed', showFing); }
+function refreshFingButton() { document.querySelectorAll('#fingMode button').forEach(b => { b.classList.toggle('pressed', b.dataset.m === fingMode); b.disabled = !song; }); }
 function markFpop() {
   const n = selNote, p = $('fpop');
-  // ordre des doigts : main droite 1→5, main gauche 5→1 (comme les doigts sur le clavier, de gauche à droite)
-  const clear = p.querySelector('button[data-f="0"]'), fs = [...p.querySelectorAll('button[data-f]')].filter(b => b.dataset.f !== '0');
-  fs.sort((a, b) => (noteHand(n) === 'L' ? b.dataset.f - a.dataset.f : a.dataset.f - b.dataset.f)).forEach(b => p.insertBefore(b, clear));
-  p.querySelectorAll('button[data-f]').forEach(b => b.classList.toggle('on', parseInt(b.dataset.f, 10) === (n.finger || 0) && b.dataset.f !== '0'));
+  const simple = fingMode === 'simple';
+  $('rake').style.display = simple ? 'none' : 'flex'; $('nums').style.display = simple ? 'flex' : 'none';
+  if (simple) { // boutons : main droite 1→5, main gauche 5→1 (comme les doigts posés sur le clavier)
+    const box = $('nums'), bs = [...box.querySelectorAll('button')];
+    bs.sort((a, b) => (noteHand(n) === 'L' ? b.dataset.f - a.dataset.f : a.dataset.f - b.dataset.f)).forEach(b => box.appendChild(b));
+    bs.forEach(b => b.classList.toggle('on', parseInt(b.dataset.f, 10) === (n.finger || 0)));
+  } else $('rake').innerHTML = rakeSVG(noteHand(n), n.finger || 0); // schéma de la main de la note ; le doigt choisi est en orange
   p.querySelectorAll('button[data-h]').forEach(b => b.classList.toggle('on', b.dataset.h === noteHand(n)));
 }
 function chooseHand(h) { if (!selNote) return; setHand(selNote, h); markFpop(); }
@@ -320,14 +335,14 @@ function showFpop(h) {
 function chooseFinger(f) {
   if (!selNote) return;
   setFinger(selNote, f);
-  if (f && !showFing) { showFing = true; refreshFingButton(); try { localStorage.setItem('seb-roulpiano-doigtes-affiches', '1'); } catch (e) {} }
+  if (f && !showFing) setFingMode(lastOn);
   hideFpop();
 }
 $('fpop').addEventListener('click', e => {
-  const b = e.target.closest('button[data-f]'); if (b) return chooseFinger(parseInt(b.dataset.f, 10));
+  const b = e.target.closest('[data-f]'); if (b) return chooseFinger(parseInt(b.dataset.f, 10));
   const h = e.target.closest('button[data-h]'); if (h) chooseHand(h.dataset.h);
 });
-$('fing').onclick = () => { showFing = !showFing; refreshFingButton(); try { localStorage.setItem('seb-roulpiano-doigtes-affiches', showFing ? '1' : '0'); } catch (e) {} };
+$('fingMode').addEventListener('click', e => { const b = e.target.closest('button[data-m]'); if (b && song) setFingMode(b.dataset.m); });
 cv.addEventListener('click', e => {
   if (!song || exp.active) return;
   const r = cv.getBoundingClientRect(), px = (e.clientX - r.left) * cssW / r.width, py = (e.clientY - r.top) * cssH / r.height;
@@ -357,7 +372,7 @@ $('fingFile').onchange = async e => {
       const k = noteKey(n), v = parseInt(d[k], 10) || 0; n.finger = v >= 1 && v <= 5 ? v : 0; if (n.finger !== n.fileFinger) song.manual.f[k] = n.finger;
       n.fh = (mh[k] === 'L' || mh[k] === 'R') && mh[k] !== n.hand ? mh[k] : undefined; if (n.fh) song.manual.h[k] = n.fh;
     });
-    saveManual(); clearError();
+    refreshHF(); saveManual(); clearError();
   } catch (err) { showError(err.message || 'Fichier de doigtés illisible.'); }
 };
 
@@ -464,8 +479,8 @@ function updateInfo() {
   if (!song) return;
   const posTick = song.timeline.secToTick(pos), M = song.measures[measureIndexAt(posTick)];
   const bpm = song.timeline.bpmAtTick(posTick) * speed;
-  $('info').textContent = 'Mesure ' + M.label + ' / ' + song.measures[song.measures.length - 1].label + '  ·  ♩=' + Math.round(bpm) + '  ·  ' + fmt(pos) + ' / ' + fmt(song.durationSec);
-  if (!seeking) $('progress').value = song.durationSec ? pos / song.durationSec : 0;
+  $('info').textContent = 'Mesure ' + M.label + ' / ' + song.measures[song.measures.length - 1].label + '  ·  ♩=' + Math.round(bpm) + '  ·  ' + fmt(Math.min(pos, song.durationSec)) + ' / ' + fmt(song.durationSec);
+  if (!seeking) $('progress').value = song.durationSec ? Math.min(1, pos / song.durationSec) : 0;
 }
 // dessine la scène dans le contexte c (écran ou canvas d'export) ; W,H en pixels logiques, k = facteur d'échelle
 function renderScene(c, W, H, k) {
@@ -475,7 +490,7 @@ function renderScene(c, W, H, k) {
 function scene(W, H, dpr) {
   const onScreen = ctx === screenCtx; if (onScreen) hit.length = 0;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  const kbH = Math.min(255, Math.max(120, H * 0.3)), rollH = H - kbH; // clavier : 1,5 × la hauteur d'origine
+  const kbH = Math.min(255, Math.max(120, H * 0.3)), rollH = H - kbH;
   const g = ctx.createLinearGradient(0, 0, 0, rollH); g.addColorStop(0, '#0b0e1c'); g.addColorStop(1, '#161b34');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, rollH);
 
@@ -495,7 +510,8 @@ function scene(W, H, dpr) {
     drawKeyboard(W, rollH, kbH, active); return;
   }
 
-  const posTick = song.timeline.secToTick(ctx === screenCtx ? Math.max(0, pos - vlag * speed) : pos); // écran : image retardée de la latence audio
+  const sp = ctx === screenCtx ? Math.max(0, pos - vlag * speed) : pos; // écran : image retardée de la latence audio
+  const posTick = song.timeline.secToTick(sp);
   const mi = measureIndexAt(posTick), M = song.measures[mi];
   const winT = Math.max(1, Math.round(song.ppq * 4 * M.num / M.den) * visMeasures), topTick = posTick + winT;
   const y = t => rollH - (t - posTick) / winT * rollH;
@@ -548,30 +564,132 @@ function scene(W, H, dpr) {
     });
   });
   // doigtés (au-dessus de chaque note ; dans la note si elle touche le haut de la zone)
-  const hr = [];
-  vis.forEach(n => {
+  // Empilement chronologique : les schémas se chevauchent quand les notes sont rapprochées. On dessine donc de la note la plus
+  // lointaine à la plus proche : la prochaine à jouer est au premier plan, entièrement lisible ; les suivantes passent derrière
+  // et sont de plus en plus estompées.
+  for (let vi = vis.length - 1; vi >= 0; vi--) {
+    const n = vis[vi];
     const kr = keyRect(n.midi, W), y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
     const rec = { n, x, w, top: y0, bottom };
     if (showFing && n.finger) {
-      const label = handTxt(n) + ' ' + n.finger;
-      ctx.font = '700 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
-      const pw = Math.ceil(ctx.measureText(label).width) + 8, ph = 14;
-      const px = Math.max(2, Math.min(W - pw - 2, x + w / 2 - pw / 2));
-      const py = y0 >= 18 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3);
-      ctx.fillStyle = 'rgba(8,10,24,.94)'; rrect(px, py, pw, ph, 7); ctx.fill();
-      ctx.lineWidth = 1.2; ctx.strokeStyle = COL[noteHand(n)].note; ctx.stroke();
-      ctx.fillStyle = '#fff'; ctx.fillText(label, px + pw / 2, py + 10.5);
-      Object.assign(rec, { px, py, pw, ph });
+      if (!fingIllus) { // doigté simple : « M.D. 1 »
+        const label = handTxt(n) + ' ' + n.finger;
+        ctx.font = '700 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
+        const pw = Math.ceil(ctx.measureText(label).width) + 8, ph = 14;
+        const px = Math.max(2, Math.min(W - pw - 2, x + w / 2 - pw / 2));
+        const py = y0 >= 18 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3);
+        ctx.fillStyle = 'rgba(8,10,24,.94)'; rrect(px, py, pw, ph, 7); ctx.fill();
+        ctx.lineWidth = 1.2; ctx.strokeStyle = COL[noteHand(n)].note; ctx.stroke();
+        ctx.fillStyle = '#fff'; ctx.fillText(label, px + pw / 2, py + 10.5);
+        Object.assign(rec, { px, py, pw, ph });
+      } else {
+      const pw = Math.max(36, Math.min(76, kr.w * 1.9)), ph = (RAKE_BASE + 2) * pw / 122;
+      const px = Math.max(1, Math.min(W - pw - 1, x + w / 2 - pw / 2));
+      const py = y0 >= ph + 6 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3);
+      ctx.save(); ctx.globalAlpha = Math.max(0.5, 1 - Math.max(0, n.tick - posTick) / winT * 0.55);
+      ctx.fillStyle = 'rgba(8,10,24,.96)'; rrect(px - 2, py - 2, pw + 4, ph + 4, 6); ctx.fill();
+      ctx.strokeStyle = 'rgba(120,134,196,.45)'; ctx.lineWidth = 1; ctx.stroke();
+      drawMiniRake(noteHand(n), n.finger, px, py, pw);
+      ctx.restore();
+      Object.assign(rec, { px: px - 2, py: py - 2, pw: pw + 4, ph: ph + 4 });
+      }
     }
     if (onScreen) { hit.push(rec); if (n === selNote) { ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; rrect(x - 1, y0 - 1, w + 2, bottom - y0 + 2, 6); ctx.stroke(); } }
-  });
+  }
   ctx.restore();
 
   // ligne de jeu
   ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, rollH - 2, W, 2);
   drawKeyboard(W, rollH, kbH, active);
+  if (fingIllus) drawBubbles(W, rollH, kbH, posTick, sp);
 }
 
+// Schémas des mains « râteaux » : une barre par doigt sur une ligne de base, pouces courts et séparés, mains opposées
+// (main gauche à gauche, pouce à droite ; main droite à droite, pouce à gauche). Le doigt qui joue porte son numéro dans une
+// pastille orange pleine ; celui qui va jouer (prochaine note de la main, dans les 2 noires à venir), dans une pastille orange évidée.
+const RAKE = { 1: [9, .42], 2: [40, .92], 3: [58, 1], 4: [76, .92], 5: [94, .74] }; // doigt : [x, longueur relative] (main droite, repère 110 × 112)
+const RAKE_LEN = 76, RAKE_BASE = 100, RAKE_COMB = [28, 104], ORANGE = '#ff9a2e';
+const rkX = (side, x) => (side === 'L' ? 110 - x : x);
+// Schéma miniature d'une main (même « râteau » que la bulle de saisie) : seul le doigt à utiliser est mis en évidence,
+// avec son numéro dans une pastille orange. x, y = coin haut-gauche ; w = largeur ; renvoie la hauteur.
+function drawMiniRake(side, finger, x, y, w, onLight) {
+  const s = w / 122, X = u => x + (rkX(side, u) + 6) * s, Y = u => y + (u - 4) * s;
+  const line = (x0, y0, x1, y1) => { ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); };
+  ctx.save(); ctx.lineCap = 'round';
+  ctx.strokeStyle = onLight ? '#3b4268' : '#7c88c4'; ctx.lineWidth = Math.max(1.4, 3.4 * s);
+  line(X(RAKE_COMB[0]), Y(RAKE_BASE), X(RAKE_COMB[1]), Y(RAKE_BASE));
+  line(X(RAKE[1][0] - 7), Y(RAKE_BASE), X(RAKE[1][0] + 7), Y(RAKE_BASE));
+  for (let f = 1; f <= 5; f++) {
+    const [bx, rel] = RAKE[f], y1 = RAKE_BASE - RAKE_LEN * rel, on = f === finger;
+    ctx.strokeStyle = on ? ORANGE : (onLight ? '#4f5888' : '#a4aedc'); ctx.lineWidth = Math.max(on ? 2.8 : 2, (on ? 7 : 5.5) * s);
+    line(X(bx), Y(RAKE_BASE), X(bx), Y(y1));
+    if (on) {
+      const r = Math.max(6.5, 19 * s);
+      ctx.save(); ctx.shadowColor = ORANGE; ctx.shadowBlur = 8; ctx.beginPath(); ctx.arc(X(bx), Y(y1), r, 0, Math.PI * 2);
+      ctx.fillStyle = ORANGE; ctx.fill(); ctx.restore();
+      ctx.lineWidth = 1.2; ctx.strokeStyle = '#10121f'; ctx.stroke();
+      ctx.fillStyle = '#10121f'; ctx.font = '800 ' + Math.round(r * 1.3) + 'px -apple-system, sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(f), X(bx), Y(y1) + 0.5);
+    }
+  }
+  ctx.restore();
+  return (RAKE_BASE + 2) * s;
+}
+// Bulles de doigté sur le clavier : elle apparaît (en grossissant) au moment où la note est jouée, centrée sur la touche, flotte
+// tant que la note sonne (0,3 s au minimum), puis éclate (anneau + gouttelettes) quand elle est terminée.
+const BUBBLE_MIN = 0.3, BUBBLE_POP = 0.15, BURST_SEC = 0.4; // secondes de temps de morceau
+function drawBubbles(W, top, kbH, posTick, sp) {
+  // remonter assez loin : une note déjà finie peut encore avoir sa bulle (durée minimale) puis son éclatement
+  const back = posTick - song.timeline.secToTick(Math.max(0, sp - (BUBBLE_MIN + BURST_SEC)));
+  for (let i = lowerBoundTick(posTick - song.maxDur - back); i < song.notes.length && song.notes[i].tick <= posTick; i++) {
+    const n = song.notes[i]; if (!n.finger) continue;
+    const endShow = Math.max(n.t1, n.t0 + BUBBLE_MIN), age = sp - n.t0, gone = sp - endShow;
+    if (age < 0 || gone >= BURST_SEC || (gone >= 0 && !playing)) continue; // à l'arrêt, pas d'éclatement figé à mi-course
+    const kr = keyRect(n.midi, W), D = Math.max(56, Math.min(100, kr.w * 1.7)), cx = kr.x + kr.w / 2;
+    if (gone < 0) {
+      const q = Math.min(1, age / BUBBLE_POP), e = 1 - Math.pow(1 - q, 3);
+      const cy = top + kbH - D / 2 - 8 + Math.sin(sp * 4 + n.midi) * 2.2;
+      drawBubble(cx, cy, D / 2 * (0.45 + 0.55 * e), noteHand(n), n.finger, e);
+    } else drawBurst(cx, top + kbH - D / 2 - 8, D / 2, gone / BURST_SEC, noteHand(n), n.finger);
+  }
+}
+function drawBubble(cx, cy, R, side, finger, alpha) {
+  ctx.save(); ctx.globalAlpha = alpha;
+  const g = ctx.createRadialGradient(cx - R * .3, cy - R * .35, R * .1, cx, cy, R);
+  g.addColorStop(0, 'rgba(70,86,150,.92)'); g.addColorStop(1, 'rgba(14,18,44,.92)');
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill();
+  ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(190,215,255,.9)'; ctx.stroke();
+  const w = R * 1.4; drawMiniRake(side, finger, cx - w / 2, cy - (RAKE_BASE + 2) * w / 244, w);
+  ctx.restore();
+}
+function drawBurst(cx, cy, R, p, side, finger) {
+  const k = 1 - p;
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.pow(k, 2)); const w = R * 1.4; drawMiniRake(side, finger, cx - w / 2, cy - (RAKE_BASE + 2) * w / 244, w); // le schéma s'efface vite
+  ctx.globalAlpha = 1;
+  ctx.beginPath(); ctx.arc(cx, cy, R * (1 + .7 * p), 0, Math.PI * 2); ctx.lineWidth = 1 + 3 * k; ctx.strokeStyle = 'rgba(190,215,255,' + (.9 * k).toFixed(3) + ')'; ctx.stroke();
+  ctx.fillStyle = 'rgba(255,255,255,' + (.25 * k * k).toFixed(3) + ')'; ctx.beginPath(); ctx.arc(cx, cy, R * (1 + .7 * p), 0, Math.PI * 2); ctx.fill();
+  for (let i = 0; i < 10; i++) { // gouttelettes
+    const a = i / 10 * Math.PI * 2 + .3, d = R * (.9 + 1.1 * p);
+    ctx.beginPath(); ctx.arc(cx + Math.cos(a) * d, cy + Math.sin(a) * d, Math.max(.3, 4 * k), 0, Math.PI * 2);
+    ctx.fillStyle = (i % 2 ? 'rgba(255,154,46,' : 'rgba(190,215,255,') + (.95 * k).toFixed(3) + ')'; ctx.fill();
+  }
+  ctx.restore();
+}
+// même schéma, en SVG cliquable, pour la bulle de saisie : cliquer sur un doigt (sa pastille ou sa barre) le choisit
+function rakeSVG(side, cur) {
+  const X = x => rkX(side, x);
+  let g = '<svg viewBox="-6 0 122 112" width="168" height="154" role="group" aria-label="Choisir le doigt">';
+  g += `<g stroke="#56629a" stroke-width="3" stroke-linecap="round"><line x1="${X(RAKE_COMB[0])}" y1="${RAKE_BASE}" x2="${X(RAKE_COMB[1])}" y2="${RAKE_BASE}"/><line x1="${X(RAKE[1][0] - 7)}" y1="${RAKE_BASE}" x2="${X(RAKE[1][0] + 7)}" y2="${RAKE_BASE}"/></g>`;
+  for (let f = 1; f <= 5; f++) {
+    const [x, rel] = RAKE[f], y1 = RAKE_BASE - RAKE_LEN * rel, on = f === cur;
+    g += `<g class="fk" data-f="${f}"><rect x="${X(x) - 8}" y="${y1 - 12}" width="16" height="${RAKE_BASE - y1 + 12}" fill="transparent"/>` +
+      `<line x1="${X(x)}" y1="${RAKE_BASE}" x2="${X(x)}" y2="${y1}" stroke="#8e9ad0" stroke-width="5" stroke-linecap="round"/>` +
+      `<circle cx="${X(x)}" cy="${y1}" r="11" fill="${on ? ORANGE : '#1d2342'}" stroke="${on ? '#fff' : ORANGE}" stroke-width="2"/>` +
+      `<text x="${X(x)}" y="${y1 + 4.5}" text-anchor="middle" font-size="13" font-weight="800" fill="${on ? '#10121f' : ORANGE}" font-family="-apple-system,sans-serif">${f}</text></g>`;
+  }
+  return g + '</svg>';
+}
 function drawKeyboard(W, top, kbH, active) {
   const ww = W / NW, bh = kbH * 0.62;
   ctx.fillStyle = '#05060d'; ctx.fillRect(0, top, W, kbH);
@@ -585,10 +703,10 @@ function drawKeyboard(W, top, kbH, active) {
       ctx.fillStyle = hand ? '#1b1b2a' : '#6a6f88'; ctx.font = '600 11px -apple-system, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('Do' + (Math.floor(m / 12) - 1), r.x + r.w / 2, top + kbH - 9);
     }
-    if (an && showFing && an.finger && ww >= 14) { // doigté sur la touche : « M.D. » puis le chiffre
+    if (an && showFing && !fingIllus && an.finger && ww >= 14) { // doigté simple sur la touche : « M.D. » puis le chiffre
       ctx.fillStyle = '#10121f'; ctx.textAlign = 'center';
       ctx.font = '800 17px -apple-system, sans-serif'; ctx.fillText(String(an.finger), r.x + r.w / 2, top + kbH - 24);
-      if (kbH >= 100) { ctx.font = '700 9px -apple-system, sans-serif'; ctx.fillText(handTxt(an), r.x + r.w / 2, top + kbH - 40); }
+      ctx.font = '700 9px -apple-system, sans-serif'; ctx.fillText(handTxt(an), r.x + r.w / 2, top + kbH - 40);
     }
   }
   for (let m = FIRST; m <= LAST; m++) {
@@ -597,7 +715,7 @@ function drawKeyboard(W, top, kbH, active) {
     ctx.fillStyle = hand ? COL[hand].keyB : '#15161f';
     rrect(r.x, top + 2, r.w, bh, 3); ctx.fill();
     ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
-    if (an && showFing && an.finger && r.w >= 9) { // touche noire : chiffre seul (la touche est trop étroite pour « M.D. »)
+    if (an && showFing && !fingIllus && an.finger && r.w >= 9) { // doigté simple, touche noire : chiffre seul
       ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '800 13px -apple-system, sans-serif';
       ctx.fillText(String(an.finger), r.x + r.w / 2, top + bh - 6);
     }
@@ -642,7 +760,7 @@ async function startExport() {
   await play(); exp.started = true;
 }
 function exportTick(ts) {
-  const pct = song.durationSec ? Math.round(100 * pos / song.durationSec) : 100;
+  const pct = song.durationSec ? Math.min(100, Math.round(100 * pos / song.durationSec)) : 100;
   $('status').dataset.exp = 'Export vidéo en cours… ' + pct + ' % (gardez cet onglet visible)'; refreshStatus();
   if (!playing) { // fin du morceau : on laisse décroître la dernière note
     if (!exp.endAt) exp.endAt = ts + 1800;
@@ -679,7 +797,8 @@ function frame(ts) {
   if (playing && song) {
     pos += dt * speed;
     while (speed > 0 && nextIdx < song.notes.length && song.notes[nextIdx].t0 <= pos) playNote(song.notes[nextIdx++]);
-    if (pos >= song.durationSec) { pos = song.durationSec; playing = false; refreshButtons(); }
+    const END = song.durationSec + BUBBLE_MIN + BURST_SEC; // on laisse finir la dernière bulle (sinon elle reste figée au début de son éclatement)
+    if (pos >= END) { pos = END; playing = false; refreshButtons(); }
   }
   if (exp.active && exp.started) exportTick(ts);
   draw();
