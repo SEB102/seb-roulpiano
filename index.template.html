@@ -40,6 +40,8 @@
              box-shadow:0 6px 20px rgba(0,0,0,.5); pointer-events:none; }
   .tip:hover .tiptext, .tip:focus-within .tiptext { display:block; }
   footer { background:var(--panel); border-top:1px solid var(--line); text-align:center; color:var(--muted); font-size:12px; letter-spacing:.12em; padding:6px 12px; }
+  footer a { color:#a9b6ff; text-decoration:underline; text-underline-offset:3px; }
+  footer a:hover { color:#fff; }
   main { flex:1; min-height:0; position:relative; }
   canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
   #fpop { position:absolute; z-index:6; display:none; align-items:center; gap:5px; background:#0b0e1c; border:1px solid var(--accent); border-radius:10px; padding:6px 8px; box-shadow:0 6px 20px rgba(0,0,0,.5); }
@@ -96,8 +98,8 @@
       <label for="vis">Mesures visibles</label>
       <select id="vis"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
     </div>
-    <span class="legend" title="La couleur suit la main du doigté : par défaut clé de sol = main droite, clé de fa = main gauche ; modifiable note par note"><span class="sw" style="background:var(--R)"></span>M.D. (clé de sol)
-      <span class="sw" style="background:var(--L);margin-left:10px"></span>M.G. (clé de fa)</span>
+    <span class="legend" title="La couleur suit la main du doigté (modifiable note par note) : orange = main droite, bleu = main gauche"><span class="sw" style="background:var(--R)"></span>M.D.
+      <span class="sw" style="background:var(--L);margin-left:10px"></span>M.G.</span>
   </div>
   <div class="row">
     <span id="title">Aucun morceau</span>
@@ -111,7 +113,7 @@
   <div id="fpop"><button data-h="R" title="Main droite (touche D)">M.D.</button><button data-h="L" title="Main gauche (touche G)">M.G.</button><span class="sep"></span><button data-f="1">1</button><button data-f="2">2</button><button data-f="3">3</button><button data-f="4">4</button><button data-f="5">5</button><button data-f="0" title="Effacer le doigté">✕</button></div>
   <div id="drop">Déposez un fichier .mid / .musicxml / .mxl</div>
 </main>
-<footer>SEB-ROULPIANO · Octobre 2026</footer>
+<footer>SEB-ROULPIANO · Octobre 2026 · <a href="MODE-D-EMPLOI.html" target="_blank" rel="noopener">Mode d'emploi</a></footer>
 
 <script>
 'use strict';
@@ -142,7 +144,7 @@ function keyRect(m, W) {
 }
 const NOMS = ['Do', 'Do♯', 'Ré', 'Ré♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
 
-// ---------- Couleurs : main droite (M.D.) = orange, main gauche (M.G.) = bleu ; la main est celle du doigté (par défaut : clé de sol = M.D., clé de fa = M.G.) ----------
+// ---------- Couleurs : main droite (M.D.) = orange, main gauche (M.G.) = bleu ; la main est celle du doigté, indépendamment des clés ----------
 const COL = {
   R: { note: '#ff9a2e', noteB: '#d9690a', lit: '#ffd08a', key: '#ffb04d', keyB: '#ff8a1f' },
   L: { note: '#3b9cff', noteB: '#1f66c9', lit: '#a9d3ff', key: '#6bb2ff', keyB: '#3b86ee' },
@@ -267,11 +269,11 @@ $('speed1').onclick = () => setSpeed(1);
 let showFing = true, selNote = null; const hit = [];
 try { const v = localStorage.getItem('seb-roulpiano-doigtes-affiches'); if (v !== null) showFing = v === '1'; } catch (e) {}
 const noteKey = n => n.tick + ':' + n.midi;
-const noteHand = n => n.fh || n.hand; // main du doigté : par défaut la clé (sol = droite, fa = gauche), modifiable note par note
+const noteHand = n => n.fh || n.hand; // main du doigté : par défaut celle déduite de la partition (portée haute = droite, basse = gauche), modifiable note par note
 const handTxt = n => (noteHand(n) === 'L' ? 'M.G.' : 'M.D.');
 const storeKey = () => 'seb-roulpiano-doigtes:' + song.title + '|' + song.notes.length + '|' + song.endTick;
 function loadFingerings() {
-  song.manual = { f: {}, h: {} }; // f : doigts saisis (0 = effacé), h : main du doigté si différente de la clé
+  song.manual = { f: {}, h: {} }; // f : doigts saisis (0 = effacé), h : main du doigté si différente de celle par défaut
   try {
     const raw = JSON.parse(localStorage.getItem(storeKey()) || 'null');
     if (raw) song.manual = (raw.f || raw.h) ? { f: raw.f || {}, h: raw.h || {} } : { f: raw, h: {} }; // ancien format : doigts seuls
