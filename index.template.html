@@ -277,11 +277,10 @@ $('speed1').onclick = () => setSpeed(1);
 // ---------- Doigtés ----------
 // Source : doigtés inscrits dans le MusicXML (n.fileFinger) + saisie manuelle (song.manual, mémorisée par morceau dans le navigateur).
 let fingMode = 'simple', lastOn = 'simple', showFing = true, fingIllus = false, selNote = null; const hit = [];
-function setFingMode(m, save = true) {
+// Le mode n'est PAS mémorisé : à chaque ouverture de l'application, on repart des doigtés simples.
+function setFingMode(m) {
   fingMode = m; if (m !== 'off') lastOn = m; showFing = m !== 'off'; fingIllus = m === 'illus'; refreshFingButton();
-  if (save) { try { localStorage.setItem('seb-roulpiano-doigtes-mode', m); } catch (e) {} }
 }
-try { const v = localStorage.getItem('seb-roulpiano-doigtes-mode'); if (v === 'off' || v === 'simple' || v === 'illus') setFingMode(v, false); } catch (e) {}
 const noteKey = n => n.tick + ':' + n.midi;
 const noteHand = n => n.fh || n.hand; // main du doigté : par défaut celle déduite de la partition (portée haute = droite, basse = gauche), modifiable note par note
 const handTxt = n => (noteHand(n) === 'L' ? 'M.G.' : 'M.D.');
