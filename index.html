@@ -149,7 +149,7 @@ function initSampler() {
   setSoundStatus('Piano : chargement des échantillons…');
   sampler = new Tone.Sampler({
     urls, release: 1, baseUrl: 'https://tonejs.github.io/audio/salamander/',
-    onload: () => { samplerReady = true; setSoundStatus('Piano : prêt'); },
+    onload: () => { samplerReady = true; setSoundStatus(''); },
     onerror: () => { sampler = null; setSoundStatus('Piano : synthé de secours (échantillons indisponibles)'); },
   }).toDestination();
 }
@@ -213,7 +213,7 @@ function refreshButtons() {
 }
 function refreshStatus() {
   const s = $('status'); const err = s.dataset.err;
-  s.textContent = err || s.dataset.exp || [s.dataset.snd, s.dataset.extra].filter(Boolean).join('  ·  '); s.classList.toggle('err', !!err);
+  s.textContent = err || s.dataset.exp || s.dataset.snd || ''; s.classList.toggle('err', !!err);
 }
 function showError(msg) { $('status').dataset.err = msg; refreshStatus(); }
 function clearError() { delete $('status').dataset.err; refreshStatus(); }
@@ -246,7 +246,7 @@ async function openBuffer(name, buf) {
     refreshButtons();
   } catch (err) { showError(err.message || String(err)); }
 }
-function setSoundStatusExtra(t) { $('status').dataset.extra = t; refreshStatus(); }
+function setSoundStatusExtra() {} // l'info « sol/fa = … » n'est plus affichée
 $('file').onchange = async e => {
   const f = e.target.files[0]; if (!f) return;
   await openBuffer(f.name, await f.arrayBuffer()); e.target.value = '';
