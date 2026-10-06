@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEB-ROULPIANO</title>
+<style>
+  :root { --bg:#0e1120; --panel:#171b30; --line:#2a3050; --text:#e8ebf7; --muted:#8d94b3;
+          --R:#ff9a2e; --L:#3b9cff; --accent:#5b7cff; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; background:var(--bg); color:var(--text);
+              font:14px/1.3 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  body { display:flex; flex-direction:column; }
+  header { background:var(--panel); border-bottom:1px solid var(--line); padding:8px 12px; display:flex; flex-direction:column; gap:8px; }
+  .row { display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; }
+  .grp { display:flex; align-items:center; gap:8px; }
+  button, .btn { background:#252b4a; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:7px 13px;
+                 font:inherit; cursor:pointer; white-space:nowrap; }
+  button:hover, .btn:hover { background:#2f3760; }
+  button:disabled { opacity:.4; cursor:default; }
+  button.primary { background:var(--accent); border-color:var(--accent); font-weight:600; }
+  button.primary:hover { background:#6f8bff; }
+  input[type=file] { display:none; }
+  input[type=range] { accent-color:var(--accent); }
+  select { background:#252b4a; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit; }
+  label { color:var(--muted); }
+  #speed { width:190px; }
+  #speedVal { display:inline-block; min-width:3.4em; text-align:right; font-variant-numeric:tabular-nums; font-weight:600; }
+  .sw { display:inline-block; width:12px; height:12px; border-radius:3px; vertical-align:-1px; margin-right:5px; }
+  .legend { color:var(--muted); font-size:13px; }
+  #title { font-weight:600; max-width:34ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #status { color:var(--muted); font-size:13px; margin-left:auto; }
+  #status.err { color:#ff7b7b; }
+  #progress { flex:1; min-width:160px; }
+  #info { color:var(--muted); font-variant-numeric:tabular-nums; min-width:21ch; text-align:right; }
+  .tip { position:relative; }
+  .tiptext { display:none; position:absolute; top:calc(100% + 8px); left:0; width:max-content; max-width:min(520px, 90vw); z-index:20;
+             background:#0b0e1c; color:var(--text); border:1px solid var(--accent); border-radius:8px; padding:8px 12px; font-size:13px; line-height:1.4;
+             box-shadow:0 6px 20px rgba(0,0,0,.5); pointer-events:none; }
+  .tip:hover .tiptext, .tip:focus-within .tiptext { display:block; }
+  footer { background:var(--panel); border-top:1px solid var(--line); text-align:center; color:var(--muted); font-size:12px; letter-spacing:.12em; padding:6px 12px; }
+  main { flex:1; min-height:0; position:relative; }
+  canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  #drop { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(91,124,255,.25);
+          border:3px dashed var(--accent); font-size:22px; z-index:5; pointer-events:none; }
+  body.dragging #drop { display:flex; }
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<script src="core.js"></script>
+</head>
+<body>
+<header>
+  <div class="row">
+    <label class="btn" for="file">📂 Ouvrir un fichier…</label>
+    <input id="file" type="file" accept=".mid,.midi,.musicxml,.xml,.mxl">
+    <button id="demo" title="Charger le morceau d'exemple intégré">Exemple</button>
+    <div class="grp tip">
+      <button id="export">🎬 Export vidéo</button>
+      <select id="xres" title="Résolution de la vidéo"><option value="1280">720p</option><option value="1920">1080p</option></select>
+      <span class="tiptext" role="tooltip">Garder l'onglet visible pendant l'export, sinon le navigateur ralentit l'enregistrement. L'export est impossible à la vitesse 0.</span>
+    </div>
+    <div class="grp">
+      <button id="rew" title="Retour au début (Début)">⏮ Début</button>
+      <button id="play" class="primary" title="Lecture (Espace)">▶ Lecture</button>
+      <button id="stop" title="Arrêt : met en pause à la position courante (Espace)">⏹ Arrêt</button>
+    </div>
+    <div class="grp">
+      <label for="speed">Vitesse</label>
+      <input id="speed" title="Vitesse de lecture (0 à 3)" type="range" min="0" max="3" step="0.05" value="1">
+      <span id="speedVal">×1,00</span>
+      <button id="speed1" title="Remettre la vitesse à 1">1×</button>
+    </div>
+    <div class="grp">
+      <label for="vis">Mesures visibles</label>
+      <select id="vis"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
+    </div>
+    <span class="legend"><span class="sw" style="background:var(--R)"></span>clé de sol
+      <span class="sw" style="background:var(--L);margin-left:10px"></span>clé de fa</span>
+  </div>
+  <div class="row">
+    <span id="title">Aucun morceau</span>
+    <input id="progress" title="Position dans le morceau" type="range" min="0" max="1" step="0.001" value="0" disabled>
+    <span id="info">—</span>
+    <span id="status"></span>
+  </div>
+</header>
+<main>
+  <canvas id="cv"></canvas>
+  <div id="drop">Déposez un fichier .mid / .musicxml / .mxl</div>
+</main>
+<footer>SEB-ROULPIANO · Octobre 2026</footer>
+
+<script>
+'use strict';
+const EXEMPLE_B64 = '__EXEMPLE_B64__';
+const $ = id => document.getElementById(id);
+const cv = $('cv'); let ctx = cv.getContext('2d'); const screenCtx = ctx;
+
+// ---------- État ----------
+let song = null, pos = 0, playing = false, speed = 1, visMeasures = 2, nextIdx = 0, lastTs = 0, seeking = false;
+
+// ---------- Clavier 88 touches ----------
+const FIRST = 21, LAST = 108;
+const BLACK = new Set([1, 3, 6, 8, 10]);
+const isBlack = m => BLACK.has(m % 12);
+const whiteIdx = {}; let NW = 0;
+for (let m = FIRST; m <= LAST; m++) if (!isBlack(m)) whiteIdx[m] = NW++;
+function keyRect(m, W) {
+  const ww = W / NW;
+  if (!isBlack(m)) return { x: whiteIdx[m] * ww, w: ww, black: false };
+  const bw = ww * 0.6;
+  return { x: (whiteIdx[m - 1] + 1) * ww - bw / 2, w: bw, black: true };
+}
+const NOMS = ['Do', 'Do♯', 'Ré', 'Ré♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
+
+// ---------- Couleurs : clé de sol (main droite) = orange, clé de fa (main gauche) = bleu ----------
+const COL = {
+  R: { note: '#ff9a2e', noteB: '#d9690a', lit: '#ffd08a', key: '#ffb04d', keyB: '#ff8a1f' },
+  L: { note: '#3b9cff', noteB: '#1f66c9', lit: '#a9d3ff', key: '#6bb2ff', keyB: '#3b86ee' },
+};
+
+// ---------- Son ----------
+const synthFallback = {
+  ctx: null, voices: new Set(),
+  tap: null,
+  ensure() { if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)(); },
+  play(midi, vel, dur) {
+    this.ensure();
+    const c = this.ctx, t = c.currentTime, f = 440 * Math.pow(2, (midi - 69) / 12), v = 0.25 * vel / 127;
+    const g = c.createGain(); g.connect(c.destination); if (this.tap) g.connect(this.tap);
+    g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(v, t + 0.005);
+    g.gain.setTargetAtTime(v * 0.05, t + 0.01, 0.9);
+    g.gain.setTargetAtTime(0, t + dur, 0.07);
+    const o1 = c.createOscillator(), o2 = c.createOscillator(), g2 = c.createGain();
+    o1.type = 'triangle'; o1.frequency.value = f; o2.type = 'sine'; o2.frequency.value = f * 2; g2.gain.value = 0.35;
+    o1.connect(g); o2.connect(g2); g2.connect(g);
+    o1.start(t); o2.start(t); o1.stop(t + dur + 1); o2.stop(t + dur + 1);
+    const voice = { o1, o2, g }; this.voices.add(voice); o1.onended = () => this.voices.delete(voice);
+  },
+  releaseAll() { this.voices.forEach(v => { try { v.g.gain.cancelScheduledValues(0); v.g.gain.setTargetAtTime(0, this.ctx.currentTime, 0.03); v.o1.stop(this.ctx.currentTime + 0.2); v.o2.stop(this.ctx.currentTime + 0.2); } catch (e) {} }); this.voices.clear(); },
+};
+let sampler = null, samplerReady = false;
+const stats = { played: 0 };
+function setSoundStatus(t) { $('status').dataset.snd = t; refreshStatus(); }
+function initSampler() {
+  if (typeof Tone === 'undefined') { setSoundStatus('Piano : synthé de secours (Tone.js indisponible)'); return; }
+  const urls = { A0: 'A0.mp3', C8: 'C8.mp3' }; // échantillons Salamander : un tous les 3 demi-tons
+  for (let o = 1; o <= 7; o++) ['C', 'D#', 'F#', 'A'].forEach(n => { urls[n + o] = n.replace('#', 's') + o + '.mp3'; });
+  setSoundStatus('Piano : chargement des échantillons…');
+  sampler = new Tone.Sampler({
+    urls, release: 1, baseUrl: 'https://tonejs.github.io/audio/salamander/',
+    onload: () => { samplerReady = true; setSoundStatus('Piano : prêt'); },
+    onerror: () => { sampler = null; setSoundStatus('Piano : synthé de secours (échantillons indisponibles)'); },
+  }).toDestination();
+}
+function playNote(n) {
+  stats.played++;
+  const dur = Math.min(60, Math.max(0.06, (n.t1 - n.t0) / speed)); // vitesse 0 : jamais appelée (cf. frame)
+  if (samplerReady && sampler) sampler.triggerAttackRelease(Tone.Frequency(n.midi, 'midi').toNote(), dur, Tone.now(), n.vel / 127);
+  else synthFallback.play(n.midi, n.vel, dur);
+}
+function releaseAll() { try { if (sampler && samplerReady) sampler.releaseAll(Tone.now()); } catch (e) {} synthFallback.releaseAll(); }
+
+// ---------- Utilitaires temps ----------
+function lowerBoundTick(tick) { // 1er indice dont n.tick >= tick
+  const a = song.notes; let lo = 0, hi = a.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (a[m].tick < tick) lo = m + 1; else hi = m; }
+  return lo;
+}
+function lowerBoundSec(sec) {
+  const a = song.notes; let lo = 0, hi = a.length;
+  while (lo < hi) { const m = (lo + hi) >> 1; if (a[m].t0 < sec) lo = m + 1; else hi = m; }
+  return lo;
+}
+function measureIndexAt(tick) {
+  const a = song.measures; let lo = 0, hi = a.length - 1;
+  while (lo < hi) { const m = (lo + hi + 1) >> 1; if (a[m].startTick <= tick) lo = m; else hi = m - 1; }
+  return lo;
+}
+const fmt = s => { s = Math.max(0, s); return Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0'); };
+
+// ---------- Contrôles ----------
+async function play() {
+  if (!song || playing) return;
+  if (pos >= song.durationSec - 0.01) pos = 0;
+  try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
+  nextIdx = lowerBoundSec(pos - 1e-6);
+  lastTs = performance.now(); playing = true; refreshButtons();
+}
+function pause() { if (!playing) return; playing = false; releaseAll(); refreshButtons(); }
+function seek(sec) {
+  if (!song) return;
+  pos = Math.min(Math.max(0, sec), song.durationSec);
+  releaseAll(); nextIdx = lowerBoundSec(pos - 1e-6);
+}
+function rewind() { pause(); seek(0); }
+function seekMeasures(d) {
+  if (!song) return;
+  const i = measureIndexAt(song.timeline.secToTick(pos));
+  const j = Math.min(Math.max(0, i + d), song.measures.length - 1);
+  seek(song.timeline.tickToSec(song.measures[j].startTick));
+}
+function setSpeed(v) {
+  speed = Math.min(3, Math.max(0, Math.round(v * 100) / 100));
+  $('speed').value = speed; $('speedVal').textContent = '×' + speed.toFixed(2).replace('.', ',');
+}
+function refreshButtons() {
+  const x = exp.active;
+  $('play').disabled = !song || playing || x; $('stop').disabled = !playing || x; $('rew').disabled = !song || x;
+  $('progress').disabled = !song || x; $('speed').disabled = x; $('speed1').disabled = x; $('demo').disabled = x;
+  $('file').disabled = x; $('export').disabled = !song; $('xres').disabled = x;
+  $('export').textContent = x ? '⏹ Annuler l\'export' : '🎬 Export vidéo';
+}
+function refreshStatus() {
+  const s = $('status'); const err = s.dataset.err;
+  s.textContent = err || s.dataset.exp || [s.dataset.snd, s.dataset.extra].filter(Boolean).join('  ·  '); s.classList.toggle('err', !!err);
+}
+function showError(msg) { $('status').dataset.err = msg; refreshStatus(); }
+function clearError() { delete $('status').dataset.err; refreshStatus(); }
+
+$('play').onclick = play; $('stop').onclick = pause; $('rew').onclick = rewind;
+$('speed').oninput = e => setSpeed(parseFloat(e.target.value));
+$('speed1').onclick = () => setSpeed(1);
+$('vis').onchange = e => { visMeasures = parseInt(e.target.value, 10); };
+$('progress').oninput = e => { seeking = true; seek(parseFloat(e.target.value) * song.durationSec); };
+$('progress').onchange = () => { seeking = false; };
+addEventListener('keydown', e => {
+  if (exp.active) { if (e.code === 'Escape') stopExport(true); return; }
+  if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
+  if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); }
+  else if (e.code === 'Home') { e.preventDefault(); rewind(); }
+  else if (e.code === 'ArrowLeft') { e.preventDefault(); seekMeasures(-1); }
+  else if (e.code === 'ArrowRight') { e.preventDefault(); seekMeasures(1); }
+  else if (e.code === 'ArrowUp' && e.target.type !== 'range') { e.preventDefault(); setSpeed(speed + 0.05); }
+  else if (e.code === 'ArrowDown' && e.target.type !== 'range') { e.preventDefault(); setSpeed(speed - 0.05); }
+});
+
+// ---------- Chargement de fichiers ----------
+async function openBuffer(name, buf) {
+  try {
+    const s = await PianoCore.loadSong(name, new Uint8Array(buf));
+    pause(); song = s; pos = 0; nextIdx = 0; clearError();
+    $('title').textContent = s.title; $('title').title = s.title;
+    const modes = { 'pistes': 'sol/fa = 2 pistes', 'portées': 'sol/fa = 2 portées', 'parties': 'sol/fa = 2 parties', 'do-central': 'sol/fa = coupure au Do central' };
+    setSoundStatusExtra(modes[s.handMode] || '');
+    refreshButtons();
+  } catch (err) { showError(err.message || String(err)); }
+}
+function setSoundStatusExtra(t) { $('status').dataset.extra = t; refreshStatus(); }
+$('file').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  await openBuffer(f.name, await f.arrayBuffer()); e.target.value = '';
+};
+$('demo').onclick = () => {
+  const bin = atob(EXEMPLE_B64); const b = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
+  openBuffer('Ode à la joie (exemple)', b.buffer);
+};
+let dragDepth = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+addEventListener('dragleave', e => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', async e => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
+  const f = e.dataTransfer.files[0]; if (f) await openBuffer(f.name, await f.arrayBuffer());
+});
+
+// ---------- Dessin ----------
+let cssW = 0, cssH = 0, dpr = 1;
+function fitCanvas() {
+  const r = cv.getBoundingClientRect(); dpr = window.devicePixelRatio || 1;
+  const w = Math.round(r.width), h = Math.round(r.height);
+  if (w !== cssW || h !== cssH || cv.width !== Math.round(w * dpr)) {
+    cssW = w; cssH = h; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  }
+}
+function rrect(x, y, w, h, r) {
+  r = Math.min(r, w / 2, h / 2);
+  ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+function draw() {
+  fitCanvas();
+  renderScene(screenCtx, cssW, cssH, dpr);
+  updateInfo();
+  if (exp.active) { renderScene(exp.ctx, exp.W, exp.H, exp.scale); drawBand(exp.ctx, exp.W, exp.H, exp.scale); }
+}
+// petit bandeau sous l'image de la vidéo (hors zone de jeu)
+const BAND = 24;
+function drawBand(c, W, H, k) {
+  c.setTransform(k, 0, 0, k, 0, 0);
+  c.fillStyle = '#171b30'; c.fillRect(0, H, W, BAND);
+  c.fillStyle = '#2a3050'; c.fillRect(0, H, W, 1);
+  c.fillStyle = '#8d94b3'; c.font = '12px -apple-system, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+  if ('letterSpacing' in c) c.letterSpacing = '1.5px';
+  c.fillText('SEB-ROULPIANO · Octobre 2026', W / 2, H + BAND / 2 + 1);
+  if ('letterSpacing' in c) c.letterSpacing = '0px';
+  c.textBaseline = 'alphabetic';
+}
+function updateInfo() {
+  if (!song) return;
+  const posTick = song.timeline.secToTick(pos), M = song.measures[measureIndexAt(posTick)];
+  const bpm = song.timeline.bpmAtTick(posTick) * speed;
+  $('info').textContent = 'Mesure ' + M.label + ' / ' + song.measures[song.measures.length - 1].label + '  ·  ♩=' + Math.round(bpm) + '  ·  ' + fmt(pos) + ' / ' + fmt(song.durationSec);
+  if (!seeking) $('progress').value = song.durationSec ? pos / song.durationSec : 0;
+}
+// dessine la scène dans le contexte c (écran ou canvas d'export) ; W,H en pixels logiques, k = facteur d'échelle
+function renderScene(c, W, H, k) {
+  const prev = ctx; ctx = c;
+  try { scene(W, H, k); } finally { ctx = prev; }
+}
+function scene(W, H, dpr) {
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const kbH = Math.min(170, Math.max(80, H * 0.2)), rollH = H - kbH;
+  const g = ctx.createLinearGradient(0, 0, 0, rollH); g.addColorStop(0, '#0b0e1c'); g.addColorStop(1, '#161b34');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, rollH);
+
+  // guides verticaux (limites des touches blanches, Do renforcé)
+  const ww = W / NW;
+  for (let m = FIRST; m <= LAST; m++) {
+    if (isBlack(m)) continue;
+    const x = whiteIdx[m] * ww;
+    ctx.fillStyle = m % 12 === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.035)';
+    ctx.fillRect(Math.round(x), 0, 1, rollH);
+  }
+
+  const active = new Map(); // midi -> main
+  if (!song) {
+    ctx.fillStyle = '#8d94b3'; ctx.font = '600 18px -apple-system, sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('Ouvrez un fichier MIDI / MusicXML (ou glissez-le ici), ou cliquez sur « Exemple »', W / 2, rollH / 2);
+    drawKeyboard(W, rollH, kbH, active); return;
+  }
+
+  const posTick = song.timeline.secToTick(pos);
+  const mi = measureIndexAt(posTick), M = song.measures[mi];
+  const winT = Math.max(1, M.lenTick * visMeasures), topTick = posTick + winT;
+  const y = t => rollH - (t - posTick) / winT * rollH;
+
+  ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, rollH); ctx.clip();
+
+  // bandes de mesures + temps + numéros
+  for (let i = mi; i < song.measures.length && song.measures[i].startTick < topTick; i++) {
+    const m = song.measures[i], yTop = y(m.startTick + m.lenTick), yBot = y(m.startTick);
+    if (i % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.fillRect(0, yTop, W, yBot - yTop); }
+    const beat = song.ppq * 4 / m.den;
+    ctx.fillStyle = 'rgba(255,255,255,.07)';
+    for (let t = m.startTick + beat; t < m.startTick + m.lenTick - 1; t += beat) ctx.fillRect(0, Math.round(y(t)), W, 1);
+    if (m.startTick >= posTick) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(0, Math.round(yBot), W, 2); }
+    // numéro (collé en bas si la mesure est en cours)
+    const ly = Math.min(yBot, rollH - 4) - 6;
+    ctx.font = '700 15px -apple-system, sans-serif'; ctx.textAlign = 'left';
+    const label = m.label, tw = ctx.measureText(label).width;
+    ctx.fillStyle = i === mi ? 'rgba(91,124,255,.95)' : 'rgba(40,48,86,.95)';
+    rrect(6, ly - 15, tw + 14, 21, 6); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.fillText(label, 13, ly);
+  }
+
+  // notes visibles
+  const vis = [];
+  for (let i = lowerBoundTick(posTick - song.maxDur); i < song.notes.length && song.notes[i].tick < topTick; i++) {
+    const n = song.notes[i];
+    if (n.tick + n.dur <= posTick) continue;
+    vis.push(n);
+    if (n.tick <= posTick) active.set(n.midi, n.hand);
+  }
+  [false, true].forEach(blackPass => {
+    vis.forEach(n => {
+      const kr = keyRect(n.midi, W); if (kr.black !== blackPass) return;
+      const c = COL[n.hand], lit = n.tick <= posTick;
+      const y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5);
+      const x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
+      ctx.save();
+      if (lit) { ctx.shadowColor = c.note; ctx.shadowBlur = 16; }
+      ctx.fillStyle = lit ? c.lit : (kr.black ? c.noteB : c.note);
+      rrect(x, y0, w, bottom - y0, 5); ctx.fill();
+      ctx.restore();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; rrect(x + .5, y0 + .5, w - 1, bottom - y0 - 1, 5); ctx.stroke();
+      if (!kr.black && w >= 19 && bottom - y0 >= 15) {
+        ctx.fillStyle = 'rgba(10,12,30,.85)'; ctx.font = '700 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(NOMS[n.midi % 12], x + w / 2, bottom - 4);
+      }
+    });
+  });
+  ctx.restore();
+
+  // ligne de jeu
+  ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, rollH - 2, W, 2);
+  drawKeyboard(W, rollH, kbH, active);
+}
+
+function drawKeyboard(W, top, kbH, active) {
+  const ww = W / NW, bh = kbH * 0.62;
+  ctx.fillStyle = '#05060d'; ctx.fillRect(0, top, W, kbH);
+  for (let m = FIRST; m <= LAST; m++) {
+    if (isBlack(m)) continue;
+    const r = keyRect(m, W), hand = active.get(m);
+    const gr = ctx.createLinearGradient(0, top, 0, top + kbH);
+    if (hand) { gr.addColorStop(0, COL[hand].key); gr.addColorStop(1, COL[hand].lit); } else { gr.addColorStop(0, '#f7f7f9'); gr.addColorStop(1, '#d9dbe3'); }
+    ctx.fillStyle = gr; rrect(r.x + .5, top + 2, r.w - 1, kbH - 3, 3); ctx.fill();
+    if (m % 12 === 0 && ww >= 17) {
+      ctx.fillStyle = hand ? '#1b1b2a' : '#6a6f88'; ctx.font = '600 11px -apple-system, sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText('Do' + (Math.floor(m / 12) - 1), r.x + r.w / 2, top + kbH - 9);
+    }
+  }
+  for (let m = FIRST; m <= LAST; m++) {
+    if (!isBlack(m)) continue;
+    const r = keyRect(m, W), hand = active.get(m);
+    ctx.fillStyle = hand ? COL[hand].keyB : '#15161f';
+    rrect(r.x, top + 2, r.w, bh, 3); ctx.fill();
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(0, top, W, 2);
+}
+
+// ---------- Export vidéo (enregistrement en temps réel : image + son) ----------
+const exp = { active: false, started: false, rec: null, chunks: [], canvas: null, ctx: null, W: 1280, H: 720, scale: 1, endAt: 0, cleanup: null, cancelled: false, mime: '' };
+function pickMime() {
+  if (!window.MediaRecorder) return '';
+  return ['video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4', 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+}
+async function startExport() {
+  if (!song || exp.active) return;
+  clearError();
+  if (speed <= 0) return showError('Export impossible à la vitesse 0.');
+  const mime = pickMime(); if (!mime) return showError('Ce navigateur ne sait pas enregistrer de vidéo (essayez Chrome).');
+  if (sampler && !samplerReady) return showError('Attendez la fin du chargement du piano avant d\'exporter.');
+  pause(); seek(0);
+  try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
+  let audioStream;
+  if (sampler && samplerReady) {
+    const d = Tone.context.createMediaStreamDestination(); Tone.Destination.connect(d);
+    audioStream = d.stream; exp.cleanup = () => { try { Tone.Destination.disconnect(d); } catch (e) {} };
+  } else {
+    synthFallback.ensure(); const d = synthFallback.ctx.createMediaStreamDestination(); synthFallback.tap = d;
+    audioStream = d.stream; exp.cleanup = () => { synthFallback.tap = null; };
+  }
+  const outW = parseInt($('xres').value, 10);
+  exp.W = 1280; exp.H = 720; exp.scale = outW / 1280;
+  exp.canvas = document.createElement('canvas'); exp.canvas.width = outW; exp.canvas.height = Math.round((720 + BAND) * exp.scale);
+  exp.ctx = exp.canvas.getContext('2d');
+  exp.mime = mime; exp.chunks = []; exp.cancelled = false; exp.started = false; exp.active = true;
+  draw(); // 1re image avant le début de la capture
+  const stream = new MediaStream([...exp.canvas.captureStream(30).getVideoTracks(), ...audioStream.getAudioTracks()]);
+  exp.rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: outW >= 1920 ? 12e6 : 6e6 });
+  exp.rec.ondataavailable = e => { if (e.data && e.data.size) exp.chunks.push(e.data); };
+  exp.rec.onstop = finishExport;
+  exp.rec.start(1000);
+  refreshButtons();
+  await play(); exp.started = true;
+}
+function exportTick(ts) {
+  const pct = song.durationSec ? Math.round(100 * pos / song.durationSec) : 100;
+  $('status').dataset.exp = 'Export vidéo en cours… ' + pct + ' % (gardez cet onglet visible)'; refreshStatus();
+  if (!playing) { // fin du morceau : on laisse décroître la dernière note
+    if (!exp.endAt) exp.endAt = ts + 1800;
+    else if (ts >= exp.endAt) stopExport(false);
+  }
+}
+function stopExport(cancel) {
+  if (!exp.active || !exp.rec || exp.rec.state === 'inactive') return;
+  exp.cancelled = cancel; pause(); exp.rec.stop();
+}
+function finishExport() {
+  const type = exp.mime.split(';')[0], ext = type === 'video/mp4' ? 'mp4' : 'webm';
+  if (exp.cleanup) exp.cleanup();
+  const wasCancelled = exp.cancelled, chunks = exp.chunks;
+  exp.active = false; exp.started = false; exp.endAt = 0; exp.rec = null; exp.chunks = [];
+  delete $('status').dataset.exp;
+  seek(0); refreshButtons();
+  if (wasCancelled) { refreshStatus(); return; }
+  const blob = new Blob(chunks, { type }), name = (song.title || 'piano-roll').replace(/[\\/:*?"<>|]+/g, '_') + '.' + ext;
+  stats.lastExport = { size: blob.size, type, name, blob };
+  if (!window.__noDownload) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  }
+  $('status').dataset.exp = 'Vidéo enregistrée : ' + name + ' (' + (blob.size / 1048576).toFixed(1) + ' Mo)'; refreshStatus();
+  setTimeout(() => { delete $('status').dataset.exp; refreshStatus(); }, 8000);
+}
+$('export').onclick = () => (exp.active ? stopExport(true) : startExport());
+
+// ---------- Boucle ----------
+function frame(ts) {
+  const dt = Math.min(0.25, (ts - lastTs) / 1000); lastTs = ts;
+  if (playing && song) {
+    pos += dt * speed;
+    while (speed > 0 && nextIdx < song.notes.length && song.notes[nextIdx].t0 <= pos) playNote(song.notes[nextIdx++]);
+    if (pos >= song.durationSec) { pos = song.durationSec; playing = false; refreshButtons(); }
+  }
+  if (exp.active && exp.started) exportTick(ts);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+// ---------- Démarrage ----------
+setSpeed(1); refreshButtons(); initSampler();
+requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
+// accès pour les tests automatiques
+window.__app = { stats, get song() { return song; }, get pos() { return pos; }, get playing() { return playing; }, get speed() { return speed; } };
+</script>
+</body>
+</html>
