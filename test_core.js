@@ -137,5 +137,36 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${
     for (let lo = 21; lo <= 108; lo += 3) for (let hi = lo; hi <= 108; hi += 7) { const r = C.keyboardRange(lo, hi); assert.ok(r.first <= lo && r.last >= hi && r.first >= 21 && r.last <= 108, lo + '-' + hi); }
   });
 
+  await t('Deux mains écrites sur la MÊME portée (cas Hanon) : voix parallèles → M.D. en haut, M.G. en bas', () => {
+    const note = (step, oct, staff, voice, dur = 1) => `<note><pitch><step>${step}</step><octave>${oct}</octave></pitch><duration>${dur}</duration><voice>${voice}</voice><staff>${staff}</staff></note>`;
+    const xml = `<?xml version="1.0"?><score-partwise><part-list/><part id="P1">
+<measure number="1"><attributes><divisions>4</divisions><time><beats>2</beats><beat-type>4</beat-type></time><staves>2</staves></attributes>
+<note><rest measure="yes"/><duration>8</duration><voice>1</voice><staff>1</staff></note><backup><duration>8</duration></backup>
+${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2, 5)}<backup><duration>4</duration></backup>
+${note('C', 2, 2, 6)}${note('E', 2, 2, 6)}${note('G', 2, 2, 6)}${note('C', 3, 2, 6)}</measure>
+<measure number="2">
+${note('C', 5, 1, 1)}${note('E', 5, 1, 1)}${note('G', 5, 1, 1)}${note('C', 6, 1, 1)}<backup><duration>4</duration></backup>
+${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2, 5)}</measure>
+<measure number="3">
+${note('C', 3, 2, 5, 2)}${note('G', 3, 2, 5, 2)}<backup><duration>4</duration></backup>
+${note('C', 2, 2, 6, 4)}</measure>
+<measure number="4">
+${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2, 5)}</measure>
+</part></score-partwise>`;
+    const s = C.parseMusicXml(xml);
+    const at = m => s.notes.filter(x => x.tick >= s.measures[m].startTick && x.tick < s.measures[m].startTick + s.measures[m].lenTick);
+    const h = (m, midi) => at(m).filter(x => x.midi === midi).map(x => x.hand).join('');
+    // mesure 1 : deux lignes de rythme identique sur la portée du bas = deux mains en parallèle
+    assert.strictEqual(h(0, 60), 'R'); assert.strictEqual(h(0, 52), 'R'); // voix haute : main droite
+    assert.strictEqual(h(0, 36), 'L'); assert.strictEqual(h(0, 40), 'L'); // voix basse : main gauche
+    assert.strictEqual(h(0, 48), 'RL'); // do3 joué par la voix haute (début) puis par la voix basse (fin)
+    // mesure 2 : une note par portée → comportement par portée inchangé
+    assert.strictEqual(h(1, 72), 'R'); assert.strictEqual(h(1, 48), 'L');
+    // mesure 3 : deux voix de rythmes DIFFÉRENTS sur la portée du bas (basse + autre voix) → main gauche pour les deux
+    assert.ok(at(2).every(x => x.hand === 'L'));
+    // mesure 4 : une seule ligne sur la portée du bas → main gauche
+    assert.ok(at(3).every(x => x.hand === 'L'));
+  });
+
   console.log(`\n${n} tests passés`);
 })();

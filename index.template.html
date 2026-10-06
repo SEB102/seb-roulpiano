@@ -47,6 +47,9 @@
   #fpop { position:absolute; z-index:6; display:none; align-items:center; gap:5px; background:#0b0e1c; border:1px solid var(--accent); border-radius:10px; padding:6px 8px; box-shadow:0 6px 20px rgba(0,0,0,.5); }
   #fpop .sep { width:1px; align-self:stretch; background:var(--line); margin:0 3px; }
   #fpop button { padding:4px 10px; min-width:30px; }
+  #gpop { position:absolute; z-index:6; display:none; align-items:center; gap:8px; background:#0b0e1c; border:1px solid var(--accent); border-radius:10px; padding:6px 10px; box-shadow:0 6px 20px rgba(0,0,0,.5); }
+  #gpop .sep { width:1px; align-self:stretch; background:var(--line); }
+  #gpop button { padding:4px 12px; }
   #fpop #nums { display:none; gap:5px; }
   #fpop #rake { display:flex; line-height:0; } #fpop .fk { cursor:pointer; } #fpop .fk:hover circle { stroke:#fff; }
   #fpop button.on { background:var(--accent); border-color:var(--accent); font-weight:700; }
@@ -116,6 +119,7 @@
 </header>
 <main>
   <canvas id="cv"></canvas>
+  <div id="gpop"><span id="gcount"></span><span class="sep"></span><button data-gh="R" title="Affecter ces notes à la main droite">M.D.</button><button data-gh="L" title="Affecter ces notes à la main gauche">M.G.</button><button id="gcancel" title="Annuler la sélection (Échap)">✕</button></div>
   <div id="fpop"><button data-h="R" title="Main droite (touche D)">M.D.</button><button data-h="L" title="Main gauche (touche G)">M.G.</button><span class="sep"></span><span id="rake"></span><span id="nums"><button data-f="1">1</button><button data-f="2">2</button><button data-f="3">3</button><button data-f="4">4</button><button data-f="5">5</button></span><button data-f="0" title="Effacer le doigté">✕</button></div>
   <div id="drop">Déposez un fichier .mid / .musicxml / .mxl</div>
 </main>
@@ -236,12 +240,12 @@ async function play() {
   if (pos >= song.durationSec - 0.01) pos = 0;
   try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
   nextIdx = lowerBoundSec(pos - 1e-6);
-  hideFpop(); lastTs = performance.now(); playing = true; refreshButtons();
+  hideFpop(); clearGroup(); lastTs = performance.now(); playing = true; refreshButtons();
 }
 function pause() { if (!playing) return; playing = false; releaseAll(); refreshButtons(); }
 function seek(sec) {
   if (!song) return;
-  pos = Math.min(Math.max(0, sec), song.durationSec); hideFpop();
+  pos = Math.min(Math.max(0, sec), song.durationSec); hideFpop(); clearGroup();
   releaseAll(); nextIdx = lowerBoundSec(pos - 1e-6);
 }
 function rewind() { pause(); seek(0); }
@@ -322,8 +326,41 @@ function markFpop() {
   p.querySelectorAll('button[data-h]').forEach(b => b.classList.toggle('on', b.dataset.h === noteHand(n)));
 }
 function chooseHand(h) { if (!selNote) return; setHand(selNote, h); markFpop(); }
+// ---------- Sélection d'un groupe de notes (rectangle) : même main pour tout le groupe ----------
+let selGroup = new Set(), selRect = null, dragStart = null, justDragged = false;
+function clearGroup() { selGroup = new Set(); selRect = null; $('gpop').style.display = 'none'; }
+const rollBottom = () => cssH - Math.min(255, Math.max(120, cssH * 0.3));
+const canvasXY = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cssW / r.width, (e.clientY - r.top) * cssH / r.height]; };
+cv.addEventListener('mousedown', e => {
+  if (!song || exp.active || e.button !== 0) return;
+  const [x, y] = canvasXY(e); if (y > rollBottom()) return;
+  dragStart = { x, y, moved: false };
+});
+addEventListener('mousemove', e => {
+  if (!dragStart) return;
+  let [x, y] = canvasXY(e); x = Math.max(0, Math.min(cssW, x)); y = Math.max(0, Math.min(rollBottom(), y));
+  if (!dragStart.moved) { if (Math.hypot(x - dragStart.x, y - dragStart.y) < 5) return; dragStart.moved = true; pause(); hideFpop(); $('gpop').style.display = 'none'; }
+  selRect = { x: Math.min(x, dragStart.x), y: Math.min(y, dragStart.y), w: Math.abs(x - dragStart.x), h: Math.abs(y - dragStart.y) };
+  selGroup = new Set(hit.filter(h => h.x < selRect.x + selRect.w && h.x + h.w > selRect.x && h.top < selRect.y + selRect.h && h.bottom > selRect.y).map(h => h.n));
+});
+addEventListener('mouseup', () => {
+  if (!dragStart) return;
+  const moved = dragStart.moved; dragStart = null; if (!moved) return;
+  justDragged = true; setTimeout(() => { justDragged = false; }, 0); // le « click » qui suit le relâchement ne doit rien faire
+  if (!selGroup.size) { clearGroup(); return; }
+  const g = $('gpop'); $('gcount').textContent = selGroup.size + (selGroup.size > 1 ? ' notes' : ' note');
+  g.style.display = 'flex'; const w = g.offsetWidth, h = g.offsetHeight, below = selRect.y + selRect.h + 8;
+  g.style.left = Math.max(4, Math.min(cssW - w - 4, selRect.x + selRect.w / 2 - w / 2)) + 'px';
+  g.style.top = Math.max(4, Math.min(cssH - h - 4, below + h > cssH ? selRect.y - h - 8 : below)) + 'px';
+  selRect = null; // le rectangle disparaît, les notes restent entourées
+});
+$('gpop').addEventListener('click', e => {
+  const b = e.target.closest('button[data-gh]');
+  if (b) { selGroup.forEach(n => setHand(n, b.dataset.gh)); clearGroup(); } else if (e.target.closest('#gcancel')) clearGroup();
+});
 function hideFpop() { selNote = null; $('fpop').style.display = 'none'; }
 function showFpop(h) {
+  clearGroup();
   const p = $('fpop'); selNote = h.n;
   markFpop();
   p.style.display = 'flex';
@@ -343,7 +380,8 @@ $('fpop').addEventListener('click', e => {
 });
 $('fingMode').addEventListener('click', e => { const b = e.target.closest('button[data-m]'); if (b && song) setFingMode(b.dataset.m); });
 cv.addEventListener('click', e => {
-  if (!song || exp.active) return;
+  if (!song || exp.active || justDragged) return;
+  if (selGroup.size) clearGroup();
   const r = cv.getBoundingClientRect(), px = (e.clientX - r.left) * cssW / r.width, py = (e.clientY - r.top) * cssH / r.height;
   for (let i = hit.length - 1; i >= 0; i--) {
     const h = hit[i];
@@ -394,6 +432,7 @@ $('vis').onchange = e => { visMeasures = parseInt(e.target.value, 10); };
 $('progress').oninput = e => { seeking = true; seek(parseFloat(e.target.value) * song.durationSec); };
 $('progress').onchange = () => { seeking = false; };
 addEventListener('keydown', e => {
+  if (e.key === 'Escape' && selGroup.size) { clearGroup(); return; }
   if (selNote && !(e.target.tagName === 'INPUT' && e.target.type === 'number')) {
     if (/^[1-5]$/.test(e.key)) { e.preventDefault(); chooseFinger(parseInt(e.key, 10)); return; }
     if (e.key === '0' || e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); chooseFinger(0); return; }
@@ -415,7 +454,7 @@ addEventListener('keydown', e => {
 async function openBuffer(name, buf) {
   try {
     const s = await PianoCore.loadSong(name, new Uint8Array(buf));
-    pause(); song = s; pos = 0; nextIdx = 0; clearError(); $('tempo').value = fmtBpm(s.fileBpm); hideFpop(); loadFingerings(); { const r = PianoCore.keyboardRange(s.lo, s.hi); setRange(r.first, r.last); }
+    pause(); clearGroup(); song = s; pos = 0; nextIdx = 0; clearError(); $('tempo').value = fmtBpm(s.fileBpm); hideFpop(); loadFingerings(); { const r = PianoCore.keyboardRange(s.lo, s.hi); setRange(r.first, r.last); }
     $('title').textContent = s.title; $('title').title = s.title;
     const modes = { 'pistes': 'sol/fa = 2 pistes', 'portées': 'sol/fa = 2 portées', 'parties': 'sol/fa = 2 parties', 'do-central': 'sol/fa = coupure au Do central' };
     setSoundStatusExtra(modes[s.handMode] || '');
@@ -593,7 +632,11 @@ function scene(W, H, dpr) {
       Object.assign(rec, { px: px - 2, py: py - 2, pw: pw + 4, ph: ph + 4 });
       }
     }
-    if (onScreen) { hit.push(rec); if (n === selNote) { ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; rrect(x - 1, y0 - 1, w + 2, bottom - y0 + 2, 6); ctx.stroke(); } }
+    if (onScreen) { hit.push(rec); if (n === selNote || selGroup.has(n)) { ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; rrect(x - 1, y0 - 1, w + 2, bottom - y0 + 2, 6); ctx.stroke(); } }
+  }
+  if (onScreen && selRect) { // rectangle de sélection en cours
+    ctx.fillStyle = 'rgba(91,124,255,.18)'; ctx.fillRect(selRect.x, selRect.y, selRect.w, selRect.h);
+    ctx.save(); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#9fb0ff'; ctx.strokeRect(selRect.x + .5, selRect.y + .5, selRect.w, selRect.h); ctx.restore();
   }
   ctx.restore();
 
