@@ -88,7 +88,7 @@ function exempleElise() {
     { rh: [['A4', 6]], lh: [['A2', 6]] },
   ];
   const body = mes.map((m, i) => {
-    const attrs = i === 0 ? '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>3</beats><beat-type>8</beat-type></time><staves>2</staves></attributes><direction placement="above"><sound tempo="126"/></direction>' : '';
+    const attrs = i === 0 ? '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>3</beats><beat-type>8</beat-type></time><staves>2</staves></attributes><direction placement="above"><sound tempo="100"/></direction>' : '';
     const len = m.rh.reduce((s, x) => s + x[1], 0);
     const lh = m.lh.length ? `<backup><duration>${len}</duration></backup>${xmlNotes(m.lh, 2)}` : '';
     return `<measure number="${i}"${m.pickup ? ' implicit="yes"' : ''}>${attrs}${xmlNotes(m.rh, 1)}${lh}</measure>`;

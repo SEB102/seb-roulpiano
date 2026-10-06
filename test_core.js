@@ -94,8 +94,8 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${
     assert.strictEqual(s.notes.filter(x => x.hand === 'L').length, 3 + 3 + 3 + 3 + 3 + 1);
     assert.ok(s.notes.every(x => x.midi >= 36 && x.midi <= 88));
     assert.strictEqual(s.handMode, 'portées');
-    near(s.timeline.tickToSec(720), 60 / 126 * 1.5); // une mesure 3/8 = 1,5 noire
-    near(s.durationSec, 60 / 126 * (0.5 + 8 * 1.5), 0.01);
+    near(s.timeline.tickToSec(720), 60 / 100 * 1.5); // une mesure 3/8 = 1,5 noire
+    near(s.durationSec, 60 / 100 * (0.5 + 8 * 1.5), 0.01);
     assert.ok(s.notes.filter(x => x.hand === 'L').every(x => x.midi < 60) && s.notes.filter(x => x.tick === 240 + 0).some(x => x.midi === 76));
   });
 
