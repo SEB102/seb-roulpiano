@@ -364,8 +364,10 @@ function scene(W, H, dpr) {
     const m = song.measures[i], yTop = y(m.startTick + m.lenTick), yBot = y(m.startTick);
     if (i % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.fillRect(0, yTop, W, yBot - yTop); }
     const beat = song.ppq * 4 / m.den;
-    ctx.fillStyle = 'rgba(255,255,255,.07)';
-    for (let t = m.startTick + beat; t < m.startTick + m.lenTick - 1; t += beat) ctx.fillRect(0, Math.round(y(t)), W, 1);
+    // barres de subdivision (1 par temps, hors début de mesure) : pointillés bien visibles, plus fines que les barres de mesure
+    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.setLineDash([7, 5]);
+    for (let t = m.startTick + beat; t < m.startTick + m.lenTick - 1; t += beat) { const yy = Math.round(y(t)) + .5; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
+    ctx.restore();
     if (m.startTick >= posTick) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(0, Math.round(yBot), W, 2); }
     // numéro (collé en bas si la mesure est en cours)
     const ly = Math.min(yBot, rollH - 4) - 6;
