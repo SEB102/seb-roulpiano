@@ -22,6 +22,7 @@
   button.primary:hover { background:#6f8bff; }
   input[type=file] { display:none; }
   input[type=range] { accent-color:var(--accent); }
+  input[type=number] { width:4.8em; background:#252b4a; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit; font-variant-numeric:tabular-nums; }
   select { background:#252b4a; color:var(--text); border:1px solid var(--line); border-radius:8px; padding:6px 8px; font:inherit; }
   label { color:var(--muted); }
   #speed { width:190px; }
@@ -69,6 +70,11 @@
       <input id="speed" title="Vitesse de lecture (0 à 3)" type="range" min="0" max="3" step="0.05" value="1">
       <span id="speedVal">×1,00</span>
       <button id="speed1" title="Remettre la vitesse à 1">1×</button>
+    </div>
+    <div class="grp">
+      <label for="tempo">Tempo ♩ =</label>
+      <input id="tempo" type="number" min="20" max="300" step="1" disabled title="Tempo de départ (noires par minute). Par défaut : celui du fichier ; modifiable.">
+      <button id="tempoReset" title="Revenir au tempo du fichier">↺</button>
     </div>
     <div class="grp">
       <label for="vis">Mesures visibles</label>
@@ -209,6 +215,7 @@ function refreshButtons() {
   $('play').disabled = !song || playing || x; $('stop').disabled = !playing || x; $('rew').disabled = !song || x;
   $('progress').disabled = !song || x; $('speed').disabled = x; $('speed1').disabled = x; $('demo').disabled = x;
   $('file').disabled = x; $('export').disabled = !song; $('xres').disabled = x;
+  $('tempo').disabled = !song || x; $('tempoReset').disabled = !song || x;
   $('export').textContent = x ? '⏹ Annuler l\'export' : '🎬 Export vidéo';
 }
 function refreshStatus() {
@@ -221,6 +228,19 @@ function clearError() { delete $('status').dataset.err; refreshStatus(); }
 $('play').onclick = play; $('stop').onclick = pause; $('rew').onclick = rewind;
 $('speed').oninput = e => setSpeed(parseFloat(e.target.value));
 $('speed1').onclick = () => setSpeed(1);
+// ---------- Tempo de départ ----------
+const fmtBpm = b => String(Math.round(b * 10) / 10);
+function applyTempo(bpm) {
+  if (!song) return;
+  bpm = Math.min(300, Math.max(20, bpm));
+  const posTick = song.timeline.secToTick(pos);
+  PianoCore.retime(song, bpm);
+  pos = Math.min(song.durationSec, song.timeline.tickToSec(posTick));
+  releaseAll(); nextIdx = lowerBoundSec(pos - 1e-6);
+  $('tempo').value = fmtBpm(bpm);
+}
+$('tempo').onchange = e => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (isFinite(v) && v > 0) applyTempo(v); else if (song) e.target.value = fmtBpm(song.timeline.bpmAtTick(0)); };
+$('tempoReset').onclick = () => { if (song) applyTempo(song.fileBpm); };
 $('vis').onchange = e => { visMeasures = parseInt(e.target.value, 10); };
 $('progress').oninput = e => { seeking = true; seek(parseFloat(e.target.value) * song.durationSec); };
 $('progress').onchange = () => { seeking = false; };
@@ -239,7 +259,7 @@ addEventListener('keydown', e => {
 async function openBuffer(name, buf) {
   try {
     const s = await PianoCore.loadSong(name, new Uint8Array(buf));
-    pause(); song = s; pos = 0; nextIdx = 0; clearError();
+    pause(); song = s; pos = 0; nextIdx = 0; clearError(); $('tempo').value = fmtBpm(s.fileBpm);
     $('title').textContent = s.title; $('title').title = s.title;
     const modes = { 'pistes': 'sol/fa = 2 pistes', 'portées': 'sol/fa = 2 portées', 'parties': 'sol/fa = 2 parties', 'do-central': 'sol/fa = coupure au Do central' };
     setSoundStatusExtra(modes[s.handMode] || '');

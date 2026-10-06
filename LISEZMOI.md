@@ -6,6 +6,7 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 - **Fichiers** : .mid / .midi, .musicxml / .xml, .mxl (partition exportée de MuseScore, Finale, Sibelius…).
   Glisser-déposer possible. Bouton « Exemple » = début de « Lettre à Élise » (Beethoven) intégré, saisi de mémoire : à vérifier sur la partition.
 - **Commandes** : ⏮ Début · ▶ Lecture · ⏸ Pause (garde la position) · vitesse 0 à 3 (1× = tempo du fichier)
+  · **Tempo ♩ =** (noires/min) : par défaut celui du fichier (60 pour l'exemple), modifiable (20–300), ↺ pour revenir au tempo du fichier
   · barre de progression cliquable. Clavier : Espace = lecture/arrêt, Début = retour, ← → = mesure précédente/suivante, ↑ ↓ = vitesse.
 - **Couleurs** : orange = clé de sol (main droite), bleu = clé de fa (main gauche) ; teinte plus foncée = touche noire. Pas de doigtés.
   Mains : 2 pistes/parties/portées si le fichier en a deux (la plus aiguë = droite), sinon coupure au Do central.

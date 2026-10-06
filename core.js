@@ -119,12 +119,28 @@
     return finish({ format: 'midi', title, ppq, tempos, notes, handMode, measures: midiMeasures(timesigs, ppq, endTick), endTick });
   }
 
-  function finish(song) {
-    song.timeline = makeTimeline(song.tempos, song.ppq);
-    song.notes.sort((a, c) => a.tick - c.tick || a.midi - c.midi);
-    song.maxDur = song.notes.reduce((m, n) => Math.max(m, n.dur), 0);
+  function computeTimes(song) {
     song.durationSec = song.timeline.tickToSec(song.endTick);
     song.notes.forEach(n => { n.t0 = song.timeline.tickToSec(n.tick); n.t1 = song.timeline.tickToSec(n.tick + n.dur); });
+  }
+  // Fixe le tempo de départ (noire/min) ; les changements de tempo du fichier sont mis à l'échelle dans la même proportion.
+  function retime(song, startBpm) {
+    if (!(startBpm > 0)) throw new Error('Tempo invalide.');
+    const base = song.tempos0 || (song.tempos0 = song.tempos.map(t => ({ tick: t.tick, uspq: t.uspq })));
+    const f = startBpm / song.fileBpm;
+    song.tempos = base.map(t => ({ tick: t.tick, uspq: t.uspq / f }));
+    song.timeline = makeTimeline(song.tempos, song.ppq);
+    computeTimes(song);
+    return song;
+  }
+
+  function finish(song) {
+    if (!song.tempos.some(t => t.tick === 0)) song.tempos.unshift({ tick: 0, uspq: 500000 }); // 120 par défaut
+    song.timeline = makeTimeline(song.tempos, song.ppq);
+    song.fileBpm = song.timeline.bpmAtTick(0); // tempo de départ du fichier (noire par minute)
+    song.notes.sort((a, c) => a.tick - c.tick || a.midi - c.midi);
+    song.maxDur = song.notes.reduce((m, n) => Math.max(m, n.dur), 0);
+    computeTimes(song);
     song.lo = song.notes.length ? Math.min.apply(null, song.notes.map(n => n.midi)) : 60;
     song.hi = song.notes.length ? Math.max.apply(null, song.notes.map(n => n.midi)) : 72;
     return song;
@@ -302,6 +318,6 @@
     return song;
   }
 
-  const API = { parseMidi, parseMusicXml, parseMxl, parseXml, loadSong, makeTimeline, unzip };
+  const API = { retime, parseMidi, parseMusicXml, parseMxl, parseXml, loadSong, makeTimeline, unzip };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.PianoCore = API;
 })(typeof self !== 'undefined' ? self : this);

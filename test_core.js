@@ -99,5 +99,20 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${
     assert.ok(s.notes.filter(x => x.hand === 'L').every(x => x.midi < 60) && s.notes.filter(x => x.tick === 240 + 0).some(x => x.midi === 76));
   });
 
+  await t('Tempo de départ : valeur du fichier, modification proportionnelle', () => {
+    assert.strictEqual(Math.round(C.parseMusicXml(E.exempleElise()).fileBpm), 60);
+    const noTempo = C.parseMidi(E.midiFile(480, [[...E.noteEv(0, 480, 60)]], 0));
+    near(noTempo.fileBpm, 120); // défaut MIDI
+    const f = E.midiFile(480, [[E.tempoEv(0, 120), E.tempoEv(960, 60), ...E.noteEv(0, 480, 60), ...E.noteEv(1440, 480, 64)]], 0);
+    const s = C.parseMidi(f);
+    near(s.fileBpm, 120); near(s.notes[1].t0, 2.0); near(s.durationSec, 3.0);
+    C.retime(s, 60); // moitié moins vite, changement de tempo conservé en proportion
+    near(s.timeline.bpmAtTick(0), 60); near(s.timeline.bpmAtTick(1000), 30);
+    near(s.notes[1].t0, 4.0); near(s.durationSec, 6.0); near(s.notes[0].t1, 1.0);
+    C.retime(s, 240); near(s.timeline.bpmAtTick(0), 240); near(s.notes[1].t0, 1.0); // repart toujours de l'original
+    C.retime(s, 120); near(s.notes[1].t0, 2.0); near(s.durationSec, 3.0);
+    assert.throws(() => C.retime(s, 0), /invalide/);
+  });
+
   console.log(`\n${n} tests passés`);
 })();
