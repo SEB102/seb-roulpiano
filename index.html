@@ -276,7 +276,7 @@ $('speed').oninput = e => setSpeed(parseFloat(e.target.value));
 $('speed1').onclick = () => setSpeed(1);
 // ---------- Doigtés ----------
 // Source : doigtés inscrits dans le MusicXML (n.fileFinger) + saisie manuelle (song.manual, mémorisée par morceau dans le navigateur).
-let fingMode = 'illus', lastOn = 'illus', showFing = true, fingIllus = true, selNote = null; const hit = [];
+let fingMode = 'simple', lastOn = 'simple', showFing = true, fingIllus = false, selNote = null; const hit = [];
 function setFingMode(m, save = true) {
   fingMode = m; if (m !== 'off') lastOn = m; showFing = m !== 'off'; fingIllus = m === 'illus'; refreshFingButton();
   if (save) { try { localStorage.setItem('seb-roulpiano-doigtes-mode', m); } catch (e) {} }
