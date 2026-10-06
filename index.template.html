@@ -62,7 +62,7 @@
     <div class="grp">
       <button id="rew" title="Retour au début (Début)">⏮ Début</button>
       <button id="play" class="primary" title="Lecture (Espace)">▶ Lecture</button>
-      <button id="stop" title="Arrêt : met en pause à la position courante (Espace)">⏹ Arrêt</button>
+      <button id="stop" title="Pause : arrête à la position courante (Espace)">⏸ Pause</button>
     </div>
     <div class="grp">
       <label for="speed">Vitesse</label>
@@ -254,7 +254,7 @@ $('file').onchange = async e => {
 $('demo').onclick = () => {
   const bin = atob(EXEMPLE_B64); const b = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i);
-  openBuffer('Ode à la joie (exemple)', b.buffer);
+  openBuffer('Lettre à Élise (exemple)', b.buffer);
 };
 let dragDepth = 0;
 addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
@@ -334,7 +334,7 @@ function scene(W, H, dpr) {
 
   const posTick = song.timeline.secToTick(pos);
   const mi = measureIndexAt(posTick), M = song.measures[mi];
-  const winT = Math.max(1, M.lenTick * visMeasures), topTick = posTick + winT;
+  const winT = Math.max(1, Math.round(song.ppq * 4 * M.num / M.den) * visMeasures), topTick = posTick + winT;
   const y = t => rollH - (t - posTick) / winT * rollH;
 
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, rollH); ctx.clip();

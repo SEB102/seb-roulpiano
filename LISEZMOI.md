@@ -1,11 +1,11 @@
 # SEB-ROULPIANO (piano roll d'apprentissage)
 
-Ouvrir `index.html` dans Chrome / Safari / Firefox (double-clic). Internet requis au 1er lancement
+En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `index.html` dans Chrome / Safari / Firefox (double-clic). Internet requis au 1er lancement
 (échantillons de piano + Tone.js) ; sans connexion, un synthé de secours prend le relais.
 
 - **Fichiers** : .mid / .midi, .musicxml / .xml, .mxl (partition exportée de MuseScore, Finale, Sibelius…).
-  Glisser-déposer possible. Bouton « Exemple » = Ode à la joie intégrée.
-- **Commandes** : ⏮ Début · ▶ Lecture · ⏹ Arrêt (pause, garde la position) · vitesse 0 à 3 (1× = tempo du fichier)
+  Glisser-déposer possible. Bouton « Exemple » = début de « Lettre à Élise » (Beethoven) intégré, saisi de mémoire : à vérifier sur la partition.
+- **Commandes** : ⏮ Début · ▶ Lecture · ⏸ Pause (garde la position) · vitesse 0 à 3 (1× = tempo du fichier)
   · barre de progression cliquable. Clavier : Espace = lecture/arrêt, Début = retour, ← → = mesure précédente/suivante, ↑ ↓ = vitesse.
 - **Couleurs** : orange = clé de sol (main droite), bleu = clé de fa (main gauche) ; teinte plus foncée = touche noire. Pas de doigtés.
   Mains : 2 pistes/parties/portées si le fichier en a deux (la plus aiguë = droite), sinon coupure au Do central.
@@ -16,4 +16,4 @@ Ouvrir `index.html` dans Chrome / Safari / Firefox (double-clic). Internet requi
 - Non géré : répétitions/reprises MusicXML (jouées une seule fois), PDF/images de partitions.
 
 Fichiers : `index.html` (application), `core.js` (lecture MIDI/MusicXML/MXL), `test_core.js` (tests : `node test_core.js`),
-`exemples.js` (génère les exemples), `exemple.mid`, `exemple.musicxml`, `index.template.html` (source de index.html).
+`exemples.js` (génère les exemples), `exemple.musicxml`, `index.template.html` (source de index.html).

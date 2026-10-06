@@ -83,5 +83,21 @@ const near = (a, b, eps = 1e-6) => assert.ok(Math.abs(a - b) < eps, `${a} ≠ ${
     assert.strictEqual(s.format, 'musicxml'); assert.strictEqual(s.notes.length, 5);
   });
 
+  await t('Exemple « Lettre à Élise » : levée, 3/8, mains, tempo', () => {
+    const s = C.parseMusicXml(E.exempleElise());
+    assert.strictEqual(s.title, 'Lettre à Élise (début)');
+    assert.strictEqual(s.measures.length, 9);
+    assert.strictEqual(s.measures[0].label, '0'); assert.strictEqual(s.measures[0].lenTick, 240); // levée de 2 doubles-croches
+    assert.strictEqual(s.measures[1].lenTick, 720); assert.strictEqual(s.measures[1].num, 3); assert.strictEqual(s.measures[1].den, 8);
+    assert.deepStrictEqual(s.notes.slice(0, 3).map(x => x.midi), [76, 75, 76]);
+    assert.strictEqual(s.notes.filter(x => x.hand === 'R').length, 2 + 6 + 4 + 4 + 3 + 6 + 4 + 4 + 1);
+    assert.strictEqual(s.notes.filter(x => x.hand === 'L').length, 3 + 3 + 3 + 3 + 3 + 1);
+    assert.ok(s.notes.every(x => x.midi >= 36 && x.midi <= 88));
+    assert.strictEqual(s.handMode, 'portées');
+    near(s.timeline.tickToSec(720), 60 / 126 * 1.5); // une mesure 3/8 = 1,5 noire
+    near(s.durationSec, 60 / 126 * (0.5 + 8 * 1.5), 0.01);
+    assert.ok(s.notes.filter(x => x.hand === 'L').every(x => x.midi < 60) && s.notes.filter(x => x.tick === 240 + 0).some(x => x.midi === 76));
+  });
+
   console.log(`\n${n} tests passés`);
 })();

@@ -65,11 +65,46 @@ const XML_TEST = `<?xml version="1.0" encoding="UTF-8"?>
 <note><pitch><step>G</step><octave>2</octave></pitch><duration>8</duration><staff>2</staff></note>
 </measure></part></score-partwise>`;
 
-module.exports = { midiFile, noteEv, tempoEv, timesigEv, exempleMidi, XML_TEST };
+
+// « Lettre à Élise » (Beethoven, domaine public) — début de la partie A, 3/8, saisi de mémoire (à vérifier sur la partition).
+// Éléments : ['r', durée] silence | [note, durée] ; durées en doubles-croches (4 par noire, 2 par croche)
+function exempleElise() {
+  const P = n => { const m = /^([A-G])(#?)(\d)$/.exec(n); return { step: m[1], alter: m[2] ? 1 : 0, oct: m[3] }; };
+  const xmlNotes = (items, staff) => items.map(([n, d]) => {
+    if (n === 'r') return `<note><rest/><duration>${d}</duration><voice>${staff}</voice><staff>${staff}</staff></note>`;
+    const p = P(n);
+    return `<note><pitch><step>${p.step}</step>${p.alter ? '<alter>1</alter>' : ''}<octave>${p.oct}</octave></pitch><duration>${d}</duration><voice>${staff}</voice><staff>${staff}</staff></note>`;
+  }).join('');
+  const motif = [['E5', 1], ['D#5', 1], ['E5', 1], ['B4', 1], ['D5', 1], ['C5', 1]];
+  const mes = [ // [RH, LH, pickup?]
+    { rh: [['E5', 1], ['D#5', 1]], lh: [], pickup: true },
+    { rh: motif, lh: [['r', 6]] },
+    { rh: [['A4', 2], ['r', 1], ['C4', 1], ['E4', 1], ['A4', 1]], lh: [['A2', 1], ['E3', 1], ['A3', 1], ['r', 3]] },
+    { rh: [['B4', 2], ['r', 1], ['E4', 1], ['G#4', 1], ['B4', 1]], lh: [['E2', 1], ['E3', 1], ['G#3', 1], ['r', 3]] },
+    { rh: [['C5', 2], ['r', 2], ['E5', 1], ['D#5', 1]], lh: [['A2', 1], ['E3', 1], ['A3', 1], ['r', 3]] },
+    { rh: motif, lh: [['r', 6]] },
+    { rh: [['A4', 2], ['r', 1], ['C4', 1], ['E4', 1], ['A4', 1]], lh: [['A2', 1], ['E3', 1], ['A3', 1], ['r', 3]] },
+    { rh: [['B4', 2], ['r', 1], ['E4', 1], ['C5', 1], ['B4', 1]], lh: [['E2', 1], ['E3', 1], ['G#3', 1], ['r', 3]] },
+    { rh: [['A4', 6]], lh: [['A2', 6]] },
+  ];
+  const body = mes.map((m, i) => {
+    const attrs = i === 0 ? '<attributes><divisions>4</divisions><key><fifths>0</fifths></key><time><beats>3</beats><beat-type>8</beat-type></time><staves>2</staves></attributes><direction placement="above"><sound tempo="126"/></direction>' : '';
+    const len = m.rh.reduce((s, x) => s + x[1], 0);
+    const lh = m.lh.length ? `<backup><duration>${len}</duration></backup>${xmlNotes(m.lh, 2)}` : '';
+    return `<measure number="${i}"${m.pickup ? ' implicit="yes"' : ''}>${attrs}${xmlNotes(m.rh, 1)}${lh}</measure>`;
+  }).join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1"><work><work-title>Lettre à Élise (début)</work-title></work>
+<part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list>
+<part id="P1">
+${body}
+</part></score-partwise>`;
+}
+
+module.exports = { exempleElise, midiFile, noteEv, tempoEv, timesigEv, exempleMidi, XML_TEST };
 
 if (require.main === module) {
   const dir = process.argv[2] || __dirname;
-  fs.writeFileSync(path.join(dir, 'exemple.mid'), exempleMidi());
-  fs.writeFileSync(path.join(dir, 'exemple.musicxml'), XML_TEST);
+  fs.writeFileSync(path.join(dir, 'exemple.musicxml'), exempleElise());
   console.log('exemples écrits dans', dir);
 }
