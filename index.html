@@ -285,12 +285,12 @@ const noteKey = n => n.tick + ':' + n.midi;
 const noteHand = n => n.fh || n.hand; // main du doigté : par défaut celle déduite de la partition (portée haute = droite, basse = gauche), modifiable note par note
 const handTxt = n => (noteHand(n) === 'L' ? 'M.G.' : 'M.D.');
 const storeKey = () => 'seb-roulpiano-doigtes:' + song.title + '|' + song.notes.length + '|' + song.endTick;
+// Les doigtés saisis ne sont PAS enregistrés dans le navigateur : ils vivent en mémoire le temps de la séance (si on rouvre le même
+// fichier dans la séance, on les retrouve) et disparaissent à la fermeture de la page. Seul l'export ⤓ (fichier .doigtes.json) les conserve.
+const sessionDoigtes = {};
+try { Object.keys(localStorage).filter(k => k.startsWith('seb-roulpiano-doigtes')).forEach(k => localStorage.removeItem(k)); } catch (e) {} // nettoyage des anciennes mémorisations
 function loadFingerings() {
-  song.manual = { f: {}, h: {} }; // f : doigts saisis (0 = effacé), h : main du doigté si différente de celle par défaut
-  try {
-    const raw = JSON.parse(localStorage.getItem(storeKey()) || 'null');
-    if (raw) song.manual = (raw.f || raw.h) ? { f: raw.f || {}, h: raw.h || {} } : { f: raw, h: {} }; // ancien format : doigts seuls
-  } catch (e) {}
+  song.manual = sessionDoigtes[storeKey()] || (sessionDoigtes[storeKey()] = { f: {}, h: {} }); // f : doigts saisis (0 = effacé), h : main du doigté si différente de celle par défaut
   song.notes.forEach(n => {
     n.fileFinger = n.finger || 0; const m = song.manual.f[noteKey(n)]; n.finger = m !== undefined ? m : n.fileFinger;
     const h = song.manual.h[noteKey(n)]; n.fh = h === 'L' || h === 'R' ? h : undefined;
@@ -298,7 +298,7 @@ function loadFingerings() {
   refreshHF();
 }
 function refreshHF() { song.hf = song.notes.some(n => n.finger > 0); }
-function saveManual() { try { localStorage.setItem(storeKey(), JSON.stringify(song.manual)); } catch (e) {} }
+function saveManual() { sessionDoigtes[storeKey()] = song.manual; }
 function setFinger(n, f) {
   n.finger = f; refreshHF();
   if (f === n.fileFinger) delete song.manual.f[noteKey(n)]; else song.manual.f[noteKey(n)] = f;
