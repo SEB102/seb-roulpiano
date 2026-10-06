@@ -88,6 +88,11 @@
       <input id="fingFile" type="file" accept=".json,application/json">
     </div>
     <div class="grp">
+      <label for="sync">Synchro</label>
+      <input id="sync" type="number" min="-300" max="1000" step="10" value="0" title="Décalage son/image en millisecondes. Le navigateur compense déjà la latence audio ; si le son vous semble encore en retard sur l'image, augmentez cette valeur (l'image est retardée) ; s'il est en avance, diminuez-la.">
+      <span class="legend">ms</span>
+    </div>
+    <div class="grp">
       <label for="vis">Mesures visibles</label>
       <select id="vis"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
     </div>
@@ -115,6 +120,7 @@ const $ = id => document.getElementById(id);
 const cv = $('cv'); let ctx = cv.getContext('2d'); const screenCtx = ctx;
 
 // ---------- État ----------
+let vlag = 0; // retard (s, temps réel) appliqué à l'image pour la caler sur le son réellement entendu
 let song = null, pos = 0, playing = false, speed = 1, visMeasures = 2, nextIdx = 0, lastTs = 0, seeking = false;
 
 // ---------- Clavier 88 touches ----------
@@ -169,12 +175,22 @@ function initSampler() {
   if (typeof Tone === 'undefined') { setSoundStatus('Piano : synthé de secours (Tone.js indisponible)'); return; }
   const urls = { A0: 'A0.mp3', C8: 'C8.mp3' }; // échantillons Salamander : un tous les 3 demi-tons
   for (let o = 1; o <= 7; o++) ['C', 'D#', 'F#', 'A'].forEach(n => { urls[n + o] = n.replace('#', 's') + o + '.mp3'; });
+  try { Tone.context.lookAhead = 0; } catch (e) {} // sinon Tone.now() retarde chaque note de 100 ms
   setSoundStatus('Piano : chargement des échantillons…');
   sampler = new Tone.Sampler({
     urls, release: 1, baseUrl: 'https://tonejs.github.io/audio/salamander/',
     onload: () => { samplerReady = true; setSoundStatus(''); },
     onerror: () => { sampler = null; setSoundStatus('Piano : synthé de secours (échantillons indisponibles)'); },
   }).toDestination();
+}
+// Latence audio : tampon du navigateur + sortie matérielle (haut-parleurs, Bluetooth…) + réglage manuel « Synchro ».
+let syncMs = 0;
+try { const v = parseInt(localStorage.getItem('seb-roulpiano-sync'), 10); if (isFinite(v)) syncMs = Math.max(-300, Math.min(1000, v)); } catch (e) {}
+function audioLatency() {
+  try {
+    const c = (typeof Tone !== 'undefined' && Tone.context) ? Tone.context.rawContext : synthFallback.ctx;
+    return c ? (c.baseLatency || 0) + (c.outputLatency || 0) : 0;
+  } catch (e) { return 0; }
 }
 function playNote(n) {
   stats.played++;
@@ -352,6 +368,8 @@ function applyTempo(bpm) {
 }
 $('tempo').onchange = e => { const v = parseFloat(String(e.target.value).replace(',', '.')); if (isFinite(v) && v > 0) applyTempo(v); else if (song) e.target.value = fmtBpm(song.timeline.bpmAtTick(0)); };
 $('tempoReset').onclick = () => { if (song) applyTempo(song.fileBpm); };
+$('sync').value = syncMs;
+$('sync').onchange = e => { const v = parseInt(e.target.value, 10); syncMs = isFinite(v) ? Math.max(-300, Math.min(1000, v)) : 0; e.target.value = syncMs; try { localStorage.setItem('seb-roulpiano-sync', String(syncMs)); } catch (er) {} };
 $('vis').onchange = e => { visMeasures = parseInt(e.target.value, 10); };
 $('progress').oninput = e => { seeking = true; seek(parseFloat(e.target.value) * song.durationSec); };
 $('progress').onchange = () => { seeking = false; };
@@ -471,7 +489,7 @@ function scene(W, H, dpr) {
     drawKeyboard(W, rollH, kbH, active); return;
   }
 
-  const posTick = song.timeline.secToTick(pos);
+  const posTick = song.timeline.secToTick(ctx === screenCtx ? Math.max(0, pos - vlag * speed) : pos); // écran : image retardée de la latence audio
   const mi = measureIndexAt(posTick), M = song.measures[mi];
   const winT = Math.max(1, Math.round(song.ppq * 4 * M.num / M.den) * visMeasures), topTick = posTick + winT;
   const y = t => rollH - (t - posTick) / winT * rollH;
@@ -651,6 +669,7 @@ $('export').onclick = () => (exp.active ? stopExport(true) : startExport());
 // ---------- Boucle ----------
 function frame(ts) {
   const dt = Math.min(0.25, (ts - lastTs) / 1000); lastTs = ts;
+  { const target = (playing && !exp.active) ? audioLatency() + syncMs / 1000 : 0; vlag += (target - vlag) * Math.min(1, dt * 10); }
   if (playing && song) {
     pos += dt * speed;
     while (speed > 0 && nextIdx < song.notes.length && song.notes[nextIdx].t0 <= pos) playNote(song.notes[nextIdx++]);
