@@ -134,6 +134,9 @@ const cv = $('cv'); let ctx = cv.getContext('2d'); const screenCtx = ctx;
 
 // ---------- État ----------
 let vlag = 0; // retard (s, temps réel) appliqué à l'image pour la caler sur le son réellement entendu
+// Introduction : le temps de la partition commence à 0, mais la lecture (et le chargement) démarrent une fenêtre entière avant, rouleau vide :
+// les premières notes sortent du clavier du haut et descendent jusqu'au clavier du bas, où elles sont jouées au temps 0.
+const startPos = () => { const M = song.measures[0]; return -song.timeline.tickToSec(Math.round(song.ppq * 4 * M.num / M.den) * visMeasures); };
 let song = null, pos = 0, playing = false, speed = 1, visMeasures = 2, nextIdx = 0, lastTs = 0, seeking = false;
 
 // ---------- Clavier 88 touches ----------
@@ -238,7 +241,7 @@ const fmt = s => { s = Math.max(0, s); return Math.floor(s / 60) + ':' + String(
 // ---------- Contrôles ----------
 async function play() {
   if (!song || playing) return;
-  if (pos >= song.durationSec - 0.01) pos = 0;
+  if (pos >= song.durationSec - 0.01) pos = startPos();
   try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
   nextIdx = lowerBoundSec(pos - 1e-6);
   hideFpop(); clearGroup(); lastTs = performance.now(); playing = true; refreshButtons();
@@ -246,10 +249,10 @@ async function play() {
 function pause() { if (!playing) return; playing = false; releaseAll(); refreshButtons(); }
 function seek(sec) {
   if (!song) return;
-  pos = Math.min(Math.max(0, sec), song.durationSec); hideFpop(); clearGroup();
+  pos = Math.min(Math.max(startPos(), sec), song.durationSec); hideFpop(); clearGroup();
   releaseAll(); nextIdx = lowerBoundSec(pos - 1e-6);
 }
-function rewind() { pause(); seek(0); }
+function rewind() { pause(); seek(startPos()); }
 function seekMeasures(d) {
   if (!song) return;
   const i = measureIndexAt(song.timeline.secToTick(pos));
@@ -421,7 +424,7 @@ function applyTempo(bpm) {
   bpm = Math.min(300, Math.max(20, bpm));
   const posTick = song.timeline.secToTick(pos);
   PianoCore.retime(song, bpm);
-  pos = Math.min(song.durationSec, song.timeline.tickToSec(posTick));
+  pos = Math.min(song.durationSec, song.timeline.tickToSec(posTick)); if (posTick <= 0) pos = startPos(); // encore dans l'introduction : on la recalcule avec le nouveau tempo
   releaseAll(); nextIdx = lowerBoundSec(pos - 1e-6);
   $('tempo').value = fmtBpm(bpm);
 }
@@ -429,8 +432,8 @@ $('tempo').onchange = e => { const v = parseFloat(String(e.target.value).replace
 $('tempoReset').onclick = () => { if (song) applyTempo(song.fileBpm); };
 $('sync').value = syncMs;
 $('sync').onchange = e => { const v = parseInt(e.target.value, 10); syncMs = isFinite(v) ? Math.max(-300, Math.min(1000, v)) : 0; e.target.value = syncMs; try { localStorage.setItem('seb-roulpiano-sync', String(syncMs)); } catch (er) {} };
-$('vis').onchange = e => { visMeasures = parseInt(e.target.value, 10); };
-$('progress').oninput = e => { seeking = true; seek(parseFloat(e.target.value) * song.durationSec); };
+$('vis').onchange = e => { visMeasures = parseInt(e.target.value, 10); if (song && pos < 0) pos = startPos(); };
+$('progress').oninput = e => { seeking = true; const a = startPos(); seek(a + parseFloat(e.target.value) * (song.durationSec - a)); };
 $('progress').onchange = () => { seeking = false; };
 addEventListener('keydown', e => {
   if (e.key === 'Escape' && selGroup.size) { clearGroup(); return; }
@@ -455,7 +458,7 @@ addEventListener('keydown', e => {
 async function openBuffer(name, buf) {
   try {
     const s = await PianoCore.loadSong(name, new Uint8Array(buf));
-    pause(); clearGroup(); song = s; pos = 0; nextIdx = 0; clearError(); $('tempo').value = fmtBpm(s.fileBpm); hideFpop(); loadFingerings(); { const r = PianoCore.keyboardRange(s.lo, s.hi); setRange(r.first, r.last); }
+    pause(); clearGroup(); song = s; pos = startPos(); nextIdx = 0; clearError(); $('tempo').value = fmtBpm(s.fileBpm); hideFpop(); loadFingerings(); { const r = PianoCore.keyboardRange(s.lo, s.hi); setRange(r.first, r.last); }
     $('title').textContent = s.title; $('title').title = s.title;
     const modes = { 'pistes': 'sol/fa = 2 pistes', 'portées': 'sol/fa = 2 portées', 'parties': 'sol/fa = 2 parties', 'do-central': 'sol/fa = coupure au Do central' };
     setSoundStatusExtra(modes[s.handMode] || '');
@@ -518,8 +521,8 @@ function updateInfo() {
   if (!song) return;
   const posTick = song.timeline.secToTick(pos), M = song.measures[measureIndexAt(posTick)];
   const bpm = song.timeline.bpmAtTick(posTick) * speed;
-  $('info').textContent = 'Mesure ' + M.label + ' / ' + song.measures[song.measures.length - 1].label + '  ·  ♩=' + Math.round(bpm) + '  ·  ' + fmt(Math.min(pos, song.durationSec)) + ' / ' + fmt(song.durationSec);
-  if (!seeking) $('progress').value = song.durationSec ? Math.min(1, pos / song.durationSec) : 0;
+  $('info').textContent = 'Mesure ' + M.label + ' / ' + song.measures[song.measures.length - 1].label + '  ·  ♩=' + Math.round(bpm) + '  ·  ' + fmt(Math.max(0, Math.min(pos, song.durationSec))) + ' / ' + fmt(song.durationSec);
+  if (!seeking) { const a = startPos(); $('progress').value = song.durationSec ? Math.max(0, Math.min(1, (pos - a) / (song.durationSec - a))) : 0; }
 }
 // dessine la scène dans le contexte c (écran ou canvas d'export) ; W,H en pixels logiques, k = facteur d'échelle
 function renderScene(c, W, H, k) {
@@ -553,7 +556,7 @@ function scene(W, H, dpr) {
     drawKeyboard(W, rollH, kbH, active); return;
   }
 
-  const sp = ctx === screenCtx ? Math.max(0, pos - vlag * speed) : pos; // écran : image retardée de la latence audio
+  const sp = ctx === screenCtx ? pos - vlag * speed : pos; // écran : image retardée de la latence audio
   const posTick = song.timeline.secToTick(sp);
   const mi = measureIndexAt(posTick), M = song.measures[mi];
   const winT = Math.max(1, Math.round(song.ppq * 4 * M.num / M.den) * visMeasures), topTick = posTick + winT;
@@ -645,9 +648,12 @@ function scene(W, H, dpr) {
   }
   ctx.restore();
 
-  // clavier miniature en haut du rouleau : mêmes touches, même largeur et mêmes colonnes que le clavier du bas, pour suivre
-  // une note de haut en bas ; les touches des notes qui sonnent s'y allument aussi
-  drawTopKeyboard(W, Math.max(18, Math.min(34, H * 0.04)), active);
+  // clavier miniature en haut du rouleau : mêmes touches, même largeur et mêmes colonnes que le clavier du bas. Il « lâche » les notes
+  // que le clavier du bas devra jouer : chaque touche s'allume tant que sa note sort de dessous (de son premier bord visible
+  // jusqu'à la fin de la note), avec une lueur sous la touche, puis la note descend le long de son rail jusqu'au clavier du bas.
+  const topH = Math.max(18, Math.min(34, H * 0.04)), released = new Map();
+  vis.forEach(n => { const y1 = y(n.tick), y0 = y(n.tick + n.dur); if (y1 >= topH && y0 < topH + 10) released.set(n.midi, n); });
+  drawTopKeyboard(W, topH, released);
 
   // ligne de jeu
   ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, rollH - 2, W, 2);
@@ -691,7 +697,7 @@ function drawMiniRake(side, finger, x, y, w, onLight) {
 const BUBBLE_MIN = 0.3, BUBBLE_POP = 0.15, BURST_SEC = 0.4; // secondes de temps de morceau
 function drawBubbles(W, top, kbH, posTick, sp) {
   // remonter assez loin : une note déjà finie peut encore avoir sa bulle (durée minimale) puis son éclatement
-  const back = posTick - song.timeline.secToTick(Math.max(0, sp - (BUBBLE_MIN + BURST_SEC)));
+  const back = posTick - song.timeline.secToTick(sp - (BUBBLE_MIN + BURST_SEC));
   for (let i = lowerBoundTick(posTick - song.maxDur - back); i < song.notes.length && song.notes[i].tick <= posTick; i++) {
     const n = song.notes[i]; if (!n.finger) continue;
     const endShow = Math.max(n.t1, n.t0 + BUBBLE_MIN), age = sp - n.t0, gone = sp - endShow;
@@ -741,8 +747,8 @@ function rakeSVG(side, cur) {
   }
   return g + '</svg>';
 }
-function drawTopKeyboard(W, h, active) {
-  const bh = h * 0.62;
+function drawTopKeyboard(W, h, released) {
+  const active = released, bh = h * 0.62;
   ctx.fillStyle = '#05060d'; ctx.fillRect(0, 0, W, h + 2);
   for (let m = FIRST; m <= LAST; m++) {
     if (isBlack(m)) continue;
@@ -755,6 +761,11 @@ function drawTopKeyboard(W, h, active) {
     ctx.fillStyle = hand ? COL[hand].keyB : '#15161f'; ctx.fillRect(r.x, 0, r.w, bh);
   }
   ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(0, h, W, 2);
+  released.forEach((n, m) => { // lueur de la note qui sort, sous la touche (dans la couleur de sa main)
+    const r = keyRect(m, W), c = COL[noteHand(n)].note, g = ctx.createLinearGradient(0, h + 2, 0, h + 46);
+    g.addColorStop(0, c + 'aa'); g.addColorStop(1, c + '00');
+    ctx.fillStyle = g; ctx.fillRect(r.x, h + 2, r.w, 44);
+  });
 }
 function drawKeyboard(W, top, kbH, active) {
   const ww = W / NW, bh = kbH * 0.62;
@@ -801,7 +812,7 @@ async function startExport() {
   if (speed <= 0) return showError('Export impossible à la vitesse 0.');
   const mime = pickMime(); if (!mime) return showError('Ce navigateur ne sait pas enregistrer de vidéo (essayez Chrome).');
   if (sampler && !samplerReady) return showError('Attendez la fin du chargement du piano avant d\'exporter.');
-  pause(); seek(0);
+  pause(); seek(startPos());
   try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
   let audioStream;
   if (sampler && samplerReady) {
@@ -826,7 +837,7 @@ async function startExport() {
   await play(); exp.started = true;
 }
 function exportTick(ts) {
-  const pct = song.durationSec ? Math.min(100, Math.round(100 * pos / song.durationSec)) : 100;
+  const pct = song.durationSec ? Math.max(0, Math.min(100, Math.round(100 * (pos - startPos()) / (song.durationSec - startPos())))) : 100;
   $('status').dataset.exp = 'Export vidéo en cours… ' + pct + ' % (gardez cet onglet visible)'; refreshStatus();
   if (!playing) { // fin du morceau : on laisse décroître la dernière note
     if (!exp.endAt) exp.endAt = ts + 1800;
@@ -843,7 +854,7 @@ function finishExport() {
   const wasCancelled = exp.cancelled, chunks = exp.chunks;
   exp.active = false; exp.started = false; exp.endAt = 0; exp.rec = null; exp.chunks = [];
   delete $('status').dataset.exp;
-  seek(0); refreshButtons();
+  seek(startPos()); refreshButtons();
   if (wasCancelled) { refreshStatus(); return; }
   const blob = new Blob(chunks, { type }), name = (song.title || 'piano-roll').replace(/[\\/:*?"<>|]+/g, '_') + '.' + ext;
   stats.lastExport = { size: blob.size, type, name, blob };
