@@ -279,6 +279,9 @@ function setHand(n, h) {
 function refreshFingButton() { $('fing').textContent = showFing ? '🖐 Masquer les doigtés' : '🖐 Afficher les doigtés'; $('fing').classList.toggle('pressed', showFing); }
 function markFpop() {
   const n = selNote, p = $('fpop');
+  // ordre des doigts : main droite 1→5, main gauche 5→1 (comme les doigts sur le clavier, de gauche à droite)
+  const clear = p.querySelector('button[data-f="0"]'), fs = [...p.querySelectorAll('button[data-f]')].filter(b => b.dataset.f !== '0');
+  fs.sort((a, b) => (noteHand(n) === 'L' ? b.dataset.f - a.dataset.f : a.dataset.f - b.dataset.f)).forEach(b => p.insertBefore(b, clear));
   p.querySelectorAll('button[data-f]').forEach(b => b.classList.toggle('on', parseInt(b.dataset.f, 10) === (n.finger || 0) && b.dataset.f !== '0'));
   p.querySelectorAll('button[data-h]').forEach(b => b.classList.toggle('on', b.dataset.h === noteHand(n)));
 }
