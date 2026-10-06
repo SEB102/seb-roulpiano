@@ -177,21 +177,25 @@ function initSampler() {
   if (typeof Tone === 'undefined') { setSoundStatus('Piano : synthé de secours (Tone.js indisponible)'); return; }
   const urls = { A0: 'A0.mp3', C8: 'C8.mp3' }; // échantillons Salamander : un tous les 3 demi-tons
   for (let o = 1; o <= 7; o++) ['C', 'D#', 'F#', 'A'].forEach(n => { urls[n + o] = n.replace('#', 's') + o + '.mp3'; });
-  try { Tone.context.lookAhead = 0; } catch (e) {} // sinon Tone.now() retarde chaque note de 100 ms
+  // Contre les craquements : grands tampons audio (latencyHint « playback »), petite marge d'ordonnancement (50 ms au lieu de 100,
+  // compensée par la synchro image) et limiteur en sortie pour que les accords et les notes qui se chevauchent ne saturent pas.
+  // (après setContext, Tone.context et Tone.Destination restent ceux du contexte d'origine : toujours utiliser getContext() / getDestination())
+  try { Tone.setContext(new Tone.Context({ latencyHint: 'playback', lookAhead: 0.05 })); } catch (e) {}
+  const limiter = new Tone.Limiter(-3).toDestination();
   setSoundStatus('Piano : chargement des échantillons…');
   sampler = new Tone.Sampler({
     urls, release: 1, baseUrl: 'https://tonejs.github.io/audio/salamander/',
     onload: () => { samplerReady = true; setSoundStatus(''); },
     onerror: () => { sampler = null; setSoundStatus('Piano : synthé de secours (échantillons indisponibles)'); },
-  }).toDestination();
+  }).connect(limiter); sampler.volume.value = -4;
 }
 // Latence audio : tampon du navigateur + sortie matérielle (haut-parleurs, Bluetooth…) + réglage manuel « Synchro ».
 let syncMs = 0;
 try { const v = parseInt(localStorage.getItem('seb-roulpiano-sync'), 10); if (isFinite(v)) syncMs = Math.max(-300, Math.min(1000, v)); } catch (e) {}
 function audioLatency() {
   try {
-    const c = (typeof Tone !== 'undefined' && Tone.context) ? Tone.context.rawContext : synthFallback.ctx;
-    return c ? (c.baseLatency || 0) + (c.outputLatency || 0) : 0;
+    const c = (typeof Tone !== 'undefined') ? Tone.getContext().rawContext : synthFallback.ctx;
+    return c ? (c.baseLatency || 0) + (c.outputLatency || 0) + ((typeof Tone !== 'undefined' && Tone.getContext().lookAhead) || 0) : 0;
   } catch (e) { return 0; }
 }
 function playNote(n) {
@@ -617,8 +621,8 @@ async function startExport() {
   try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
   let audioStream;
   if (sampler && samplerReady) {
-    const d = Tone.context.createMediaStreamDestination(); Tone.Destination.connect(d);
-    audioStream = d.stream; exp.cleanup = () => { try { Tone.Destination.disconnect(d); } catch (e) {} };
+    const d = Tone.getContext().createMediaStreamDestination(); Tone.getDestination().connect(d);
+    audioStream = d.stream; exp.cleanup = () => { try { Tone.getDestination().disconnect(d); } catch (e) {} };
   } else {
     synthFallback.ensure(); const d = synthFallback.ctx.createMediaStreamDestination(); synthFallback.tap = d;
     audioStream = d.stream; exp.cleanup = () => { synthFallback.tap = null; };
