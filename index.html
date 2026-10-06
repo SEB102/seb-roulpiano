@@ -115,6 +115,7 @@
     <input id="progress" title="Position dans le morceau" type="range" min="0" max="1" step="0.001" value="0" disabled>
     <span id="info">—</span>
     <span id="status"></span>
+    <button id="fs" title="Afficher toute l'application en plein écran, réglages compris (Échap pour quitter)">⛶ Plein écran</button>
   </div>
 </header>
 <main>
@@ -532,13 +533,17 @@ function scene(W, H, dpr) {
   const g = ctx.createLinearGradient(0, 0, 0, rollH); g.addColorStop(0, '#0b0e1c'); g.addColorStop(1, '#161b34');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, rollH);
 
-  // guides verticaux (limites des touches blanches, Do renforcé)
+  // rails verticaux : une ligne par touche (blanche ou noire), à la verticale exacte de sa touche, le long de laquelle glisse sa note ;
+  // les touches noires ont en plus une bande sombre de la largeur de la touche, les Do sont plus marqués
   const ww = W / NW;
   for (let m = FIRST; m <= LAST; m++) {
-    if (isBlack(m)) continue;
-    const x = whiteIdx[m] * ww;
-    ctx.fillStyle = m % 12 === 0 ? 'rgba(255,255,255,.10)' : 'rgba(255,255,255,.035)';
-    ctx.fillRect(Math.round(x), 0, 1, rollH);
+    const kr = keyRect(m, W);
+    if (kr.black) { ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); }
+  }
+  for (let m = FIRST; m <= LAST; m++) {
+    const kr = keyRect(m, W), x = Math.round(kr.x + kr.w / 2) - 0.5;
+    ctx.fillStyle = m % 12 === 0 ? 'rgba(255,255,255,.26)' : kr.black ? 'rgba(255,255,255,.11)' : 'rgba(255,255,255,.14)';
+    ctx.fillRect(x, 0, m % 12 === 0 ? 1.5 : 1, rollH);
   }
 
   const active = new Map(); // midi -> note en cours
@@ -607,7 +612,7 @@ function scene(W, H, dpr) {
   // et sont de plus en plus estompées.
   for (let vi = vis.length - 1; vi >= 0; vi--) {
     const n = vis[vi];
-    const kr = keyRect(n.midi, W), y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
+    const kr = keyRect(n.midi, W), kk = kr, y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
     const rec = { n, x, w, top: y0, bottom };
     if (showFing && n.finger) {
       if (!fingIllus) { // doigté simple : « M.D. 1 »
@@ -621,7 +626,7 @@ function scene(W, H, dpr) {
         ctx.fillStyle = '#fff'; ctx.fillText(label, px + pw / 2, py + 10.5);
         Object.assign(rec, { px, py, pw, ph });
       } else {
-      const pw = Math.max(36, Math.min(76, kr.w * 1.9)), ph = (RAKE_BASE + 2) * pw / 122;
+      const pw = Math.max(36, Math.min(76, kk.w * 1.9)), ph = (RAKE_BASE + 2) * pw / 122;
       const px = Math.max(1, Math.min(W - pw - 1, x + w / 2 - pw / 2));
       const py = y0 >= ph + 6 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3);
       ctx.save(); ctx.globalAlpha = Math.max(0.5, 1 - Math.max(0, n.tick - posTick) / winT * 0.55);
@@ -639,6 +644,10 @@ function scene(W, H, dpr) {
     ctx.save(); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#9fb0ff'; ctx.strokeRect(selRect.x + .5, selRect.y + .5, selRect.w, selRect.h); ctx.restore();
   }
   ctx.restore();
+
+  // clavier miniature en haut du rouleau : mêmes touches, même largeur et mêmes colonnes que le clavier du bas, pour suivre
+  // une note de haut en bas ; les touches des notes qui sonnent s'y allument aussi
+  drawTopKeyboard(W, Math.max(18, Math.min(34, H * 0.04)), active);
 
   // ligne de jeu
   ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, rollH - 2, W, 2);
@@ -731,6 +740,21 @@ function rakeSVG(side, cur) {
       `<text x="${X(x)}" y="${y1 + 4.5}" text-anchor="middle" font-size="13" font-weight="800" fill="${on ? '#10121f' : ORANGE}" font-family="-apple-system,sans-serif">${f}</text></g>`;
   }
   return g + '</svg>';
+}
+function drawTopKeyboard(W, h, active) {
+  const bh = h * 0.62;
+  ctx.fillStyle = '#05060d'; ctx.fillRect(0, 0, W, h + 2);
+  for (let m = FIRST; m <= LAST; m++) {
+    if (isBlack(m)) continue;
+    const r = keyRect(m, W), an = active.get(m), hand = an && noteHand(an);
+    ctx.fillStyle = hand ? COL[hand].key : '#e6e8f0'; ctx.fillRect(r.x + .5, 0, r.w - 1, h);
+  }
+  for (let m = FIRST; m <= LAST; m++) {
+    if (!isBlack(m)) continue;
+    const r = keyRect(m, W), an = active.get(m), hand = an && noteHand(an);
+    ctx.fillStyle = hand ? COL[hand].keyB : '#15161f'; ctx.fillRect(r.x, 0, r.w, bh);
+  }
+  ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(0, h, W, 2);
 }
 function drawKeyboard(W, top, kbH, active) {
   const ww = W / NW, bh = kbH * 0.62;
@@ -831,6 +855,19 @@ function finishExport() {
   setTimeout(() => { delete $('status').dataset.exp; refreshStatus(); }, 8000);
 }
 $('export').onclick = () => (exp.active ? stopExport(true) : startExport());
+
+// ---------- Plein écran (toute la page : barre de réglages, rouleau, clavier, bandeau) ----------
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+const fsOk = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+function refreshFs() { $('fs').textContent = fsEl() ? '⛶ Quitter le plein écran' : '⛶ Plein écran'; }
+if (!fsOk) $('fs').style.display = 'none'; // ex. iPhone : pas d'API plein écran pour une page web
+$('fs').onclick = async () => {
+  try {
+    if (fsEl()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else await (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement);
+  } catch (e) { showError('Plein écran refusé par le navigateur.'); }
+};
+document.addEventListener('fullscreenchange', refreshFs); document.addEventListener('webkitfullscreenchange', refreshFs);
 
 // ---------- Boucle ----------
 function frame(ts) {
