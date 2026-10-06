@@ -177,6 +177,22 @@
   const kid = (el, name) => el.children.find(c => c.name === name) || null;
   const txt = (el, name) => { const k = kid(el, name); return k ? k.text.trim() : null; };
 
+  // Les deux mains sont parfois écrites sur la MÊME portée (ex. Hanon n°1, début en clé de fa pour les deux mains) : la portée
+  // ne dit alors rien. Indice fiable : dans une mesure où une seule portée porte des notes, deux lignes (voix) de rythme strictement
+  // identique = deux mains en parallèle ; la ligne la plus haute est la main droite, la plus basse la main gauche.
+  // (Deux voix de rythmes différents, ex. basse + accords de la main gauche, ne sont PAS séparées.) Renvoie {'portée/voix': 'R'|'L'} ou null.
+  function parallelHands(ns) {
+    if (!ns.length || new Set(ns.map(n => (n.staff >= 2 ? 2 : 1))).size !== 1) return null;
+    const lines = {};
+    ns.forEach(n => { const k = n.staff + '/' + n.voice; (lines[k] = lines[k] || []).push(n); });
+    const keys = Object.keys(lines); if (keys.length !== 2) return null;
+    const onsets = k => [...new Set(lines[k].map(n => n.tick))].sort((a, b) => a - b).join(',');
+    if (onsets(keys[0]) !== onsets(keys[1])) return null;
+    const mean = k => lines[k].reduce((s, n) => s + n.midi, 0) / lines[k].length;
+    const [hi, lo] = mean(keys[0]) >= mean(keys[1]) ? keys : [keys[1], keys[0]];
+    return { [hi]: 'R', [lo]: 'L' };
+  }
+
   // ---------- MusicXML ----------
   const STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
   function parseMusicXml(src) {
@@ -228,7 +244,7 @@
               if (!tieTypes.includes('start')) open.delete(key);
               return;
             }
-            const n = { midi, tick: tickAbs, dur: Math.max(1, durT), vel: 80, staff };
+            const n = { midi, tick: tickAbs, dur: Math.max(1, durT), vel: 80, staff, voice: parseInt(txt(e, 'voice') || '1', 10) };
             const fg = parseInt(txt(kid(kid(e, 'notations') || { children: [] }, 'technical') || { children: [] }, 'fingering'), 10);
             if (fg >= 1 && fg <= 5) n.finger = fg; // doigté inscrit dans la partition
             notes.push(n);
@@ -254,9 +270,10 @@
       measures.push({ startTick: tick, lenTick: len, label: ms[0].label, num: ms[0].num, den: ms[0].den });
       P.forEach((p, pi) => {
         const m = p.measures[i]; if (!m) return;
+        const parallel = hasTwoStaves ? parallelHands(m.notes) : null;
         m.notes.forEach(n => {
           n.tick += tick; n.track = pi;
-          if (hasTwoStaves) n.hand = n.staff >= 2 ? 'L' : 'R';
+          if (hasTwoStaves) n.hand = (parallel && parallel[n.staff + '/' + n.voice]) || (n.staff >= 2 ? 'L' : 'R');
           else if (twoParts) n.hand = pi === 0 ? 'R' : 'L';
           notes.push(n);
         });
