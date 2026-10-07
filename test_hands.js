@@ -19,6 +19,15 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     const d = run([61, 63, 65, 66, 68, 70, 72, 73]); assert.strictEqual(d.map(x => x.af).join(''), '23123412', d.map(x => x.af).join(''));
     const b = run([58, 60, 62, 63, 65, 67, 69, 70, 72]); assert.strictEqual(b.filter(x => x.af === 1 && H.isBlack(x.midi)).length, 0, b.map(x => x.af).join(''));
   });
+  await t('Enchaînement : on lâche la touche jouée juste avant d\'en frapper une autre (hors accord et hors note tenue)', () => {
+    const fp = (ns, hand = 'R') => H.buildPlan(ns, hand);
+    const a = [{ midi: 60, t0: 0, t1: 0.5, finger: 3 }, { midi: 62, t0: 0.5, t1: 1, finger: 2 }];   // fin et début simultanés dans le fichier
+    const p = fp(a); assert.ok(p.finger(3, 0.3).pressed, 'doigt 3 posé'); assert.ok(!p.finger(3, 0.49).pressed, 'doigt 3 déjà lâché à 0,49 s'); assert.ok(p.finger(2, 0.51).pressed, 'doigt 2 posé à 0,51 s');
+    const c = fp([{ midi: 60, t0: 0, t1: 1, finger: 1 }, { midi: 64, t0: 0, t1: 1, finger: 3 }]);   // accord : les deux restent posés
+    assert.ok(c.finger(1, 0.9).pressed && c.finger(3, 0.9).pressed, 'accord');
+    const h = fp([{ midi: 60, t0: 0, t1: 2, finger: 1 }, { midi: 64, t0: 0.5, t1: 1, finger: 3 }]);   // note tenue : le doigt 1 reste posé
+    assert.ok(h.finger(1, 0.9).pressed && h.finger(1, 1.5).pressed, 'note tenue');
+  });
   await t('Gamme descendante à la main gauche : image miroir de la main droite (pouce sur la note la plus haute)', () => {
     const ns = mk([60, 59, 57, 55, 53, 52, 50, 48]); H.assignFingerings(ns, 'L');
     const f = ns.map(x => x.af); assert.strictEqual(f[0], 1, f.join('')); for (let i = 1; i < f.length; i++) if (f[i] === 1) assert.ok(f[i - 1] === 3 || f[i - 1] === 4, f.join('')); // 1 2 3 1 2 3 … : image miroir de la main droite
