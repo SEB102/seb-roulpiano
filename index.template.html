@@ -684,7 +684,7 @@ function scene(W, H, dpr) {
   // ligne de jeu
   ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, rollH - 2, W, 2);
   drawKeyboard(W, rollH, kbH, active);
-  if (showHands) drawHands(W, rollH, kbH, sp); else if (fingIllus) drawBubbles(W, rollH, kbH, posTick, sp);
+  if (showHands) { try { drawHands(W, rollH, kbH, sp); } catch (err) { reportDrawError(err); } } else if (fingIllus) drawBubbles(W, rollH, kbH, posTick, sp);
 }
 
 
@@ -1002,6 +1002,8 @@ $('fs').onclick = async () => {
 document.addEventListener('fullscreenchange', refreshFs); document.addEventListener('webkitfullscreenchange', refreshFs);
 
 // ---------- Boucle ----------
+let drawErrShown = false;
+function reportDrawError(err) { console.error(err); if (!drawErrShown) { drawErrShown = true; try { showError('Erreur d\u2019affichage : ' + (err && err.message || err)); } catch (e) {} } }
 function frame(ts) {
   const dt = Math.min(0.25, (ts - lastTs) / 1000); lastTs = ts;
   { const target = (playing && !exp.active) ? audioLatency() + syncMs / 1000 : 0; vlag += (target - vlag) * Math.min(1, dt * 10); }
@@ -1012,7 +1014,7 @@ function frame(ts) {
     if (pos >= END) { pos = END; playing = false; refreshButtons(); }
   }
   if (exp.active && exp.started) exportTick(ts);
-  draw();
+  try { draw(); } catch (err) { reportDrawError(err); } // une erreur de dessin ne doit JAMAIS arrêter la boucle (donc le son : les notes sont déclenchées plus haut)
   requestAnimationFrame(frame);
 }
 
