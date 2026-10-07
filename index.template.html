@@ -758,11 +758,13 @@ function drawHand(side, ev, G, onTop) {
     ctx.lineWidth = 1; ctx.strokeStyle = edge + '55'; // plis des articulations
     [4, 7].forEach(k => { const a = L[k], c = R[k]; ctx.beginPath(); ctx.moveTo(a[0] + (c[0] - a[0]) * 0.22, a[1] + (c[1] - a[1]) * 0.22); ctx.lineTo(a[0] + (c[0] - a[0]) * 0.78, a[1] + (c[1] - a[1]) * 0.78); ctx.stroke(); });
     // ongle (vu de dessus) : pâle ; le bout s'éclaire dans la couleur de la main quand le doigt appuie
-    const d = t.f.depth, pr = t.f.pressed, k = pr ? 1.5 : 1, nx = t.x - dir[0] * w1 * 0.3 * k, ny = t.y - dir[1] * w1 * 0.3 * k;
+    const d = t.f.depth, pr = t.f.pressed, k = pr ? 1.8 : 1, off = pr ? 0.05 : 0.3, nx = t.x - dir[0] * w1 * off, ny = t.y - dir[1] * w1 * off; // pastille centrée sur le bout du doigt (le numéro est dedans)
     ctx.beginPath(); ctx.ellipse(nx, ny, w1 * 0.3 * k, w1 * 0.36 * k, Math.atan2(dir[1], dir[0]) + Math.PI / 2, 0, Math.PI * 2);
-    if (pr) { ctx.shadowColor = col.note; ctx.shadowBlur = hs * 0.6; ctx.shadowOffsetY = 0; } // pastille du doigt qui joue : plus grande, pleine couleur, avec halo
-    ctx.fillStyle = pr ? col.note : 'rgba(255,255,255,.4)'; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-    ctx.lineWidth = pr ? 2 : 1; ctx.strokeStyle = pr ? '#fff' : edge + '99'; ctx.stroke(); // orange / bleu SEULEMENT si une note est réellement jouée
+    const lit = side === 'R' ? '#ffc23a' : '#7fd0ff'; // pastille du doigt qui joue : plus grande, couleur très vive, double halo
+    if (pr) { ctx.shadowColor = lit; ctx.shadowBlur = hs * 1.1; ctx.shadowOffsetY = 0; ctx.fillStyle = lit; ctx.fill(); ctx.fill(); }
+    ctx.fillStyle = pr ? lit : 'rgba(255,255,255,.4)'; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+    if (pr) { ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); } // liseré sombre puis blanc : la pastille ressort même sur une touche allumée de la même couleur
+    ctx.lineWidth = pr ? 2.5 : 1; ctx.strokeStyle = pr ? '#fff' : edge + '99'; ctx.stroke(); // orange / bleu SEULEMENT si une note est réellement jouée
   };
   const label = i => { // numéro du doigt, au bout
     const t = tip[i], d = t.f.depth;
