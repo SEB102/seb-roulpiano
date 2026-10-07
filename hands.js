@@ -107,7 +107,8 @@
   // ---------- Plan d'une main ----------
   const REL_SEC = 0.25;   // un doigt relâché revient vers la paume en 0,25 s
   const LEAD_SEC = 0.30;  // un doigt part vers sa prochaine touche 0,30 s avant (ou dès qu'il est libre)
-  const TOL_NOTE = 1.0, TOL_ACCORD = 0.6;
+  const TOL_NOTE = 0, TOL_ACCORD = 0; // la main est asservie au doigt qui joue : elle se place EXACTEMENT en face de sa touche (pour un accord : en face de leur moyenne)
+  const LIFT_GAP = 0.05, HELD_OVERLAP = 0.1;
   const PALM_SEC = 0.30;  // la paume se déplace pendant les 0,30 s qui précèdent la note qui l'exige
   function buildPlan(notes, hand) {
     const sg = hand === 'L' ? -1 : 1, off = f => sg * (f - 3);
@@ -124,6 +125,13 @@
       } else presses.push({ f, midi: n.midi, u, a, b: a + dur });
     });
     presses.sort((x, y) => x.a - y.a || x.f - y.f);
+    // Enchaînement de notes (hors accords et hors notes tenues) : on LÂCHE la touche qu'on jouait un instant avant d'en frapper une autre, même si dans le fichier
+    // la fin de l'une et le début de l'autre sont simultanés. Une note vraiment tenue (qui dépasse le début de la suivante de plus de 0,1 s) reste posée.
+    presses.forEach((p, i) => {
+      let j = i + 1; while (j < presses.length && presses[j].a <= p.a + 0.03) j++;
+      const q = presses[j]; if (!q || q.f === p.f) return;
+      if (p.b > q.a - LIFT_GAP && p.b - q.a <= HELD_OVERLAP) p.b = Math.max(p.a + 0.04, q.a - LIFT_GAP);
+    });
     const byF = { 1: [], 2: [], 3: [], 4: [], 5: [] };
     presses.forEach(p => byF[p.f].push(p));
     for (let f = 1; f <= 5; f++) { // un même doigt ne tient pas deux touches à la fois, et il lui faut un temps de trajet (proportionnel à la distance) entre deux touches
@@ -178,9 +186,21 @@
       let wP = 0, wN = 0, depth = 0, blk = 0;
       if (i >= 0) { const s = (t - L[i].b) / REL_SEC; wP = s < 1 ? 1 - ease(s) : 0; depth = Math.max(depth, clamp(1 - (t - L[i].b) / 0.1, 0, 1)); if (wP > 0) blk = isBlack(L[i].midi) ? 1 : 0; }
       if (j < L.length) { wN = ease((t - (L[j].a - LEAD_SEC)) / LEAD_SEC); depth = Math.max(depth, ease((t - (L[j].a - 0.06)) / 0.06)); if (wN > 0) blk = isBlack(L[j].midi) ? 1 : 0; }
-      const uP = i >= 0 ? L[i].u : r, uN = j < L.length ? L[j].u : r;
-      const x = r + (uP - r) * wP * (1 - wN) + (uN - r) * wN;
-      return { x, depth, blk, pressed: false, midi: 0, lift: (1 - depth) * (0.35 + 0.65 * 4 * wN * (1 - wN)) };
+      // le doigt suit la main (asservie à lui) : il ne s'écarte d'elle que de ce que la main ne peut pas absorber au moment de la frappe / du relâchement
+      const uP = i >= 0 ? L[i].u - (palmAt(L[i].b) + off(f)) : 0, uN = j < L.length ? L[j].u - (palmAt(L[j].a) + off(f)) : 0;
+      const x = r + uP * wP * (1 - wN) + uN * wN;
+      return { x, depth, wN, blk, pressed: false, midi: 0, lift: (1 - depth) * (0.35 + 0.65 * 4 * wN * (1 - wN)) };
+    }
+    // Un doigt posé sur sa touche est un mur : les doigts voisins (index, majeur, annulaire, auriculaire ; pas le pouce, qui passe sous la main) ne le traversent
+    // pas, ils sont repoussés derrière lui, de moins en moins à mesure qu'ils s'enfoncent eux-mêmes (le résultat reste donc continu).
+    const GAP = 0.5; // écart minimal entre deux bouts de doigts voisins (deux touches voisines, blanche et noire, sont à 0,5)
+    function wall(fs) {
+      const s = fs.map(g => sg * g.x), pr = fs.map(g => g.pressed), soft = g => 1 - Math.max(g.depth, g.wN || 0); // un doigt qui part vers sa touche s'affranchit du mur en douceur, sur toute sa course
+      const ws = fs.map(g => g.pressed ? 1 : g.depth); // force du mur : 1 sous un doigt posé, qui s'efface en 0,1 s quand il est relâché (pas de saut)
+      const moved = new Array(5).fill(false);
+      for (let i = 2; i <= 4; i++) { const w = ws[i - 1]; if (w > 0 && !pr[i] && s[i] < s[i - 1] + GAP) { const d = (s[i - 1] + GAP - s[i]) * w * soft(fs[i]); s[i] += d; ws[i] = Math.max(ws[i], w * soft(fs[i])); moved[i] = true; } }
+      for (let i = 3; i >= 1; i--) { const w = ws[i + 1]; if (w > 0 && !pr[i] && s[i] > s[i + 1] - GAP) { const d = (s[i] - (s[i + 1] - GAP)) * w * soft(fs[i]); s[i] -= d; ws[i] = Math.max(ws[i], w * soft(fs[i])); moved[i] = true; } }
+      return fs.map((g, i) => (moved[i] && i >= 1) ? Object.assign({}, g, { x: sg * s[i] }) : g);
     }
     // temps qui sépare t de la touche frappée ou tenue la plus proche (0 = la main joue en ce moment)
     function near(t) {
@@ -191,7 +211,7 @@
     }
     return {
       hand, sg, presses, empty: !presses.length, palm: palmAt, finger, near,
-      at(t) { return { palm: palmAt(t), fingers: [1, 2, 3, 4, 5].map(f => finger(f, t)), near: near(t) }; },
+      at(t) { return { palm: palmAt(t), fingers: wall([1, 2, 3, 4, 5].map(f => finger(f, t))), near: near(t) }; },
     };
   }
   return { ux, isBlack, pairCost, assignFingerings, buildPlan };
