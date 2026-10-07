@@ -751,7 +751,9 @@ function drawHand(side, ev, G, onTop) {
     if (Math.hypot(t0.x - b0.x, t0.y - b0.y) > L) { px += t0.x - r.x; base = mkBase(); }
     const e = reach(base[0]); tip[0] = { x: e.x, y: e.y, f: t0.f };
   }
+  const FADE = 0.38; // les doigts qui ne jouent pas sont en transparence
   const finger = i => {
+    ctx.save(); if (!tip[i].f.pressed) ctx.globalAlpha = FADE;
     const b = base[i], t = tip[i], w = hs * FWID[i], bow = (b.x - t.x) * 0.12;
     const { dir, w1, L, R } = limbPath(b, t, w, bow);
     ctx.lineJoin = 'round'; ctx.strokeStyle = edge; ctx.lineWidth = 3; ctx.stroke(); ctx.fillStyle = skin; ctx.fill();
@@ -765,11 +767,13 @@ function drawHand(side, ev, G, onTop) {
     ctx.fillStyle = pr ? lit : 'rgba(255,255,255,.4)'; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
     if (pr) { ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); } // liseré sombre puis blanc : la pastille ressort même sur une touche allumée de la même couleur
     ctx.lineWidth = pr ? 2.5 : 1; ctx.strokeStyle = pr ? '#fff' : edge + '99'; ctx.stroke(); // orange / bleu SEULEMENT si une note est réellement jouée
+    ctx.restore();
   };
   const label = i => { // numéro du doigt, au bout
     const t = tip[i], d = t.f.depth;
+    ctx.save(); if (!t.f.pressed) ctx.globalAlpha = FADE;
     ctx.fillStyle = t.f.pressed ? '#10121f' : edge; ctx.font = '800 ' + Math.max(9, Math.round(hs * 0.38)) + 'px -apple-system, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), t.x, t.y + 0.5); ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), t.x, t.y + 0.5); ctx.textBaseline = 'alphabetic'; ctx.restore();
   };
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = hs * (onTop ? 0.9 : 0.5); ctx.shadowOffsetY = hs * (onTop ? 0.5 : 0.25);
