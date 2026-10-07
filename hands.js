@@ -108,7 +108,7 @@
   const REL_SEC = 0.25;   // un doigt relâché revient vers la paume en 0,25 s
   const LEAD_SEC = 0.30;  // un doigt part vers sa prochaine touche 0,30 s avant (ou dès qu'il est libre)
   const TOL_NOTE = 0, TOL_ACCORD = 0; // la main est asservie au doigt qui joue : elle se place EXACTEMENT en face de sa touche (pour un accord : en face de leur moyenne)
-  const LIFT_GAP = 0.05, HELD_OVERLAP = 0.1;
+  const LIFT_GAP = 0.05, HELD_OVERLAP = 0.1, TM_BASE = 0.12, MIN_FRAC = 0.25; // durée mini du déplacement de la main ; fraction mini de la note où le doigt reste posé
   const PALM_SEC = 0.30;  // la paume se déplace pendant les 0,30 s qui précèdent la note qui l'exige
   function buildPlan(notes, hand) {
     const sg = hand === 'L' ? -1 : 1, off = f => sg * (f - 3);
@@ -157,7 +157,13 @@
       else {
         const np = clamp(pal, target - tol, target + tol);
         if (np !== pal) {
-          const D = Math.max(lastT, T - PALM_SEC);
+          // la main ne se déplace que lorsqu'aucun doigt n'est posé : les doigts qui jouaient se lèvent AVANT le début du déplacement (sauf accords et notes tenues),
+          // dont la durée croît avec la distance (jamais de téléportation de la main)
+          const tm = clamp(TM_BASE + 0.05 * Math.abs(np - pal), TM_BASE, PALM_SEC); let D = Math.max(lastT, T - tm);
+          const early = p => !(e.ps.includes(p) || p.a >= e.t - 0.01 || p.b <= D || p.b - e.t > HELD_OVERLAP);
+          // un doigt reste posé au moins la moitié de sa note : sinon la main part plus tard (et plus vite)
+          presses.forEach(p => { if (early(p)) D = Math.max(D, Math.min(p.b, p.a + Math.max(0.04, MIN_FRAC * (p.b - p.a)))); });
+          presses.forEach(p => { if (early(p)) p.b = Math.max(p.a + 0.04, D); });
           if (D > lastT) { kt.push(D); kp.push(pal); }
           kt.push(Math.max(T, D + 1e-3)); kp.push(np); lastT = kt[kt.length - 1]; pal = np;
         }
@@ -170,6 +176,7 @@
       }
       prev = e;
     });
+    prefB.length = 0; presses.forEach((p, i) => { prefB.push(Math.max(p.b, i ? prefB[i - 1] : -Infinity)); });
     const palmAt = t => {
       if (!kt.length) return 0;
       if (t <= kt[0]) return kp[0]; if (t >= kt[kt.length - 1]) return kp[kp.length - 1];

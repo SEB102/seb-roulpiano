@@ -22,7 +22,7 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
   await t('Enchaînement : on lâche la touche jouée juste avant d\'en frapper une autre (hors accord et hors note tenue)', () => {
     const fp = (ns, hand = 'R') => H.buildPlan(ns, hand);
     const a = [{ midi: 60, t0: 0, t1: 0.5, finger: 3 }, { midi: 62, t0: 0.5, t1: 1, finger: 2 }];   // fin et début simultanés dans le fichier
-    const p = fp(a); assert.ok(p.finger(3, 0.3).pressed, 'doigt 3 posé'); assert.ok(!p.finger(3, 0.49).pressed, 'doigt 3 déjà lâché à 0,49 s'); assert.ok(p.finger(2, 0.51).pressed, 'doigt 2 posé à 0,51 s');
+    const p = fp(a); assert.ok(p.finger(3, 0.05).pressed, 'doigt 3 posé'); assert.ok(!p.finger(3, 0.49).pressed, 'doigt 3 déjà lâché à 0,49 s'); assert.ok(p.finger(2, 0.51).pressed, 'doigt 2 posé à 0,51 s');
     const c = fp([{ midi: 60, t0: 0, t1: 1, finger: 1 }, { midi: 64, t0: 0, t1: 1, finger: 3 }]);   // accord : les deux restent posés
     assert.ok(c.finger(1, 0.9).pressed && c.finger(3, 0.9).pressed, 'accord');
     const h = fp([{ midi: 60, t0: 0, t1: 2, finger: 1 }, { midi: 64, t0: 0.5, t1: 1, finger: 3 }]);   // note tenue : le doigt 1 reste posé
