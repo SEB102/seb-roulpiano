@@ -251,12 +251,19 @@
             const tickAbs = toTick(start), durT = toTick(dur);
             if (tieTypes.includes('stop') && open.has(key)) {
               const o = open.get(key); o.n.dur += durT;
+              { const tg = parseInt(txt(kid(kid(e, 'notations') || { children: [] }, 'technical') || { children: [] }, 'fingering'), 10); // note liée dont le doigt change = changement de doigt sur la touche tenue
+                if (tg >= 1 && tg <= 5 && o.n.finger && tg !== o.n.finger && !o.n.finger2) { o.n.finger2 = tg; o.n.swapTick = tickAbs; } }
               if (!tieTypes.includes('start')) open.delete(key);
               return;
             }
             const n = { midi, tick: tickAbs, dur: Math.max(1, durT), vel: 80, staff, voice: parseInt(txt(e, 'voice') || '1', 10) };
             const fg = parseInt(txt(kid(kid(e, 'notations') || { children: [] }, 'technical') || { children: [] }, 'fingering'), 10);
             if (fg >= 1 && fg <= 5) n.finger = fg; // doigté inscrit dans la partition
+            const tech = kid(kid(e, 'notations') || { children: [] }, 'technical');
+            if (tech) { // « 3-1 » : doigté de substitution (on change de doigt sur la touche tenue)
+              const sub = kids(tech, 'fingering').find(x => x.attrs.substitution === 'yes'), sf = sub ? parseInt(sub.text.trim(), 10) : 0;
+              if (sf >= 1 && sf <= 5 && n.finger && sf !== n.finger) { n.finger2 = sf; n.swapFrac = 0.55; }
+            }
             notes.push(n);
             if (tieTypes.includes('start')) open.set(key, { n, mi });
           }
@@ -339,6 +346,7 @@
     const magic = String.fromCharCode(b[0], b[1], b[2], b[3]);
     let song;
     if (magic === 'MThd') song = parseMidi(b);
+    else if (/\.mscz$|\.mscx$/i.test(name)) throw new Error('Les fichiers MuseScore (.mscz) ne sont pas lus directement : dans MuseScore, faites Fichier › Exporter › MusicXML (.musicxml ou .mxl), puis ouvrez ce fichier.');
     else if (b[0] === 0x50 && b[1] === 0x4b) song = await parseMxl(b);
     else if (/\.pdf$/i.test(name) || magic === '%PDF') throw new Error('Les PDF/images de partitions ne sont pas encore pris en charge : exportez d\'abord en MIDI ou MusicXML (MuseScore, etc.).');
     else song = parseMusicXml(new TextDecoder().decode(b));
