@@ -762,23 +762,29 @@ function drawHand(side, ev, G, onTop) {
     [4, 7].forEach(k => { const a = L[k], c = R[k]; ctx.beginPath(); ctx.moveTo(a[0] + (c[0] - a[0]) * 0.22, a[1] + (c[1] - a[1]) * 0.22); ctx.lineTo(a[0] + (c[0] - a[0]) * 0.78, a[1] + (c[1] - a[1]) * 0.78); ctx.stroke(); });
     // ongle (vu de dessus) : pâle ; le bout s'éclaire dans la couleur de la main quand le doigt appuie
     const d = t.f.depth, pr = t.f.pressed, k = pr ? 1.8 : 1, off = pr ? 0.05 : 0.3, nx = t.x - dir[0] * w1 * off, ny = t.y - dir[1] * w1 * off; // pastille centrée sur le bout du doigt (le numéro est dedans)
-    ctx.beginPath(); ctx.ellipse(nx, ny, w1 * 0.3 * k, w1 * 0.36 * k, Math.atan2(dir[1], dir[0]) + Math.PI / 2, 0, Math.PI * 2);
-    const lit = side === 'R' ? '#ffc23a' : '#7fd0ff'; // pastille du doigt qui joue : plus grande, couleur très vive, double halo
-    if (pr) { ctx.shadowColor = lit; ctx.shadowBlur = hs * 1.1; ctx.shadowOffsetY = 0; ctx.fillStyle = lit; ctx.fill(); ctx.fill(); }
-    ctx.fillStyle = pr ? lit : 'rgba(255,255,255,.4)'; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
-    if (pr) { ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); } // liseré sombre puis blanc : la pastille ressort même sur une touche allumée de la même couleur
-    ctx.lineWidth = pr ? 2.5 : 1; ctx.strokeStyle = pr ? '#fff' : edge + '99'; ctx.stroke(); // orange / bleu SEULEMENT si une note est réellement jouée
-    if (nextF) { // pastille qui clignote (3 fois par seconde) au bout du doigt qui va jouer la prochaine note
-      const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * T), px = t.x - dir[0] * w1 * 0.05, py = t.y - dir[1] * w1 * 0.05;
-      ctx.globalAlpha = 0.15 + 0.85 * bl; ctx.beginPath(); ctx.ellipse(px, py, w1 * 0.42, w1 * 0.5, Math.atan2(dir[1], dir[0]) + Math.PI / 2, 0, Math.PI * 2);
-      ctx.fillStyle = lit; ctx.shadowColor = lit; ctx.shadowBlur = hs * 0.8; ctx.fill(); ctx.shadowBlur = 0; ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    const lit = side === 'R' ? '#ffc23a' : '#7fd0ff'; // couleur vive de la main (pastille du doigt qui joue, pastille clignotante)
+    if (!nextF) { // (le doigt qui va jouer n'a pas d'ongle : la pastille clignotante en tient lieu)
+      ctx.beginPath(); ctx.ellipse(nx, ny, w1 * 0.3 * k, w1 * 0.36 * k, Math.atan2(dir[1], dir[0]) + Math.PI / 2, 0, Math.PI * 2);
+      if (pr) { ctx.shadowColor = lit; ctx.shadowBlur = hs * 1.1; ctx.shadowOffsetY = 0; ctx.fillStyle = lit; ctx.fill(); ctx.fill(); }
+      ctx.fillStyle = pr ? lit : 'rgba(255,255,255,.4)'; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
+      if (pr) { ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); } // liseré sombre puis blanc : la pastille ressort même sur une touche allumée de la même couleur
+      ctx.lineWidth = pr ? 2.5 : 1; ctx.strokeStyle = pr ? '#fff' : edge + '99'; ctx.stroke(); // orange / bleu SEULEMENT si une note est réellement jouée
+    }
+    if (nextF) { // pastille qui clignote (3 fois par seconde) au bout du doigt qui va jouer la prochaine note : toujours bien visible, qui « respire » entre vif et éclatant
+      const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * T), px = t.x - dir[0] * w1 * 0.05, py = t.y - dir[1] * w1 * 0.05, rot = Math.atan2(dir[1], dir[0]) + Math.PI / 2, kk = 1.55 + 0.25 * bl;
+      ctx.globalAlpha = 1; ctx.beginPath(); ctx.ellipse(px, py, w1 * 0.3 * kk, w1 * 0.36 * kk, rot, 0, Math.PI * 2);
+      ctx.shadowColor = lit; ctx.shadowBlur = hs * (0.8 + 1.2 * bl); ctx.fillStyle = lit; ctx.fill(); ctx.fill(); ctx.shadowBlur = 0;   // double remplissage : couleur pleine + halo
+      ctx.fillStyle = 'rgba(255,255,255,' + (0.05 + 0.3 * bl).toFixed(2) + ')'; ctx.fill();                                                // éclat blanc au sommet du clignotement
+      ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();            // liseré sombre puis blanc
+      ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gr = ctx.createRadialGradient(px, py, 0, px, py, w1 * 1.7); gr.addColorStop(0, lit + 'cc'); gr.addColorStop(1, lit + '00');
+      ctx.globalAlpha = 0.25 + 0.75 * bl; ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(px, py, w1 * 1.7, 0, Math.PI * 2); ctx.fill(); ctx.restore();   // lueur additive qui pulse : on VOIT le doigt s'allumer
     }
     ctx.restore();
   };
   const label = i => { // numéro du doigt, au bout
     const t = tip[i], d = t.f.depth;
     ctx.save(); if (!t.f.pressed) ctx.globalAlpha = FADE;
-    ctx.fillStyle = t.f.pressed ? '#10121f' : edge; ctx.font = '800 ' + Math.max(9, Math.round(hs * 0.38)) + 'px -apple-system, sans-serif';
+    ctx.fillStyle = (t.f.pressed || (t.f.wN || 0) > 0.02) ? '#10121f' : edge; ctx.font = '800 ' + Math.max(9, Math.round(hs * 0.38)) + 'px -apple-system, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), t.x, t.y + 0.5); ctx.textBaseline = 'alphabetic'; ctx.restore();
   };
   ctx.save();
