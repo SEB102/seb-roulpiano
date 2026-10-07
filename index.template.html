@@ -133,7 +133,7 @@
   <div id="fpop"><button data-h="R" title="Main droite (touche D)">M.D.</button><button data-h="L" title="Main gauche (touche G)">M.G.</button><span class="sep"></span><span id="rake"></span><span id="nums"><button data-f="1">1</button><button data-f="2">2</button><button data-f="3">3</button><button data-f="4">4</button><button data-f="5">5</button></span><button data-f="0" title="Effacer le doigté">✕</button><span class="sep"></span><span class="sublab" title="Changement de doigt sur la touche tenue : le doigt de départ est remplacé par celui-ci en cours de note">puis</span><span id="nums2"><button data-s="1">1</button><button data-s="2">2</button><button data-s="3">3</button><button data-s="4">4</button><button data-s="5">5</button></span><button data-s="0" title="Pas de changement de doigt">✕</button></div>
   <div id="drop">Déposez un fichier .mid / .musicxml / .mxl</div>
 </main>
-<footer>SEB-ROULPIANO · Octobre 2026 · <a href="MODE-D-EMPLOI.html" target="_blank" rel="noopener">Mode d'emploi</a></footer>
+<footer>SEB-ROULPIANO · Sébastien Gay · Octobre 2026 · <a href="MODE-D-EMPLOI.html" target="_blank" rel="noopener">Mode d'emploi</a></footer>
 
 <script>
 'use strict';
@@ -542,7 +542,7 @@ function drawBand(c, W, H, k) {
   c.fillStyle = '#2a3050'; c.fillRect(0, H, W, 1);
   c.fillStyle = '#8d94b3'; c.font = '12px -apple-system, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
   if ('letterSpacing' in c) c.letterSpacing = '1.5px';
-  c.fillText('SEB-ROULPIANO · Octobre 2026', W / 2, H + BAND / 2 + 1);
+  c.fillText('SEB-ROULPIANO · Sébastien Gay · Octobre 2026', W / 2, H + BAND / 2 + 1);
   if ('letterSpacing' in c) c.letterSpacing = '0px';
   c.textBaseline = 'alphabetic';
 }
