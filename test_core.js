@@ -168,5 +168,12 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
     assert.ok(at(3).every(x => x.hand === 'L'));
   });
 
+  await t('MusicXML « timewise » (mesure > partie) lu comme le « partwise »', () => {
+    const m = k => `<measure number="${k}"><part id="P1">${k === 1 ? '<attributes><divisions>1</divisions></attributes>' : ''}<note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration></note></part></measure>`;
+    const s = C.parseMusicXml(`<?xml version="1.0"?><score-timewise><part-list><score-part id="P1"><part-name>x</part-name></score-part></part-list>${m(1)}${m(2)}</score-timewise>`);
+    assert.strictEqual(s.notes.length, 2); assert.strictEqual(s.measures.length, 2);
+    assert.ok(s.notes[1].tick > s.notes[0].tick);
+  });
+
   console.log(`\n${n} tests passés`);
 })();

@@ -197,8 +197,18 @@
   const STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
   function parseMusicXml(src) {
     const doc = parseXml(src);
-    const score = kid(doc, 'score-partwise');
-    if (!score) throw new Error('Seul le MusicXML « partwise » est pris en charge.');
+    let score = kid(doc, 'score-partwise');
+    const tw = !score && kid(doc, 'score-timewise');
+    if (tw) { // « timewise » (mesure > partie) : on le range en « partwise » (partie > mesure)
+      const byId = new Map(), order = [];
+      kids(tw, 'measure').forEach(m => kids(m, 'part').forEach(p => {
+        const id = p.attrs.id || String(order.length);
+        if (!byId.has(id)) { byId.set(id, { name: 'part', attrs: { id }, children: [], text: '' }); order.push(id); }
+        byId.get(id).children.push({ name: 'measure', attrs: m.attrs, children: p.children, text: '' });
+      }));
+      score = { name: 'score-partwise', attrs: {}, children: tw.children.filter(c => c.name !== 'measure').concat(order.map(id => byId.get(id))), text: '' };
+    }
+    if (!score) throw new Error('Fichier MusicXML non reconnu (ni « partwise » ni « timewise »).');
     const title = txt(kid(score, 'work') || { children: [] }, 'work-title') || txt(score, 'movement-title') || '';
     const parts = kids(score, 'part');
     if (!parts.length) throw new Error('Aucune partie trouvée dans la partition.');
