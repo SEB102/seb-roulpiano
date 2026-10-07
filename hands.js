@@ -52,7 +52,7 @@
         let c = 0;
         e.ns.forEach((n, i) => {
           const f = S[i]; if (!f) return;
-          if (isBlack(n.midi)) c += f === 1 ? 0.6 : f === 5 ? 0.25 : 0;
+          if (isBlack(n.midi)) c += f === 1 ? 1.0 : f === 5 ? 0.25 : 0; // pouce sur touche noire : court et en retrait, nettement moins confortable
           if (!n.finger) c += f === 4 ? 0.2 : f === 5 ? 0.15 : 0;
           if (i && S[i - 1]) c += pairCost(S[i - 1], q(e.ns[i - 1]), f, q(n));
         });
@@ -72,6 +72,7 @@
             let near = 0, nd = Infinity; p.ns.forEach((m, x) => { const d = Math.abs(q(m) - q(n)); if (d < nd) { nd = d; near = x; } });
             const fa = SA[near]; if (!fa) return;
             c += scale * pairCost(fa, q(p.ns[near]), fb, q(n));
+            if (fb === 1 && fa !== 1 && isBlack(n.midi)) c += scale * ((fa - fb) * (q(n) - q(p.ns[near])) < 0 ? 1.5 : 0.5); // le pouce qui ARRIVE sur une touche noire (surtout en passant sous la main, en montant) est difficile
             if (fa === fb && q(p.ns[near]) !== q(n) && gap < 0.15) c += 3 + 0.5 * Math.abs(q(n) - q(p.ns[near])); // même doigt, saut, sans le temps de s'y rendre
           });
           if (c < best) { best = c; arg = ai; }

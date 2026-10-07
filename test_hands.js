@@ -14,6 +14,11 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     for (let i = 1; i < f.length; i++) if (f[i] === 1) assert.ok(f[i - 1] === 3 || f[i - 1] === 4, 'pouce après ' + f[i - 1] + ' en position ' + i);
     assert.ok(f.filter(x => x === 1).length >= 2, 'au moins un passage du pouce : ' + f.join(''));
   });
+  await t('Le pouce évite les touches noires : gammes de ré♭ majeur (doigté classique 2 3 1 2 3 4 1 2) et de si♭ majeur montantes à la main droite', () => {
+    const run = ms => { const ns = mk(ms); H.assignFingerings(ns, 'R'); return ns; };
+    const d = run([61, 63, 65, 66, 68, 70, 72, 73]); assert.strictEqual(d.map(x => x.af).join(''), '23123412', d.map(x => x.af).join(''));
+    const b = run([58, 60, 62, 63, 65, 67, 69, 70, 72]); assert.strictEqual(b.filter(x => x.af === 1 && H.isBlack(x.midi)).length, 0, b.map(x => x.af).join(''));
+  });
   await t('Gamme descendante à la main gauche : image miroir de la main droite (pouce sur la note la plus haute)', () => {
     const ns = mk([60, 59, 57, 55, 53, 52, 50, 48]); H.assignFingerings(ns, 'L');
     const f = ns.map(x => x.af); assert.strictEqual(f[0], 1, f.join('')); for (let i = 1; i < f.length; i++) if (f[i] === 1) assert.ok(f[i - 1] === 3 || f[i - 1] === 4, f.join('')); // 1 2 3 1 2 3 … : image miroir de la main droite
