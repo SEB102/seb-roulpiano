@@ -23,7 +23,7 @@
     const far = a > 5 ? (a - 5) * 0.6 : 0;
     if (f2 === 1) return ({ 2: 1.6, 3: 0.3, 4: 0.8, 5: 2.5 }[f1] || 3) + far; // le pouce passe sous la main
     if (f1 === 1) return ({ 2: 1.2, 3: 0.3, 4: 0.8, 5: 2.8 }[f2] || 3) + far; // un doigt passe par-dessus le pouce
-    return 6 + a * 0.2;                                     // croisement sans le pouce : très mauvais
+    return 40 + a * 0.2;                                    // croisement sans le pouce : pratiquement interdit (seul le pouce passe sous / par-dessus)
   }
   const SUBS = {};
   function subsets(k) {
@@ -86,13 +86,14 @@
       const S = ev[i].st[s]; ev[i].ns.forEach((n, j) => { n.af = S[j] || 0; });
       if (i) s = back[i - 1][s];
     }
-    // Un doigt déjà posé sur une touche tenue ne peut pas en jouer une autre : on le remplace par un doigt libre, dans l'ordre des notes tenues.
+    // Un doigt déjà posé sur une touche tenue ne peut pas en jouer une autre, et deux doigts ne se croisent pas (hors pouce) : on le remplace par un doigt libre, dans l'ordre des notes tenues.
     const held = [];
     ev.forEach(e => {
       for (let h = held.length - 1; h >= 0; h--) if (held[h].n.t1 <= e.t + 0.02) held.splice(h, 1);
       e.ns.forEach(n => {
         const f = n.finger || n.af; if (!f) return;
-        if (!n.finger && held.some(h => (h.n.finger || h.n.af) === f)) {
+        const fh = h => h.n.finger || h.n.af, croise = h => f !== 1 && fh(h) !== 1 && q(n) !== q(h.n) && Math.sign(f - fh(h)) !== Math.sign(q(n) - q(h.n)); // passe par-dessus un doigt qui tient une touche (hors pouce)
+        if (!n.finger && held.some(h => fh(h) === f || croise(h))) {
           const used = new Set(held.map(h => h.n.finger || h.n.af));
           const ok = c => !used.has(c) && held.every(h => Math.sign(c - (h.n.finger || h.n.af)) === Math.sign(q(n) - q(h.n)));
           const alt = [1, 2, 3, 4, 5].filter(ok).sort((a, b) => Math.abs(a - f) - Math.abs(b - f))[0];
@@ -106,6 +107,7 @@
   // ---------- Plan d'une main ----------
   const REL_SEC = 0.25;   // un doigt relâché revient vers la paume en 0,25 s
   const LEAD_SEC = 0.30;  // un doigt part vers sa prochaine touche 0,30 s avant (ou dès qu'il est libre)
+  const TOL_NOTE = 1.0, TOL_ACCORD = 0.6;
   const PALM_SEC = 0.30;  // la paume se déplace pendant les 0,30 s qui précèdent la note qui l'exige
   function buildPlan(notes, hand) {
     const sg = hand === 'L' ? -1 : 1, off = f => sg * (f - 3);
@@ -135,9 +137,9 @@
     presses.filter(p => !p.sub).forEach(p => { const l = ev[ev.length - 1]; if (l && p.a - l.t < 0.03) l.ps.push(p); else ev.push({ t: p.a, ps: [p] }); });
     const kt = [], kp = [];
     let pal = null, lastT = -Infinity, prev = null;
-    ev.forEach(e => {
+    ev.forEach((e, ei) => {
       const target = e.ps.reduce((s, p) => s + p.u - off(p.f), 0) / e.ps.length;
-      let tol = e.ps.length > 1 ? 0.6 : 1.0;
+      let tol = e.ps.length > 1 ? TOL_ACCORD : TOL_NOTE; // tolérance de la paume : plus elle est petite, plus la main se place pile en face du doigt qui joue
       if (prev && prev.ps.length === 1 && e.ps.length === 1) {
         const a = prev.ps[0], b = e.ps[0];
         if ((b.f === 1 && a.f >= 2 && sg * (b.u - a.u) > 0) || (a.f === 1 && b.f >= 2 && sg * (b.u - a.u) < 0)) tol = 0; // pouce qui passe sous la main / doigt qui passe par-dessus
@@ -151,6 +153,12 @@
           if (D > lastT) { kt.push(D); kp.push(pal); }
           kt.push(Math.max(T, D + 1e-3)); kp.push(np); lastT = kt[kt.length - 1]; pal = np;
         }
+      }
+      // touche tenue longtemps par un seul doigt (aucun autre doigt ne tient de touche) : la main se recentre en face de ce doigt, sinon il reste
+      // étiré de côté, par-dessus ses voisins, pendant toute la tenue
+      const nxt = ev[ei + 1], room = nxt ? nxt.t - e.t : e.ps.reduce((m, p) => Math.max(m, p.b - p.a), 0);
+      if (e.ps.length === 1 && room > 0.9 && Math.abs(pal - target) > 0.05 && !presses.some(p => p !== e.ps[0] && p.a < e.t + 0.01 && p.b > e.t + 0.1)) {
+        const D2 = Math.max(lastT, T + 0.05); kt.push(D2); kp.push(pal); kt.push(D2 + 0.3); kp.push(target); lastT = D2 + 0.3; pal = target;
       }
       prev = e;
     });
