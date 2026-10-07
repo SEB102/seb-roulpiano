@@ -711,7 +711,7 @@ const FWID = [0.62, 0.54, 0.57, 0.54, 0.44];    // épaisseur à la base
 function drawHands(W, top, kbH, sp) {
   ensurePlan(); if (!song.plan) return;
   const ww = W / NW, hs = Math.min(ww * 1.2, kbH / 5.4), uF = PianoHands.ux(FIRST) - 0.5;
-  const G = { ww, hs, top, kbH, W, X: u => (u - uF) * ww };
+  const G = { ww, hs, top, kbH, W, X: u => (u - uF) * ww, T: ctx === screenCtx ? performance.now() / 1000 : sp }; // T : horloge du clignotement (murale à l'écran, temps du morceau à l'export)
   const hs2 = ['R', 'L'].map(h => ({ side: h, plan: song.plan[h] })).filter(o => !o.plan.empty);
   hs2.forEach(o => { o.ev = o.plan.at(sp); o.near = Math.min(99, o.ev.near); });
   hs2.sort((a, b) => b.near - a.near); // la main qui joue (ou va jouer) le plus tôt passe au premier plan : c'est elle qui passe par-dessus quand les mains se croisent
@@ -734,7 +734,7 @@ function limbPath(b, t, w0, bow) {
   return { dir, w1, L, R };
 }
 function drawHand(side, ev, G, onTop) {
-  const { ww, hs, top, kbH, W, X } = G, sg = side === 'L' ? -1 : 1, [skin, edge] = SKIN[side], col = COL[side];
+  const { ww, hs, top, kbH, W, X, T } = G, sg = side === 'L' ? -1 : 1, [skin, edge] = SKIN[side], col = COL[side];
   const yHover = top + kbH * 0.36, yW = top + kbH * 0.52, yB = top + kbH * 0.3; let px = X(ev.palm);
   // la main avance quand un doigt joue une touche noire (sinon les doigts s'allongent démesurément)
   const fwd = Math.max.apply(null, ev.fingers.map(f => f.blk * f.depth)) * (yW - yB) * 0.85;
@@ -753,7 +753,8 @@ function drawHand(side, ev, G, onTop) {
   }
   const FADE = 0.38; // les doigts qui ne jouent pas sont en transparence
   const finger = i => {
-    ctx.save(); if (!tip[i].f.pressed) ctx.globalAlpha = FADE;
+    const nextF = !tip[i].f.pressed && (tip[i].f.wN || 0) > 0.02; // doigt qui va jouer la prochaine note
+    ctx.save(); if (!tip[i].f.pressed) ctx.globalAlpha = nextF ? 0.75 : FADE;
     const b = base[i], t = tip[i], w = hs * FWID[i], bow = (b.x - t.x) * 0.12;
     const { dir, w1, L, R } = limbPath(b, t, w, bow);
     ctx.lineJoin = 'round'; ctx.strokeStyle = edge; ctx.lineWidth = 3; ctx.stroke(); ctx.fillStyle = skin; ctx.fill();
@@ -767,6 +768,11 @@ function drawHand(side, ev, G, onTop) {
     ctx.fillStyle = pr ? lit : 'rgba(255,255,255,.4)'; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
     if (pr) { ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); } // liseré sombre puis blanc : la pastille ressort même sur une touche allumée de la même couleur
     ctx.lineWidth = pr ? 2.5 : 1; ctx.strokeStyle = pr ? '#fff' : edge + '99'; ctx.stroke(); // orange / bleu SEULEMENT si une note est réellement jouée
+    if (nextF) { // pastille qui clignote (3 fois par seconde) au bout du doigt qui va jouer la prochaine note
+      const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * T), px = t.x - dir[0] * w1 * 0.05, py = t.y - dir[1] * w1 * 0.05;
+      ctx.globalAlpha = 0.15 + 0.85 * bl; ctx.beginPath(); ctx.ellipse(px, py, w1 * 0.42, w1 * 0.5, Math.atan2(dir[1], dir[0]) + Math.PI / 2, 0, Math.PI * 2);
+      ctx.fillStyle = lit; ctx.shadowColor = lit; ctx.shadowBlur = hs * 0.8; ctx.fill(); ctx.shadowBlur = 0; ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    }
     ctx.restore();
   };
   const label = i => { // numéro du doigt, au bout
