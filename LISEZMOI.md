@@ -28,6 +28,10 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
   Garder l'onglet visible pendant l'export ; Échap ou le même bouton annule. Impossible à la vitesse 0.
 - Non géré : répétitions/reprises MusicXML (jouées une seule fois), PDF/images de partitions.
 
+## Licence et crédits
+Code de SEB-ROULPIANO : licence MIT, © 2026 Sébastien Gay (fichier `LICENSE`) : réutilisation libre à condition de conserver ce crédit.
+Sons de piano : **Salamander Grand Piano V3** par Alexander Holm, licence CC BY 3.0 (https://github.com/sfzinstruments/SalamanderGrandPiano), chargés depuis Internet via Tone.js (MIT). Les partitions de Beethoven et de Bach sont dans le domaine public.
+
 Mode d'emploi illustré : `MODE-D-EMPLOI.html` (autonome, images intégrées) et `MODE-D-EMPLOI.pdf` (même contenu, imprimable).
 
 Fichiers : `index.html` (généré : `node construire.js`), `index.template.html` (source), `core.js` (lecture MIDI/MusicXML/MXL), `hands.js` (doigtés automatiques + mouvement des mains), `test_core.js` et `test_hands.js` (tests : `node test_core.js && node test_hands.js`),
