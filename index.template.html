@@ -72,9 +72,9 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261008g"></script>
-<script src="hands.js?v=20261008g"></script>
-<script src="hands_legacy.js?v=20261008g"></script>
+<script src="core.js?v=20261008j"></script>
+<script src="hands.js?v=20261008j"></script>
+<script src="hands_legacy.js?v=20261008j"></script>
 </head>
 <body>
 <header>
@@ -112,6 +112,7 @@
     <label class="btn" for="file">📂 Ouvrir un fichier…</label>
     <input id="file" type="file" accept=".mid,.midi,.musicxml,.xml,.mxl">
     <button id="demo" title="Charger l'exemple : début de la Lettre à Élise (Beethoven)">Exemple : Élise</button>
+    <button id="demo3" title="Charger l'exemple : « J'ai du bon tabac », très simple : une main à cinq doigts (do à sol), accompagnement facile">Exemple : J'ai du bon tabac</button>
     <button id="demo2" title="Charger l'exemple : Variation 30 des Variations Goldberg (Bach)">Exemple : Bach</button>
     <div class="grp tip">
       <button id="export">🎬 Export vidéo</button>
@@ -178,7 +179,7 @@
 
 <script>
 'use strict';
-const EXEMPLE_B64 = '__EXEMPLE_B64__', EXEMPLE_ELISE_B64 = '__EXEMPLE_ELISE_B64__';
+const EXEMPLE_B64 = '__EXEMPLE_B64__', EXEMPLE_ELISE_B64 = '__EXEMPLE_ELISE_B64__', EXEMPLE_TABAC_B64 = '__EXEMPLE_TABAC_B64__';
 const $ = id => document.getElementById(id);
 const cv = $('cv'); let ctx = cv.getContext('2d'); const screenCtx = ctx;
 
@@ -459,7 +460,7 @@ function setSpeed(v) {
 function refreshButtons() {
   const x = exp.active;
   $('play').disabled = !song || playing || x; $('stop').disabled = !playing || x; $('rew').disabled = !song || x;
-  $('progress').disabled = !song || x; $('speed').disabled = x; $('speed1').disabled = x; $('speedq').disabled = x; $('speedh').disabled = x; $('demo').disabled = x; $('demo2').disabled = x;
+  $('progress').disabled = !song || x; $('speed').disabled = x; $('speed1').disabled = x; $('speedq').disabled = x; $('speedh').disabled = x; $('demo').disabled = x; $('demo2').disabled = x; $('demo3').disabled = x;
   $('file').disabled = x; $('export').disabled = !song; $('xres').disabled = x;
   refreshFingButton(); $('fingExp').disabled = !song; $('fingImp').disabled = !song || x;
   $('tempo').disabled = !song || x; $('tempoReset').disabled = !song || x;
@@ -693,6 +694,7 @@ const openExemple = (b64, nom) => {
 };
 $('demo').onclick = () => openExemple(EXEMPLE_ELISE_B64, 'Lettre à Élise (exemple)');
 $('demo2').onclick = () => openExemple(EXEMPLE_B64, 'Goldberg – Variation 30 (exemple)');
+$('demo3').onclick = () => openExemple(EXEMPLE_TABAC_B64, 'J\'ai du bon tabac (exemple)');
 let dragDepth = 0;
 addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
 addEventListener('dragleave', e => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
