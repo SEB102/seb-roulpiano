@@ -72,8 +72,8 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261008d"></script>
-<script src="hands.js?v=20261008d"></script>
+<script src="core.js?v=20261008e"></script>
+<script src="hands.js?v=20261008e"></script>
 </head>
 <body>
 <header>
@@ -100,7 +100,7 @@
     <div class="grp">
       <button id="bPre" title="Pré-écoute (P) : on entend la note AVANT le geste, à la place du son de la frappe (la frappe ne sonne plus). En pas à pas : la hauteur sonne avant le geste.">🔊 pré-écoute</button>
       <button id="bCount" title="Décompte d'une mesure avant le départ (C)">décompte</button>
-      <span class="lab">Mains virtuelles</span><button id="bM0" title="Sans mains virtuelles : seulement le clavier (T pour changer)">aucune</button><button id="bM1" title="Mains virtuelles avec trajectoires : doigts repliés, repères d'atterrissage et chemin de chaque doigt (T pour changer)">avec trajectoires</button><button id="bM2" title="Mains virtuelles sans trajectoires : doigts tendus, ni repères ni chemins (T pour changer)">sans trajectoire</button>
+      <span class="lab">Mains virtuelles</span><button id="bM0" title="Sans mains virtuelles : le clavier et les repères d'atterrissage du prochain pas (T pour changer)">aucune</button><button id="bM1" title="Mains virtuelles avec trajectoires : doigts repliés, repères d'atterrissage et chemin de chaque doigt (T pour changer)">avec trajectoires</button><button id="bM2" title="Mains virtuelles sans trajectoires : doigts tendus, ni repères ni chemins (T pour changer)">sans trajectoire</button>
       <button id="bZoom" title="Le clavier suit les mains (Z)">zoom auto</button>
       <button id="bHm" title="Mains plus petites (−)">mains −</button><button id="bHp" title="Mains plus grandes (+)">mains +</button>
       <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button></div>
@@ -889,7 +889,8 @@ const noteName = m => NOMS[m % 12] + (Math.floor(m / 12) - 1);
 function drawOverlays(W, top, kbH, sp, active, posTick) {
   if (!song || !song.plan) return;
   const G = makeG(W, top, kbH, sp);
-  if (handsMode === 'traj') { drawUpcoming(G, sp); drawTrajectories(G, sp); }   // repères d'atterrissage et chemins : seulement avec les mains « avec trajectoires »
+  if (handsMode !== 'plain') drawUpcoming(G, sp);      // repères d'atterrissage du prochain pas : sans mains (« aucune ») comme avec les mains « avec trajectoires »
+  if (handsMode === 'traj') drawTrajectories(G, sp);   // chemins des doigts : seulement avec les mains « avec trajectoires »
   { // compteur de pas « x:y » en haut à gauche du clavier
     const nb = eventTimes().length, x = stepMode ? (stepAnim ? stepAnim.j + 1 : stepE + 1) : firstEventAfter(sp + 0.02), txt = Math.max(0, x) + ':' + nb;
     ctx.save(); ctx.font = '700 ' + Math.max(12, Math.round(kbH * 0.032)) + 'px -apple-system, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
