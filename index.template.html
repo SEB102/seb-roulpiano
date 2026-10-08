@@ -72,8 +72,8 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261008"></script>
-<script src="hands.js?v=20261008"></script>
+<script src="core.js?v=20261008b"></script>
+<script src="hands.js?v=20261008b"></script>
 </head>
 <body>
 <header>
@@ -1365,20 +1365,21 @@ function toggleStep() {
   else if (song) seek(Math.max(startPos(), pos));
 }
 function cycleHand() { handView = handView === 'both' ? 'R' : handView === 'R' ? 'L' : 'both'; }
+// Texte réécrit seulement s'il change : remplacer le contenu d'un bouton à chaque image peut faire perdre le clic (Safari)
+const setT = (e, t) => { if (e.textContent !== t) e.textContent = t; };
 function refreshBar() {
   const on = (id, v) => $(id).classList.toggle('pressed', !!v);
   on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bTraj', showTraj);
   on('bZoom', zoomAuto); on('bCurl', curlFingers); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhR', handView === 'R'); on('bhL', handView === 'L'); on('bh2', handView === 'both');
   [['bs25', 0.25], ['bs50', 0.5], ['bs75', 0.75], ['bs100', 1]].forEach(([id, v]) => on(id, Math.abs(speed - v) < 1e-9));
-  $('bPlay').textContent = !stepMode && playing ? '⏸ Pause' : '▶ Lecture'; $('bScroll').textContent = stepMode && stepAuto ? '⏸ Pause' : '▶ Pas à pas';
-  $('bLoop').textContent = loopRunning() ? '■ Arrêter la boucle' : '↻ Lecture en boucle'; on('bPlay', !stepMode && playing); on('bScroll', stepMode && stepAuto);
+  setT($('bPlay'), !stepMode && playing ? '⏸ Pause' : '▶ Lecture'); setT($('bScroll'), stepMode && stepAuto ? '⏸ Pause' : '▶ Pas à pas');
+  setT($('bLoop'), loopRunning() ? '■ Arrêter la boucle' : '↻ Lecture en boucle'); on('bPlay', !stepMode && playing); on('bScroll', stepMode && stepAuto);
   if (song) { const nb0 = eventTimes().length; if ($('bLA').dataset.n !== String(nb0)) { $('bLA').dataset.n = nb0; $('bLA').max = $('bLB').max = nb0; $('bLA').value = 1; $('bLB').value = nb0; } }
-  $('bSpd').textContent = '×' + speed.toFixed(2).replace('.', ',');
+  setT($('bSpd'), '×' + speed.toFixed(2).replace('.', ','));
   ['bRew', 'bPrev', 'bPlay', 'bScroll', 'bNext', 'bLoop'].forEach(id => { $(id).disabled = !song || exp.active; });
     const nb = song ? eventTimes().length : 0;
   const boucle = loopOn ? 'Boucle : pas ' + $('bLA').value + ' à ' + $('bLB').value + ' · tour ' + (loopCount + 1) : '';
-  $('bInfo').textContent = song ? [stepMode ? 'un pas toutes les ' + (stepDuration() + stepPause()).toFixed(1).replace('.', ',') + ' s' : '', boucle].filter(Boolean).join('   |   ') : '';
-  if (slowN) $('bInfo').textContent += '   |   images lentes : ' + slowN + ' (dernière : ' + (slowLast / 1000).toFixed(1).replace('.', ',') + ' s)';
+  setT($('bInfo'), (song ? [stepMode ? 'un pas toutes les ' + (stepDuration() + stepPause()).toFixed(1).replace('.', ',') + ' s' : '', boucle].filter(Boolean).join('   |   ') : '') + (slowN ? '   |   images lentes : ' + slowN + ' (dernière : ' + (slowLast / 1000).toFixed(1).replace('.', ',') + ' s)' : ''));
 }
 $('bPanel').onclick = togglePanel; $('bRoll').onclick = toggleRoll;
 $('bRew').onclick = rewind; $('bPrev').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepPrev(); }; $('bNext').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepNext(); };   // un pas à la main = mode pas à pas
