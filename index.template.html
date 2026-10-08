@@ -72,8 +72,8 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261008b"></script>
-<script src="hands.js?v=20261008b"></script>
+<script src="core.js?v=20261008c"></script>
+<script src="hands.js?v=20261008c"></script>
 </head>
 <body>
 <header>
@@ -891,7 +891,7 @@ function drawOverlays(W, top, kbH, sp, active, posTick) {
   if (!song || !song.plan) return;
   const G = makeG(W, top, kbH, sp);
   drawUpcoming(G, sp);
-  if (showTraj) drawTrajectories(G, sp);
+  if (showTraj && showHands) drawTrajectories(G, sp);
   { // compteur de pas « x:y » en haut à gauche du clavier
     const nb = eventTimes().length, x = stepMode ? (stepAnim ? stepAnim.j + 1 : stepE + 1) : firstEventAfter(sp + 0.02), txt = Math.max(0, x) + ':' + nb;
     ctx.save(); ctx.font = '700 ' + Math.max(12, Math.round(kbH * 0.032)) + 'px -apple-system, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
