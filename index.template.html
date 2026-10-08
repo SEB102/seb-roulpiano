@@ -72,8 +72,8 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261008e"></script>
-<script src="hands.js?v=20261008e"></script>
+<script src="core.js?v=20261008f"></script>
+<script src="hands.js?v=20261008f"></script>
 </head>
 <body>
 <header>
@@ -996,7 +996,7 @@ function ensurePlan() {
     });
     if (autoFing) PianoHands.assignFingerings(ns, h); else ns.forEach(n => { n.af = 0; });
     dups.forEach(([d, k]) => { d.af = k.finger || k.af || 0; });
-    plan[h] = PianoHands.buildPlan(ns, h, { gesture: stepMode });
+    plan[h] = PianoHands.buildPlan(ns, h, { gesture: stepMode && handsMode !== 'plain' });
   });
   song.plan = plan;
 }
@@ -1008,7 +1008,7 @@ const STAG = [0.95, 0.15, 0, 0.15, 0.5];       // décalage du bout du doigt ver
 const FLEN = [1.5, 2.0, 2.2, 2.0, 1.6];       // longueur du doigt au repos
 const FWID = [0.62, 0.54, 0.57, 0.54, 0.44];    // épaisseur à la base
 function makeG(W, top, kbH, sp) {
-  const ww = W / VIEW.n, hs = Math.min(ww * 1.2 * handScale, kbH / 4.2), uF = PianoHands.ux(FIRST) - 0.5;
+  const ww = W / VIEW.n, hs = handsMode === 'plain' ? Math.min(ww * 1.2, kbH / 5.4) : Math.min(ww * 1.2 * handScale, kbH / 4.2), uF = PianoHands.ux(FIRST) - 0.5;
   return { ww, hs, top, kbH, W, X: u => (u - uF - VIEW.x0) * ww, T: ctx === screenCtx ? performance.now() / 1000 : sp }; // T : horloge du clignotement (murale à l'écran, temps du morceau à l'export)
 }
 function drawHands(W, top, kbH, sp) {
@@ -1047,10 +1047,11 @@ function handGeometry(side, ev, G) { // positions des bouts de doigts, des bases
     const p = Math.max(f.depth, f.wN || 0, f.wP || 0);
     // hauteur de la touche visée : blanche ou noire, MÉLANGÉE progressivement (la touche qu'on quitte puis celle qu'on vise), sans saut quand on passe d'une touche noire à une blanche
     const wP = f.wP || 0, wN = f.wN || 0, blkE = f.pressed ? f.blk : (f.blkP || 0) * wP * (1 - wN) + (f.blkN || 0) * wN, yT0 = yW + (yB - yW) * blkE;
+    if (handsMode === 'plain') return { x: X(f.x), y: yHover + ((yW + (yB - yW) * f.blk) - yHover) * f.depth - f.lift * hs * 0.35 + STAG[i] * hs, f };   // mains de la version archivée
     return { x: X(f.x), y: ((curlFingers && i > 0) ? yT0 : yHover + (yT0 - yHover) * p) + STAG[i] * hs, f };
   });
   const rel = sg * (ev.fingers[0].x - ev.palm), under = Math.max(0, Math.min(1, (rel + 0.8) / 1.2)); // pouce passé sous la main : sa base se rapproche de la paume
-  const mkBase = () => tip.map((t, i) => ({ x: px + sg * KOFF[i] * ww * handScale * (i ? 1 : 1 - 0.7 * under), y: yW + (STAG[i] + FLEN[i]) * hs - (i ? fwd : 0) + (i ? 0 : hs * 0.3 * under) }));
+  const mkBase = () => tip.map((t, i) => ({ x: px + sg * KOFF[i] * ww * (handsMode === 'plain' ? 1 : handScale) * (i ? 1 : 1 - 0.7 * under), y: yW + (STAG[i] + FLEN[i]) * hs - (i || handsMode === 'plain' ? fwd : 0) + (i ? 0 : hs * 0.3 * under) }));
   let base = mkBase();
   { // le pouce : base TOUJOURS rattachée à la paume, longueur TOUJOURS fixe ; il ne fait que pivoter autour de sa base, dans la direction de sa touche :
     // jusqu'à 80° vers l'extérieur (écart) et jusqu'à 40° vers les autres doigts (il passe sous eux, la base se rapprochant alors de la paume).
@@ -1114,7 +1115,7 @@ function drawHand(side, ev, G, onTop) {
   ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = Math.min(14, hs * (onTop ? 0.9 : 0.5)); ctx.shadowOffsetY = Math.min(8, hs * (onTop ? 0.5 : 0.25));   // ombre plafonnée (coût)
   finger(0);                                                   // le pouce d'abord : quand il passe sous la main, la paume le recouvre
   // paume + éminence du pouce + avant-bras (qui part vers le corps du joueur)
-  const k = [1, 2, 3, 4].map(i => base[i]), wy = top + kbH + hs * 1.5, sl = (W / 2 - px) * 0.12, up = hs * 0.3, wh = 1.05 * ww * handScale;
+  const k = [1, 2, 3, 4].map(i => base[i]), wy = top + kbH + hs * 1.5, sl = (W / 2 - px) * 0.12, up = hs * 0.3, wh = 1.05 * ww * (handsMode === 'plain' ? 1 : handScale);
   const tb = base[0], thumbSide = { x: tb.x - sg * hs * 0.45, y: tb.y + hs * 0.2 };
   const poly = sg > 0 ? [[px + sl - wh, wy], [thumbSide.x, thumbSide.y], ...k.map(p => [p.x - 0, p.y - up]), [k[3].x + hs * 0.3, k[3].y], [px + sl + wh, wy]]
                       : [[px + sl + wh, wy], [thumbSide.x, thumbSide.y], ...k.map(p => [p.x + 0, p.y - up]), [k[3].x - hs * 0.3, k[3].y], [px + sl - wh, wy]];
