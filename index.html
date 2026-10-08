@@ -72,9 +72,9 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261008j"></script>
-<script src="hands.js?v=20261008j"></script>
-<script src="hands_legacy.js?v=20261008j"></script>
+<script src="core.js?v=20261008k"></script>
+<script src="hands.js?v=20261008k"></script>
+<script src="hands_legacy.js?v=20261008k"></script>
 </head>
 <body>
 <header>
@@ -986,6 +986,7 @@ function drawGestureTags(G, sp) {
 function ensurePlan() {
   if (!planDirty || !song) return; planDirty = false;
   const plan = {};
+  song.notes.forEach(n => { if (n.t1o === undefined) { n.t1o = n.t1; n.durO = n.dur; } n.t1 = n.t1o; n.dur = n.durO; });   // durées d'origine (le recalcul ci-dessous repart toujours d'elles)
   ['R', 'L'].forEach(h => {
     const all = song.notes.filter(n => noteHand(n) === h);
     // Unissons : deux voix écrites sur la MÊME note au même instant se jouent avec UNE touche et UN doigt. On garde celle qui porte un doigté du fichier (sinon la plus longue) ;
@@ -999,6 +1000,14 @@ function ensurePlan() {
     });
     if (autoFing) PianoHands.assignFingerings(ns, h); else ns.forEach(n => { n.af = 0; });
     dups.forEach(([d, k]) => { d.af = k.finger || k.af || 0; });
+    // Notes répétées avec le MÊME doigt sur la même touche : le doigt (pastille) et la touche s'éteignent un court instant (au plus 0,12 s) avant la reprise, pour marquer la répétition.
+    const fo = n => n.finger || n.af || 0;
+    ns.forEach((n, i) => {
+      let m = null; for (let j = i + 1; j < ns.length; j++) if (ns[j].midi === n.midi && ns[j].t0 > n.t0 + 0.03) { m = ns[j]; break; }
+      if (!m || !fo(n) || fo(n) !== fo(m) || m.t0 - n.t1o >= 0.12) return;
+      const gap = Math.min(0.12, 0.35 * (m.t0 - n.t0)), t1 = Math.max(n.t0 + 0.03, Math.min(n.t1o, m.t0 - gap));
+      n.t1 = t1; n.dur = Math.max(1, Math.round(n.durO * (t1 - n.t0) / (n.t1o - n.t0)));
+    });
     plan[h] = (handsMode === 'plain' ? PianoHandsLegacy : PianoHands).buildPlan(ns, h, { gesture: stepMode });   // « sans trajectoire » : moteur d'origine des mains (doigts qui s'étirent)
     if (!plan[h].nextEvent) {   // le moteur d'origine ne fournit pas les événements (zoom automatique) : on les reconstitue
       const ev = [], pl = plan[h]; pl.presses.filter(q => !q.sub).forEach(q => { const l = ev[ev.length - 1]; if (l && q.a - l.t < 0.03) l.ps.push(q); else ev.push({ t: q.a, ps: [q] }); });
