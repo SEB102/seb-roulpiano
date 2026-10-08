@@ -43,6 +43,14 @@
   footer a { color:#a9b6ff; text-decoration:underline; text-underline-offset:3px; }
   footer a:hover { color:#fff; }
   main { flex:1; min-height:0; position:relative; }
+  #bar { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; }
+  #bar button { padding:5px 10px; }
+  #bar .grp { gap:5px; }
+  #bar .lab { color:var(--muted); font-size:12px; }
+  #bInfo { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+  #bar .sepv { width:1px; height:22px; background:var(--line); }
+  #panel[hidden] { display:none; }
+  #panel { display:flex; flex-direction:column; gap:8px; padding-top:6px; border-top:1px solid var(--line); }
   canvas { position:absolute; inset:0; width:100%; height:100%; display:block; }
   #fpop { position:absolute; z-index:6; display:none; align-items:center; gap:5px; background:#0b0e1c; border:1px solid var(--accent); border-radius:10px; padding:6px 8px; box-shadow:0 6px 20px rgba(0,0,0,.5); }
   #fpop .sep { width:1px; align-self:stretch; background:var(--line); margin:0 3px; }
@@ -69,6 +77,37 @@
 </head>
 <body>
 <header>
+  <div id="bar">
+    <button id="bPanel" title="Fichiers, tempo, doigtés, export… (H)">☰ Réglages</button>
+    <div class="grp">
+      <button id="bRew" title="Retour au début (Début)">⏮</button>
+      <button id="bPrev" title="Pas précédent (←)">◀ pas</button>
+      <button id="bPlay" class="primary" title="Lecture du morceau avec son rythme : active le rouleau, coupe le défilement et la pré-écoute (Espace en mode lecture)">▶ Lecture</button>
+      <button id="bScroll" class="primary" title="Pas à pas automatique : masque le rouleau, active la pré-écoute (Espace en mode pas à pas)">▶ Pas à pas</button>
+      <button id="bNext" title="Pas suivant (→)">pas ▶</button>
+    </div>
+    <div class="sepv"></div>
+    <div class="grp"><span class="lab" title="En pas à pas : cadence du défilement automatique des pas (¼× = un pas toutes les 5,7 s, 1× = toutes les 1,4 s). Hors pas à pas : vitesse de lecture du morceau.">Vitesse</span>
+      <button id="bs25">¼×</button><button id="bs50">½×</button><button id="bs75">¾×</button><button id="bs100">1×</button><input type="range" id="bSld" min="0.25" max="1" step="0.05" title="Vitesse (curseur)" style="width:110px"><span id="bSpd" class="lab"></span></div>
+    <div class="sepv"></div>
+    <div class="grp"><span class="lab">Main</span>
+      <button id="bhR" title="Main droite seule (M)">D</button><button id="bhL" title="Main gauche seule (M)">G</button><button id="bh2" title="Les deux mains (M)">2</button>
+      <button id="bKeep" title="Garder le son de l'autre main quand une seule main est affichée">son de l'autre</button></div>
+    <div class="sepv"></div>
+    <div class="grp"><span class="lab">Boucle : du pas</span><input type="number" id="bLA" min="1" value="1" title="Numéro du pas de départ"><span class="lab">au pas</span><input type="number" id="bLB" min="1" value="1" title="Numéro du pas d'arrivée">
+      <button id="bLoop" title="Répète les pas de départ à arrivée en boucle (L). En mode pas à pas : défilement en boucle ; sinon : lecture rythmée en boucle">↻ Lecture en boucle</button><button id="bRamp" title="Accélération : tous les 2 tours de boucle, la vitesse monte d'un cran (¼× → ½× → ¾× → 1×)">↗ accélérer</button></div>
+    <div class="sepv"></div>
+    <div class="grp">
+      <button id="bPre" title="Pré-écoute (P) : on entend la note AVANT le geste, à la place du son de la frappe (la frappe ne sonne plus). En pas à pas : la hauteur sonne avant le geste.">🔊 pré-écoute</button>
+      <button id="bCount" title="Décompte d'une mesure avant le départ (C)">décompte</button>
+      <button id="bTraj" title="Trajectoire de chaque doigt (T)">trajectoires</button>
+      <button id="bCurl" title="Essai : les doigts qui ne jouent pas sont repliés, sauf le pouce (V)">doigts repliés</button>
+      <button id="bZoom" title="Le clavier suit les mains (Z)">zoom auto</button>
+      <button id="bHm" title="Mains plus petites (−)">mains −</button><button id="bHp" title="Mains plus grandes (+)">mains +</button>
+      <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button></div>
+    <span id="bInfo"></span><span id="status"></span>
+  </div>
+  <div id="panel" hidden>
   <div class="row">
     <label class="btn" for="file">📂 Ouvrir un fichier…</label>
     <input id="file" type="file" accept=".mid,.midi,.musicxml,.xml,.mxl">
@@ -79,6 +118,7 @@
       <select id="xres" title="Résolution de la vidéo"><option value="1280">720p</option><option value="1920">1080p</option></select>
       <span class="tiptext" role="tooltip">Garder l'onglet visible pendant l'export, sinon le navigateur ralentit l'enregistrement. L'export est impossible à la vitesse 0.</span>
     </div>
+    <div style="display:none" aria-hidden="true">   <!-- doublons de la barre (Début, Lecture, Pause, Vitesse) : retirés de l'écran, gardés pour le code -->
     <div class="grp">
       <button id="rew" title="Retour au début (Début)">⏮ Début</button>
       <button id="play" class="primary" title="Lecture (Espace)">▶ Lecture</button>
@@ -91,6 +131,7 @@
       <button id="speedq" title="Ralenti : quart de vitesse">¼×</button>
       <button id="speedh" title="Ralenti : demi-vitesse">½×</button>
       <button id="speed1" title="Remettre la vitesse à 1">1×</button>
+    </div>
     </div>
     <div class="grp">
       <label for="tempo">Tempo ♩ =</label>
@@ -123,8 +164,8 @@
     <span id="title">Aucun morceau</span>
     <input id="progress" title="Position dans le morceau" type="range" min="0" max="1" step="0.001" value="0" disabled>
     <span id="info">—</span>
-    <span id="status"></span>
     <button id="fs" title="Afficher toute l'application en plein écran, réglages compris (Échap pour quitter)">⛶ Plein écran</button>
+  </div>
   </div>
 </header>
 <main>
@@ -145,8 +186,17 @@ const cv = $('cv'); let ctx = cv.getContext('2d'); const screenCtx = ctx;
 let vlag = 0; // retard (s, temps réel) appliqué à l'image pour la caler sur le son réellement entendu
 // Introduction : le temps de la partition commence à 0, mais la lecture (et le chargement) démarrent une fenêtre entière avant, rouleau vide :
 // les premières notes sortent du clavier du haut et descendent jusqu'au clavier du bas, où elles sont jouées au temps 0.
-const startPos = () => { const M = song.measures[0]; return -song.timeline.tickToSec(Math.round(song.ppq * 4 * M.num / M.den) * visMeasures); };
+// Départ : un décompte d'une mesure (la partition commence à 0) ; sans décompte, la lecture commence à 0.
+const beatSec = () => song.timeline.tickToSec(Math.round(song.ppq * 4 / song.measures[0].den));
+const startPos = () => countIn ? -beatSec() * song.measures[0].num : 0;
 let song = null, pos = 0, playing = false, speed = 0.5, visMeasures = 1, nextIdx = 0, lastTs = 0, seeking = false;
+// ---- décomposition du geste : tout est désactivable depuis la barre de commandes
+let rollVisible = false, panelOpen = false, stepMode = true, stepAuto = false, stepWait = 0, stopAt = null, handView = 'both', keepOther = true;
+let slowN = 0, slowLast = 0, stepProgressTs = 0, loopAS = null, loopBS = null, loopA = null, loopB = null, loopOn = false, rampOn = false, loopCount = 0, preListen = false, countIn = true, showTraj = true, curlFingers = true, zoomAuto = true;
+let handScale = 2.4, preIdx = 0, lastBeat = 0, stepE = -1, stepAnim = null, stepPre = true; // pas à pas : événement affiché, animation en cours, pré-écoute de la hauteur avant le geste
+const RAMP = [0.25, 0.5, 0.75, 1], RAMP_EVERY = 2, STEP_HOLD = 0.45, PRE_LEAD = 0.7; // PRE_LEAD : avance de la pré-écoute (secondes réelles)
+const VIEW = { x0: 0, n: 1 };                       // fenêtre visible du clavier, en touches blanches (fractionnaire : le zoom est continu)
+const visibleHands = () => handView === 'both' ? ['R', 'L'] : [handView];
 
 // ---------- Clavier 88 touches ----------
 let FIRST = 21, LAST = 108; // étendue affichée : tout le piano tant qu'aucun morceau n'est chargé, puis adaptée au morceau
@@ -157,13 +207,14 @@ function setRange(first, last) {
   FIRST = first; LAST = last; NW = 0;
   for (const k in whiteIdx) delete whiteIdx[k];
   for (let m = FIRST; m <= LAST; m++) if (!isBlack(m)) whiteIdx[m] = NW++;
+  VIEW.x0 = 0; VIEW.n = NW;
 }
 setRange(21, 108);
 function keyRect(m, W) {
-  const ww = W / NW;
-  if (!isBlack(m)) return { x: whiteIdx[m] * ww, w: ww, black: false };
+  const ww = W / VIEW.n, o = VIEW.x0 * ww;
+  if (!isBlack(m)) return { x: whiteIdx[m] * ww - o, w: ww, black: false };
   const bw = ww * 0.6;
-  return { x: (whiteIdx[m - 1] + 1) * ww - bw / 2, w: bw, black: true };
+  return { x: (whiteIdx[m - 1] + 1) * ww - bw / 2 - o, w: bw, black: true };
 }
 const NOMS = ['Do', 'Do♯', 'Ré', 'Ré♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
 
@@ -221,11 +272,14 @@ function audioLatency() {
     return c ? (c.baseLatency || 0) + (c.outputLatency || 0) + ((typeof Tone !== 'undefined' && Tone.getContext().lookAhead) || 0) : 0;
   } catch (e) { return 0; }
 }
-function playNote(n) {
-  stats.played++;
-  const dur = Math.min(60, Math.max(0.06, (n.t1 - n.t0) / speed)); // vitesse 0 : jamais appelée (cf. frame)
-  if (samplerReady && sampler) sampler.triggerAttackRelease(Tone.Frequency(n.midi, 'midi').toNote(), dur, Tone.now(), n.vel / 127);
-  else synthFallback.play(n.midi, n.vel, dur);
+function playNote(n, quiet, durOverride) { // quiet = c'est la pré-écoute (anticipation) ; quand la pré-écoute est active, le son de la frappe est supprimé : on n'entend qu'elle
+  if (!quiet && (stepMode ? stepPre : preListen)) return;
+  if (handView !== 'both' && !keepOther && noteHand(n) !== handView) return;   // une seule main : l'autre peut être coupée
+  if (!quiet) stats.played++;
+  const dur = durOverride || Math.min(60, Math.max(0.06, (n.t1 - n.t0) / speed)); // vitesse 0 : jamais appelée (cf. frame)
+  const vel = n.vel;
+  if (samplerReady && sampler) sampler.triggerAttackRelease(Tone.Frequency(n.midi, 'midi').toNote(), dur, Tone.now(), vel / 127);
+  else synthFallback.play(n.midi, vel, dur);
 }
 function releaseAll() { try { if (sampler && samplerReady) sampler.releaseAll(Tone.now()); } catch (e) {} synthFallback.releaseAll(); }
 
@@ -250,18 +304,147 @@ const fmt = s => { s = Math.max(0, s); return Math.floor(s / 60) + ':' + String(
 // ---------- Contrôles ----------
 async function play() {
   if (!song || playing) return;
+  unlockAudio(); enterRoll();   // quel que soit le bouton (barre ou panneau) : lecture = rouleau ouvert, mode pas à pas et pré-écoute coupés
   if (pos >= song.durationSec - 0.01) pos = startPos();
   try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
-  nextIdx = lowerBoundSec(pos - 1e-6);
+  if (stepMode || playing) return;   // pendant l'attente du son (Safari : parfois longue), on a pu passer en pas à pas : la lecture ne démarre plus
+  nextIdx = lowerBoundSec(pos - 1e-6); preIdx = firstEventAfter(pos); lastBeat = beatIndex(pos);
   hideFpop(); clearGroup(); lastTs = performance.now(); playing = true; refreshButtons();
+  if (countIn && !stepMode && pos <= startPos() + 1e-6) clickSound(true);
 }
-function pause() { if (!playing) return; playing = false; releaseAll(); refreshButtons(); }
+function pause(keepSound) { if (!playing) return; playing = false; if (!keepSound) releaseAll(); refreshButtons(); }
 function seek(sec) {
   if (!song) return;
-  pos = Math.min(Math.max(startPos(), sec), song.durationSec); hideFpop(); clearGroup();
-  releaseAll(); nextIdx = lowerBoundSec(pos - 1e-6);
+  pos = Math.min(Math.max(startPos(), sec), song.durationSec); hideFpop(); clearGroup(); stopAt = null;
+  releaseAll(); nextIdx = lowerBoundSec(pos - 1e-6); preIdx = firstEventAfter(pos); lastBeat = beatIndex(pos);
+  if (stepMode) { stepAnim = null; const E = eventTimes(); let i = E.length - 1; while (i >= 0 && E[i] > pos + 0.02) i--; stepE = i; }
 }
-function rewind() { pause(); seek(startPos()); }
+// ---- événements = notes ou accords (groupes de notes frappées ensemble)
+function eventTimes() {
+  if (!song.evt) { const a = []; song.notes.forEach(n => { if (!a.length || n.t0 - a[a.length - 1] > 0.03) a.push(n.t0); }); song.evt = a; }
+  return song.evt;
+}
+const firstEventAfter = p => { const E = eventTimes(); let lo = 0, hi = E.length; while (lo < hi) { const m = (lo + hi) >> 1; if (E[m] > p + 1e-6) hi = m; else lo = m + 1; } return lo; };
+const beatIndex = p => Math.floor((p - startPos()) / beatSec() + 1e-9);
+function clickSound(accent) { // clic du décompte (indépendant des échantillons de piano)
+  try {
+    const c = (typeof Tone !== 'undefined') ? Tone.getContext().rawContext : (synthFallback.ensure(), synthFallback.ctx);
+    const t = c.currentTime, o = c.createOscillator(), g = c.createGain();
+    o.type = 'square'; o.frequency.value = accent ? 1500 : 1000; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.003); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+    o.connect(g); g.connect(c.destination); o.start(t); o.stop(t + 0.06);
+  } catch (e) {}
+}
+// ---- pas à pas : il n'imite PAS la mélodie ni son rythme. Chaque appui déroule UN geste, toujours de même durée (¼× = plus lent) :
+//   1) la hauteur de la prochaine note sonne doucement et s'affiche (on l'entend et on la lit AVANT de bouger),
+//   2) le doigt se lève, la main se déplace, le doigt descend sur sa touche, 3) la note sonne.
+// Pour cela le temps affiché est déformé : le mouvement (les 0,5 s de la partition qui précèdent la frappe) occupe presque tout le geste.
+const STEP_MOVE = 0.5;
+const stepDuration = () => 1.1 / Math.max(0.1, speed);
+function stepWarp(tFrom, tTo, tau) {
+  const A = 0.6, B = STEP_MOVE;                                          // A : le doigt qui vient de jouer se lève et se replie ; B : la main se déplace, le doigt suivant se déplie et se pose
+  if (tTo - tFrom <= A + B + 0.05) return tFrom + (tTo - tFrom) * tau;   // notes très rapprochées : temps linéaire
+  const split = 0.35;
+  return tau < split ? tFrom + A * (tau / split) : (tTo - B) + B * ((tau - split) / (1 - split));
+}
+function notesAt(t) { const out = []; for (let i = lowerBoundSec(t - 1e-6); i < song.notes.length && song.notes[i].t0 <= t + 0.03; i++) out.push(song.notes[i]); return out; }
+async function stepNext() {
+  unlockAudio(); if (!song || stepAnim) return;
+  const E = eventTimes();
+  if (stepAuto && loopOn && loopAS !== null && !stepAnim) {                      // boucle : arrivé au pas B (ou à la fin), on revient juste avant le pas A et on repart
+    const B = loopBS !== null ? loopBS : E.length - 1;
+    if (stepE >= B) {
+      loopCount++; if (rampOn && loopCount % RAMP_EVERY === 0) { const k = RAMP.findIndex(v => v > speed + 1e-9); if (k >= 0) setSpeed(RAMP[k]); }
+      stepE = loopAS - 1; pos = stepE >= 0 ? E[stepE] : E[0] - 0.9;
+    }
+  }
+  const j = stepE + 1; if (j >= E.length) return;
+  if (playing) pause();
+  hideFpop(); clearGroup();
+  const tFrom = stepE >= 0 ? E[stepE] : E[0] - 0.9, A = { j, tFrom, tTo: E[j], tau: 0, ready: false };
+  stepProgressTs = performance.now(); stepAnim = A; A.ready = true;                                        // posé tout de suite : un pas déjà lancé ne peut pas l'être deux fois ; on n'attend JAMAIS le son
+  unlockAudio();
+  try { if (stepPre) notesAt(E[j]).forEach(n => playNote(n, true, 1.2)); } catch (err) { reportDrawError(err); }   // la hauteur d'abord, doucement
+}
+function unlockAudio() { // Safari (et Chrome) ne débloquent le son que pendant un clic ou une touche : on le demande ici, sans attendre la réponse
+  try { if (typeof Tone !== 'undefined' && Tone.getContext().state !== 'running') Tone.start(); } catch (e) {}
+}
+function resetStep() { stepAuto = false; stepAnim = null; stepE = -1; stepWait = 0; if (song) pos = eventTimes()[0] - 0.9; releaseAll(); }
+function toggleStepAuto() { unlockAudio(); if (!song) return; if (stepAuto) { stepAuto = false; return; } stepAuto = true; stepWait = 0.5; stepNext().catch(reportDrawError); }   // le premier pas part DANS le clic
+function stepPrev() {
+  if (!song) return; stepAuto = false; const E = eventTimes(); stepAnim = null; releaseAll();
+  stepE = Math.max(-1, stepE - 1); pos = stepE >= 0 ? E[stepE] : E[0] - 0.9;
+}
+const stepPause = () => 0.3 * stepDuration();      // petit temps d'arrêt sur la touche enfoncée, avant le pas suivant
+function stepTick(dt) {
+  if (!stepAnim) {
+    if (stepAuto && song) {                                           // défilement automatique : le pas suivant démarre tout seul, à la cadence réglée par la vitesse
+      const E = eventTimes(); if (stepE >= E.length - 1 && !(loopOn && loopAS !== null)) { stepAuto = false; return; }
+      stepWait -= dt; if (stepWait <= 0) { stepWait = 0.5; stepNext().catch(reportDrawError); }   // (0,5 s de répit si un pas échoue : pas de boucle d'erreurs)
+    }
+    return;
+  }
+  const A = stepAnim; if (!A.ready) return;
+  A.tau = Math.min(1, A.tau + dt / stepDuration()); pos = stepWarp(A.tFrom, A.tTo, A.tau);
+  if (A.tau >= 1) { try { notesAt(A.tTo).forEach(n => playNote(n, false, 1.2)); } catch (err) { reportDrawError(err); } stepE = A.j; pos = A.tTo; stepAnim = null; stepWait = stepPause(); stepProgressTs = performance.now();
+    if (stepAuto) setTimeout(() => { if (stepAuto && stepMode && !stepAnim) { stepWait = 0.5; stepNext().catch(reportDrawError); } }, stepPause() * 1000); }   // le pas suivant est programmé tout de suite (la boucle sert de filet de sécurité)
+}
+// ---- boucle A-B, avec vitesse qui monte tous les RAMP_EVERY tours
+const loopRunning = () => loopOn && (stepMode ? stepAuto : playing);
+function stopLoop() { loopOn = false; if (stepMode) stepAuto = false; else pause(); }
+function startLoop() {                                                          // les numéros de pas se tapent dans les deux cases
+  unlockAudio(); if (!song) return;
+  if (loopRunning()) { stopLoop(); return; }
+  const E = eventTimes(), nb = E.length, cl = v => Math.min(nb, Math.max(1, Math.round(+v) || 1));
+  const a = cl($('bLA').value); let b = cl($('bLB').value); if (b < a) b = a;
+  $('bLA').value = a; $('bLB').value = b; loopCount = 0; loopOn = true;
+  if (stepMode) {
+    loopAS = a - 1; loopBS = b - 1; stepAnim = null; releaseAll(); stepE = a - 2; pos = stepE >= 0 ? E[stepE] : E[0] - 0.9;
+    stepAuto = true; stepWait = 0.5; stepNext().catch(reportDrawError);
+  } else {
+    enterRoll(); loopOn = true; loopA = E[a - 1]; loopB = b < nb ? E[b] : null; seek(loopA); play();
+  }
+}
+// ---- Lecture (rouleau, rythme) et Défilement (pas, pré-écoute) : choisir l'un coupe l'autre
+function enterRoll() { if (stepMode) toggleStep(); rollVisible = true; preListen = false; }
+function enterScroll() { if (!stepMode) toggleStep(); rollVisible = false; stepPre = true; setSpeed(0.25); }
+function loopTick() {
+  if (!loopOn || loopA === null || !playing) return;
+  const B = loopB !== null ? loopB : song.durationSec;
+  if (pos < B) return;
+  loopCount++;
+  if (rampOn && loopCount % RAMP_EVERY === 0) { const k = RAMP.findIndex(v => v > speed + 1e-9); if (k >= 0) setSpeed(RAMP[k]); }
+  seek(loopA);
+}
+// ---- décompte (un clic par temps, pendant la mesure qui précède le départ) et pré-écoute douce de la note suivante
+function countClicks() {
+  if (!countIn || stepMode || pos >= 0) { lastBeat = beatIndex(pos); return; }
+  const bi = beatIndex(pos); if (bi > lastBeat) clickSound(false); lastBeat = bi;
+}
+function previewTick() {
+  if (!preListen) return;
+  const E = eventTimes(), lead = PRE_LEAD * speed;
+  while (preIdx < E.length && E[preIdx] - lead <= pos) {
+    const t = E[preIdx++]; if (t < pos - 0.001) continue;
+    for (let i = lowerBoundSec(t - 1e-6); i < song.notes.length && song.notes[i].t0 <= t + 0.03; i++) playNote(song.notes[i], true);
+  }
+}
+// ---- zoom : le clavier suit les mains (fenêtre fractionnaire, lissée)
+function updateZoom(dt) {
+  if (!song) return;
+  let tx0 = 0, tn = NW;
+  if (zoomAuto) {
+    ensurePlan(); const sp = pos - vlag * speed, uF = PianoHands.ux(FIRST) - 0.5, U = [];
+    visibleHands().forEach(h => { const p = song.plan[h]; if (p.empty) return; U.push(p.palm(sp) - 3.5, p.palm(sp) + 3.5); const ne = p.nextEvent(sp); if (ne && ne.t - sp < 1.2) ne.ps.forEach(q => U.push(q.u - 1, q.u + 1)); });
+    if (U.length) {
+      const lo = Math.min.apply(null, U) - uF - 2, hi = Math.max.apply(null, U) - uF + 2, c0 = VIEW.x0, c1 = VIEW.x0 + VIEW.n;
+      const inside = lo >= c0 + 0.5 && hi <= c1 - 0.5 && hi - lo >= 0.5 * VIEW.n;   // zone morte : tant que les mains tiennent dans la fenêtre, elle ne bouge pas (pas de tremblement)
+      if (inside) { tx0 = c0; tn = VIEW.n; }
+      else { tn = Math.min(NW, Math.max(17, hi - lo + 6)); tx0 = Math.max(0, Math.min(NW - tn, (lo + hi) / 2 - tn / 2)); }
+    }
+  }
+  const k = 1 - Math.exp(-dt * 1.6); VIEW.x0 += (tx0 - VIEW.x0) * k; VIEW.n += (tn - VIEW.n) * k;
+}
+function rewind() { pause(); if (stepMode) { resetStep(); return; } seek(startPos()); }
 function seekMeasures(d) {
   if (!song) return;
   const i = measureIndexAt(song.timeline.secToTick(pos));
@@ -270,7 +453,7 @@ function seekMeasures(d) {
 }
 function setSpeed(v) {
   speed = Math.min(3, Math.max(0, Math.round(v * 100) / 100));
-  $('speed').value = speed; $('speedVal').textContent = '×' + speed.toFixed(2).replace('.', ',');
+  $("speed").value = speed; if ($("bSld")) $("bSld").value = speed; $('speedVal').textContent = '×' + speed.toFixed(2).replace('.', ',');
   [['speedq', 0.25], ['speedh', 0.5], ['speed1', 1]].forEach(([id, v]) => $(id).classList.toggle('pressed', speed === v)); // le bouton de la vitesse courante est allumé
 }
 function refreshButtons() {
@@ -299,9 +482,10 @@ $('autoFing').onchange = e => { autoFing = e.target.checked; markPlan(); };
 // Source : doigtés inscrits dans le MusicXML (n.fileFinger) + saisie manuelle (song.manual, mémorisée par morceau dans le navigateur).
 let fingMode = 'simple', lastOn = 'simple', showFing = true, fingIllus = false, selNote = null; const hit = [];
 let showHands = true, autoFing = true, planDirty = true; // mains virtuelles ; doigtés calculés pour les notes sans doigté ; plan des mains à recalculer
-const markPlan = () => { planDirty = true; };
+const markPlan = () => { planDirty = true; if (song) song.evt = null; };
 const fof = n => n.finger || (autoFing ? n.af || 0 : 0); // doigt effectif : celui du fichier / saisi, sinon celui proposé
-const kbHeight = H => (showHands ? Math.min(500, Math.max(250, H * 0.52)) : Math.min(420, Math.max(170, H * 0.42)));
+const rollHeight = H => rollVisible ? H - (showHands ? Math.min(500, Math.max(250, H * 0.52)) : Math.min(420, Math.max(170, H * 0.42))) : stepMode ? 0 : Math.min(80, Math.max(48, H * 0.09)); // rouleau masqué : un ruban mince
+const kbHeight = H => H - rollHeight(H);
 // Le mode n'est PAS mémorisé : à chaque ouverture de l'application, on repart des doigtés simples.
 function setFingMode(m) {
   fingMode = m; if (m !== 'off') lastOn = m; showFing = m !== 'off'; fingIllus = m === 'illus'; refreshFingButton();
@@ -473,10 +657,14 @@ addEventListener('keydown', e => {
   }
   if (exp.active) { if (e.code === 'Escape') stopExport(true); return; }
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
-  if (e.code === 'Space') { e.preventDefault(); playing ? pause() : play(); }
+  const k = e.metaKey || e.ctrlKey || e.altKey ? '' : e.key.toLowerCase();
+  if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') showTraj = !showTraj; 
+  else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'v') curlFingers = !curlFingers; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'm') cycleHand(); else if (k === 'l') startLoop();
+  else if (k === '+' || k === '=') handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); else if (k === '-') handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100);
+  else if (e.code === 'Space') { e.preventDefault(); unlockAudio(); if (stepMode) toggleStepAuto(); else if (playing) pause(); else { enterRoll(); play(); } }
   else if (e.code === 'Home') { e.preventDefault(); rewind(); }
-  else if (e.code === 'ArrowLeft') { e.preventDefault(); seekMeasures(-1); }
-  else if (e.code === 'ArrowRight') { e.preventDefault(); seekMeasures(1); }
+  else if (e.code === 'ArrowLeft') { e.preventDefault(); if (!stepMode) toggleStep(); stepPrev(); }
+  else if (e.code === 'ArrowRight') { e.preventDefault(); unlockAudio(); if (!stepMode) toggleStep(); stepNext(); }
   else if (e.code === 'ArrowUp' && e.target.type !== 'range') { e.preventDefault(); setSpeed(speed + 0.05); }
   else if (e.code === 'ArrowDown' && e.target.type !== 'range') { e.preventDefault(); setSpeed(speed - 0.05); }
 });
@@ -489,6 +677,7 @@ async function openBuffer(name, buf) {
     $('title').textContent = s.title; $('title').title = s.title;
     const modes = { 'pistes': 'sol/fa = 2 pistes', 'portées': 'sol/fa = 2 portées', 'parties': 'sol/fa = 2 parties', 'do-central': 'sol/fa = coupure au Do central' };
     setSoundStatusExtra(modes[s.handMode] || '');
+    if (stepMode) resetStep();
     refreshButtons();
   } catch (err) { showError(err.message || String(err)); }
 }
@@ -523,7 +712,7 @@ function fitCanvas() {
   }
 }
 function rrect(x, y, w, h, r) {
-  r = Math.min(r, w / 2, h / 2);
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
   ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
@@ -531,7 +720,7 @@ function rrect(x, y, w, h, r) {
 function draw() {
   fitCanvas();
   renderScene(screenCtx, cssW, cssH, dpr);
-  updateInfo();
+  updateInfo(); refreshBar();
   if (exp.active) { renderScene(exp.ctx, exp.W, exp.H, exp.scale); drawBand(exp.ctx, exp.W, exp.H, exp.scale); }
 }
 // petit bandeau sous l'image de la vidéo (hors zone de jeu)
@@ -567,7 +756,7 @@ function scene(W, H, dpr) {
 
   // rails verticaux : une ligne par touche (blanche ou noire), à la verticale exacte de sa touche, le long de laquelle glisse sa note ;
   // les touches noires ont en plus une bande sombre de la largeur de la touche, les Do sont plus marqués
-  const ww = W / NW;
+  const ww = W / VIEW.n;
   for (let m = FIRST; m <= LAST; m++) {
     const kr = keyRect(m, W);
     if (kr.black) { ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); }
@@ -581,7 +770,7 @@ function scene(W, H, dpr) {
   const active = new Map(); // midi -> note en cours
   if (!song) {
     ctx.fillStyle = '#8d94b3'; ctx.font = '600 18px -apple-system, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('Ouvrez un fichier MIDI / MusicXML (ou glissez-le ici), ou cliquez sur un « Exemple »', W / 2, rollH / 2);
+    ctx.fillText('Glissez un fichier MIDI / MusicXML ici, ou ouvrez un exemple dans ☰ Réglages', W / 2, rollH / 2);
     drawKeyboard(W, rollH, kbH, active); return;
   }
 
@@ -589,7 +778,7 @@ function scene(W, H, dpr) {
   ensurePlan();
   const posTick = song.timeline.secToTick(sp);
   const mi = measureIndexAt(posTick), M = song.measures[mi];
-  const winT = Math.max(1, Math.round(song.ppq * 4 * M.num / M.den) * visMeasures), topTick = posTick + winT;
+  const winT = Math.max(1, Math.round(song.ppq * 4 * M.num / M.den) * (rollVisible ? visMeasures : 2)), topTick = posTick + winT;
   const y = t => rollH - (t - posTick) / winT * rollH;
 
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, rollH); ctx.clip();
@@ -605,6 +794,7 @@ function scene(W, H, dpr) {
     ctx.restore();
     if (m.startTick >= posTick) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(0, Math.round(yBot), W, 2); }
     // numéro (collé en bas si la mesure est en cours)
+    if (!rollVisible) continue; // (ruban : ni numéros ni étiquettes)
     const ly = Math.min(yBot, rollH - 4) - 6;
     ctx.font = '700 15px -apple-system, sans-serif'; ctx.textAlign = 'left';
     const label = m.label, tw = ctx.measureText(label).width;
@@ -648,7 +838,7 @@ function scene(W, H, dpr) {
     const kr = keyRect(n.midi, W), kk = kr, y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
     const rec = { n, x, w, top: y0, bottom };
     const fo = fof(n);
-    if (showFing && fo) {
+    if (showFing && fo && rollVisible) {
       ctx.save(); if (!n.finger) ctx.globalAlpha = 0.62; // doigté proposé (non saisi) : plus discret
       if (!fingIllus) { // doigté simple : « M.D. 1 »
         const label = handTxt(n) + ' ' + fo;
@@ -681,12 +871,112 @@ function scene(W, H, dpr) {
   }
   ctx.restore();
 
+  // En pas à pas, une touche n'est allumée que si UN DOIGT est posé dessus (et non tant que la note dure dans la partition : un doigt levé n'allume rien)
+  if (stepMode && song.plan) {
+    active.clear();
+    visibleHands().forEach(h => { if (song.plan[h].empty) return; song.plan[h].at(sp).fingers.forEach(fg => { if (fg.pressed && fg.midi) active.set(fg.midi, { midi: fg.midi, hand: h }); }); });
+  }
   // ligne de jeu
   ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, rollH - 2, W, 2);
   drawKeyboard(W, rollH, kbH, active);
   if (showHands) { try { drawHands(W, rollH, kbH, sp); } catch (err) { reportDrawError(err); } } else if (fingIllus) drawBubbles(W, rollH, kbH, posTick, sp);
+  try { drawOverlays(W, rollH, kbH, sp, active, posTick); } catch (err) { reportDrawError(err); }
 }
 
+
+// ---------- Décomposition : surcouches ----------
+const clamp01 = x => Math.max(0, Math.min(1, x));
+const noteName = m => NOMS[m % 12] + (Math.floor(m / 12) - 1);
+function drawOverlays(W, top, kbH, sp, active, posTick) {
+  if (!song || !song.plan) return;
+  const G = makeG(W, top, kbH, sp);
+  drawUpcoming(G, sp);
+  if (showTraj) drawTrajectories(G, sp);
+  { // compteur de pas « x:y » en haut à gauche du clavier
+    const nb = eventTimes().length, x = stepMode ? (stepAnim ? stepAnim.j + 1 : stepE + 1) : firstEventAfter(sp + 0.02), txt = Math.max(0, x) + ':' + nb;
+    ctx.save(); ctx.font = '700 ' + Math.max(12, Math.round(kbH * 0.032)) + 'px -apple-system, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    const h = Math.max(12, Math.round(kbH * 0.032)) + 12, w = ctx.measureText(txt).width + 20, x0 = 10, y0 = top + 8;
+    ctx.fillStyle = 'rgba(8,10,24,.78)'; rrect(x0, y0, w, h, 8); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.95)'; ctx.fillText(txt, x0 + 10, y0 + h / 2 + 1); ctx.restore();
+  }
+  if (!stepMode && countIn && sp < 0) { // décompte (lecture rythmée seulement, jamais en pas à pas) : le temps qui reste avant la première mesure
+    const M = song.measures[0], n = M.num - beatIndex(sp);
+    if (n >= 1 && n <= M.num) {
+      ctx.save(); ctx.font = '800 ' + Math.round(kbH * 0.42) + 'px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(8,10,24,.85)'; ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.strokeText(String(n), W / 2, top + kbH * 0.45); ctx.fillText(String(n), W / 2, top + kbH * 0.45); ctx.restore();
+    }
+  }
+}
+// Le prochain pas : la prochaine frappe (note ou accord), toutes mains visibles confondues. Seuls les repères et les trajectoires VALIDES à ce pas sont affichés.
+function nextStep(sp) {
+  let t = Infinity; const info = {};
+  visibleHands().forEach(h => { const p = song.plan[h]; if (p.empty) return; const e = p.nextEvent(sp); if (e) { info[h] = e; if (e.t < t) t = e.t; } });
+  const hands = {}; Object.keys(info).forEach(h => { if (info[h].t <= t + 0.03) hands[h] = info[h]; });
+  return t === Infinity ? null : { t, hands };
+}
+// Point d'atterrissage d'un doigt : là où son bout se pose réellement à l'écran au moment de la frappe (pas le haut de la touche : le doigt descend vers l'avant)
+const landing = (h, p, G) => handGeometry(h, song.plan[h].at(p.a + 0.001), G).tip[p.f - 1];
+// repères : uniquement les doigts du prochain pas, posés à leur point d'atterrissage, avec le numéro du doigt (aucun autre texte) ; un anneau se resserre à l'approche de la frappe
+function drawUpcoming(G, sp) {
+  const { W, ww } = G, NS = nextStep(sp); if (!NS) return;
+  Object.keys(NS.hands).forEach(h => {
+    const e = NS.hands[h], lit = h === 'R' ? '#ffc23a' : '#7fd0ff';
+    e.ps.forEach(p => {
+      const L = landing(h, p, G), cx = L.x, cy = L.y, R0 = Math.max(8, Math.min(20, ww * 0.42));
+      if (cx < -30 || cx > W + 30) return;
+      ctx.save();
+      ctx.lineWidth = 3; ctx.strokeStyle = lit; ctx.beginPath(); ctx.arc(cx, cy, R0 * (1 + 1.3 * clamp01((e.t - sp) / 0.9)), 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = lit; ctx.beginPath(); ctx.arc(cx, cy, R0, 0, Math.PI * 2); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = '#10121f'; ctx.stroke();
+      ctx.fillStyle = '#10121f'; ctx.font = '800 ' + Math.round(R0 * 1.05) + 'px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(p.f), cx, cy + 1);
+      ctx.restore();
+    });
+  });
+}
+// trajectoire : une chaîne de perles (style des repères), du bout du doigt virtuel à son point d'atterrissage. Le chemin réel est LISSÉ (les petites oscillations du doigt et
+// de la main le rendaient illisible) ; s'il reste sinueux, on trace la ligne droite. Elle raccourcit à mesure que le doigt approche et clignote avec sa pastille.
+function smoothPath(p) {
+  let q = p.map(a => ({ x: a.x, y: a.y }));
+  for (let pass = 0; pass < 4; pass++) q = q.map((a, i) => (i === 0 || i === q.length - 1) ? a : { x: (q[i - 1].x + 2 * a.x + q[i + 1].x) / 4, y: (q[i - 1].y + 2 * a.y + q[i + 1].y) / 4 });
+  return q;
+}
+const pathLen = q => { let l = 0; for (let k = 1; k < q.length; k++) l += Math.hypot(q[k].x - q[k - 1].x, q[k].y - q[k - 1].y); return l; };
+function drawTrajectories(G, sp) {
+  const NS = nextStep(sp); if (!NS) return; const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * G.T), R0 = Math.max(8, Math.min(20, G.ww * 0.42));
+  Object.keys(NS.hands).forEach(h => {
+    const plan = song.plan[h], e = NS.hands[h], lit = h === 'R' ? '#ffc23a' : '#7fd0ff';
+    e.ps.forEach(p => {
+      const i = p.f - 1, raw = [];
+      for (let t = sp; t < p.a; t += 0.02) raw.push(handGeometry(h, plan.at(t), G).tip[i]);
+      const end = landing(h, p, G); raw.push(end);
+      const start = raw[0], straight = Math.hypot(end.x - start.x, end.y - start.y); if (straight < R0 + 14) return;
+      let pts = raw.length > 3 ? smoothPath(raw) : raw;
+      if (pathLen(pts) > 1.35 * straight) pts = [start, end];                       // chemin sinueux : ligne droite
+      const len = pathLen(pts), step = 17, rb = 4; let nextAt = 12, acc = 0;
+      ctx.save(); ctx.globalAlpha = 0.5 + 0.5 * bl; ctx.fillStyle = lit; ctx.strokeStyle = '#10121f'; ctx.lineWidth = 1.8;
+      for (let k = 1; k < pts.length; k++) {
+        const x0 = pts[k - 1].x, y0 = pts[k - 1].y, d = Math.hypot(pts[k].x - x0, pts[k].y - y0);
+        while (nextAt <= acc + d) {
+          const u = (nextAt - acc) / (d || 1), x = x0 + (pts[k].x - x0) * u, y = y0 + (pts[k].y - y0) * u;
+          if (len - nextAt > R0 + rb + 4) { ctx.beginPath(); ctx.arc(x, y, rb, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }   // pas de perle sous le repère
+          nextAt += step;
+        }
+        acc += d;
+      }
+      ctx.restore();
+    });
+  });
+}
+// gestes remarquables, annoncés avant qu'ils n'arrivent
+function drawGestureTags(G, sp) {
+  let row = 0;
+  visibleHands().forEach(h => song.plan[h].gestures.forEach(g => {
+    const dt = g.t - sp; if (dt < -0.25 || dt > 1.8) return;
+    const al = Math.max(0, Math.min(1, (dt + 0.25) / 0.3, (1.8 - dt) / 0.4));
+    ctx.font = '700 13px -apple-system, sans-serif'; const w = ctx.measureText(g.label).width + 18, x = Math.max(4, Math.min(G.W - w - 4, G.X(g.u) - w / 2)), y = G.top + 6 + (row++ % 3) * 26;
+    ctx.save(); ctx.globalAlpha = al; ctx.fillStyle = 'rgba(8,10,24,.92)'; rrect(x, y, w, 22, 11); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = COL[h].note; ctx.stroke();
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.fillText(g.label, x + w / 2, y + 15); ctx.restore();
+  }));
+}
 
 // ---------- Mains virtuelles ----------
 // Plan des deux mains (hands.js) : doigtés automatiques pour les notes sans doigté, puis trajectoire de la paume et des 5 doigts de chaque main.
@@ -707,7 +997,7 @@ function ensurePlan() {
     });
     if (autoFing) PianoHands.assignFingerings(ns, h); else ns.forEach(n => { n.af = 0; });
     dups.forEach(([d, k]) => { d.af = k.finger || k.af || 0; });
-    plan[h] = PianoHands.buildPlan(ns, h);
+    plan[h] = PianoHands.buildPlan(ns, h, { gesture: stepMode });
   });
   song.plan = plan;
 }
@@ -718,11 +1008,14 @@ const KOFF = [-1.0, -0.85, -0.28, 0.28, 0.85]; // abscisse de la base de chaque 
 const STAG = [0.95, 0.15, 0, 0.15, 0.5];       // décalage du bout du doigt vers le joueur
 const FLEN = [1.5, 2.0, 2.2, 2.0, 1.6];       // longueur du doigt au repos
 const FWID = [0.62, 0.54, 0.57, 0.54, 0.44];    // épaisseur à la base
+function makeG(W, top, kbH, sp) {
+  const ww = W / VIEW.n, hs = Math.min(ww * 1.2 * handScale, kbH / 4.2), uF = PianoHands.ux(FIRST) - 0.5;
+  return { ww, hs, top, kbH, W, X: u => (u - uF - VIEW.x0) * ww, T: ctx === screenCtx ? performance.now() / 1000 : sp }; // T : horloge du clignotement (murale à l'écran, temps du morceau à l'export)
+}
 function drawHands(W, top, kbH, sp) {
   ensurePlan(); if (!song.plan) return;
-  const ww = W / NW, hs = Math.min(ww * 1.2, kbH / 5.4), uF = PianoHands.ux(FIRST) - 0.5;
-  const G = { ww, hs, top, kbH, W, X: u => (u - uF) * ww, T: ctx === screenCtx ? performance.now() / 1000 : sp }; // T : horloge du clignotement (murale à l'écran, temps du morceau à l'export)
-  const hs2 = ['R', 'L'].map(h => ({ side: h, plan: song.plan[h] })).filter(o => !o.plan.empty);
+  const G = makeG(W, top, kbH, sp);
+  const hs2 = visibleHands().map(h => ({ side: h, plan: song.plan[h] })).filter(o => !o.plan.empty);
   hs2.forEach(o => { o.ev = o.plan.at(sp); o.near = Math.min(99, o.ev.near); });
   hs2.sort((a, b) => b.near - a.near); // la main qui joue (ou va jouer) le plus tôt passe au premier plan : c'est elle qui passe par-dessus quand les mains se croisent
   ctx.save(); ctx.beginPath(); ctx.rect(0, top, W, kbH); ctx.clip();
@@ -743,14 +1036,22 @@ function limbPath(b, t, w0, bow) {
   for (let k = N; k >= 0; k--) ctx.lineTo(R[k][0], R[k][1]); ctx.closePath();
   return { dir, w1, L, R };
 }
-function drawHand(side, ev, G, onTop) {
-  const { ww, hs, top, kbH, W, X, T } = G, sg = side === 'L' ? -1 : 1, [skin, edge] = SKIN[side], col = COL[side];
+function handGeometry(side, ev, G) { // positions des bouts de doigts, des bases et de la paume, en pixels (partagées par le dessin et les trajectoires)
+  const { ww, hs, top, kbH, X } = G, sg = side === 'L' ? -1 : 1;
   const yHover = top + kbH * 0.36, yW = top + kbH * 0.52, yB = top + kbH * 0.3; let px = X(ev.palm);
   // la main avance quand un doigt joue une touche noire (sinon les doigts s'allongent démesurément)
   const fwd = Math.max.apply(null, ev.fingers.map(f => f.blk * f.depth)) * (yW - yB) * 0.85;
-  const tip = ev.fingers.map((f, i) => ({ x: X(f.x), y: yHover + ((yW + (yB - yW) * f.blk) - yHover) * f.depth - f.lift * hs * 0.35 + STAG[i] * hs, f }));
+  // Le doigt va EN LIGNE DROITE de sa position de repos à sa touche, sans survol au-dessus de la cible ni arc de levée.
+  // Doigts repliés : le doigt déplié a TOUJOURS le bout sur la touche (hauteur cible fixe) ; c'est le dépliage (curl, plus bas) qui le fait avancer de la paume à la touche,
+  // x et y progressent donc ensemble. Pouce (ou doigts non repliés) : il glisse de sa hauteur de repos à celle de la touche, du même pas que son déplacement latéral.
+  const tip = ev.fingers.map((f, i) => {
+    const p = Math.max(f.depth, f.wN || 0, f.wP || 0);
+    // hauteur de la touche visée : blanche ou noire, MÉLANGÉE progressivement (la touche qu'on quitte puis celle qu'on vise), sans saut quand on passe d'une touche noire à une blanche
+    const wP = f.wP || 0, wN = f.wN || 0, blkE = f.pressed ? f.blk : (f.blkP || 0) * wP * (1 - wN) + (f.blkN || 0) * wN, yT0 = yW + (yB - yW) * blkE;
+    return { x: X(f.x), y: ((curlFingers && i > 0) ? yT0 : yHover + (yT0 - yHover) * p) + STAG[i] * hs, f };
+  });
   const rel = sg * (ev.fingers[0].x - ev.palm), under = Math.max(0, Math.min(1, (rel + 0.8) / 1.2)); // pouce passé sous la main : sa base se rapproche de la paume
-  const mkBase = () => tip.map((t, i) => ({ x: px + sg * KOFF[i] * ww * (i ? 1 : 1 - 0.7 * under), y: yW + (STAG[i] + FLEN[i]) * hs - fwd + (i ? 0 : hs * 0.3 * under) }));
+  const mkBase = () => tip.map((t, i) => ({ x: px + sg * KOFF[i] * ww * handScale * (i ? 1 : 1 - 0.7 * under), y: yW + (STAG[i] + FLEN[i]) * hs - (i ? fwd : 0) + (i ? 0 : hs * 0.3 * under) }));
   let base = mkBase();
   { // le pouce : base TOUJOURS rattachée à la paume, longueur TOUJOURS fixe ; il ne fait que pivoter autour de sa base, dans la direction de sa touche :
     // jusqu'à 80° vers l'extérieur (écart) et jusqu'à 40° vers les autres doigts (il passe sous eux, la base se rapprochant alors de la paume).
@@ -761,11 +1062,24 @@ function drawHand(side, ev, G, onTop) {
     if (Math.hypot(t0.x - b0.x, t0.y - b0.y) > L) { px += t0.x - r.x; base = mkBase(); }
     const e = reach(base[0]); tip[0] = { x: e.x, y: e.y, f: t0.f };
   }
+  if (curlFingers) {
+    const CURL_MAX = 0.6, sm = a => { a = Math.max(0, Math.min(1, a)); return a * a * (3 - 2 * a); };
+    for (let i = 1; i < 5; i++) {                                                 // le pouce reste toujours déplié
+      const f = tip[i].f, c = CURL_MAX * (1 - sm(Math.max(f.depth || 0, f.wN || 0, f.wP || 0))), b = base[i];
+      tip[i] = { x: b.x + (tip[i].x - b.x) * (1 - c), y: b.y + (tip[i].y - b.y) * (1 - c), f, curl: c / CURL_MAX };
+    }
+  }
+  return { tip, base, px };
+}
+function drawHand(side, ev, G, onTop) {
+  const { ww, hs, top, kbH, W, X, T } = G, sg = side === 'L' ? -1 : 1, [skin, edge] = SKIN[side], col = COL[side];
+  ctx.save();
+  let { tip, base, px } = handGeometry(side, ev, G);
   const FADE = 0.38; // les doigts qui ne jouent pas sont en transparence
   const finger = i => {
     const nextF = !tip[i].f.pressed && (tip[i].f.wN || 0) > 0.02; // doigt qui va jouer la prochaine note
     ctx.save(); if (!tip[i].f.pressed) ctx.globalAlpha = nextF ? 0.75 : FADE;
-    const b = base[i], t = tip[i], w = hs * FWID[i], bow = (b.x - t.x) * 0.12;
+    const b = base[i], t = tip[i], w = hs * FWID[i] * (1 + 0.3 * (t.curl || 0)), bow = (b.x - t.x) * 0.12;   // replié : plus court (géométrie) et un peu plus épais
     const { dir, w1, L, R } = limbPath(b, t, w, bow);
     ctx.lineJoin = 'round'; ctx.strokeStyle = edge; ctx.lineWidth = 3; ctx.stroke(); ctx.fillStyle = skin; ctx.fill();
     ctx.lineWidth = 1; ctx.strokeStyle = edge + '55'; // plis des articulations
@@ -775,7 +1089,7 @@ function drawHand(side, ev, G, onTop) {
     const lit = side === 'R' ? '#ffc23a' : '#7fd0ff'; // couleur vive de la main (pastille du doigt qui joue, pastille clignotante)
     if (!nextF) { // (le doigt qui va jouer n'a pas d'ongle : la pastille clignotante en tient lieu)
       ctx.beginPath(); ctx.ellipse(nx, ny, w1 * 0.3 * k, w1 * 0.36 * k, Math.atan2(dir[1], dir[0]) + Math.PI / 2, 0, Math.PI * 2);
-      if (pr) { ctx.shadowColor = lit; ctx.shadowBlur = hs * 1.1; ctx.shadowOffsetY = 0; ctx.fillStyle = lit; ctx.fill(); ctx.fill(); }
+      if (pr) { ctx.shadowColor = lit; ctx.shadowBlur = Math.min(26, hs * 1.1); ctx.shadowOffsetY = 0; ctx.fillStyle = lit; ctx.fill(); ctx.fill(); }
       ctx.fillStyle = pr ? lit : 'rgba(255,255,255,.4)'; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0;
       if (pr) { ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); } // liseré sombre puis blanc : la pastille ressort même sur une touche allumée de la même couleur
       ctx.lineWidth = pr ? 2.5 : 1; ctx.strokeStyle = pr ? '#fff' : edge + '99'; ctx.stroke(); // orange / bleu SEULEMENT si une note est réellement jouée
@@ -783,7 +1097,7 @@ function drawHand(side, ev, G, onTop) {
     if (nextF) { // pastille qui clignote (3 fois par seconde) au bout du doigt qui va jouer la prochaine note : toujours bien visible, qui « respire » entre vif et éclatant
       const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * T), px = t.x - dir[0] * w1 * 0.05, py = t.y - dir[1] * w1 * 0.05, rot = Math.atan2(dir[1], dir[0]) + Math.PI / 2, kk = 1.55 + 0.25 * bl;
       ctx.globalAlpha = 1; ctx.beginPath(); ctx.ellipse(px, py, w1 * 0.3 * kk, w1 * 0.36 * kk, rot, 0, Math.PI * 2);
-      ctx.shadowColor = lit; ctx.shadowBlur = hs * (0.8 + 1.2 * bl); ctx.fillStyle = lit; ctx.fill(); ctx.fill(); ctx.shadowBlur = 0;   // double remplissage : couleur pleine + halo
+      ctx.shadowColor = lit; ctx.shadowBlur = Math.min(34, hs * (0.8 + 1.2 * bl)); ctx.fillStyle = lit; ctx.fill(); ctx.fill(); ctx.shadowBlur = 0;   // double remplissage : couleur pleine + halo
       ctx.fillStyle = 'rgba(255,255,255,' + (0.05 + 0.3 * bl).toFixed(2) + ')'; ctx.fill();                                                // éclat blanc au sommet du clignotement
       ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();            // liseré sombre puis blanc
       ctx.save(); ctx.globalCompositeOperation = 'lighter'; const gr = ctx.createRadialGradient(px, py, 0, px, py, w1 * 1.7); gr.addColorStop(0, lit + 'cc'); gr.addColorStop(1, lit + '00');
@@ -798,10 +1112,10 @@ function drawHand(side, ev, G, onTop) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), t.x, t.y + 0.5); ctx.textBaseline = 'alphabetic'; ctx.restore();
   };
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = hs * (onTop ? 0.9 : 0.5); ctx.shadowOffsetY = hs * (onTop ? 0.5 : 0.25);
+  ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = Math.min(14, hs * (onTop ? 0.9 : 0.5)); ctx.shadowOffsetY = Math.min(8, hs * (onTop ? 0.5 : 0.25));   // ombre plafonnée (coût)
   finger(0);                                                   // le pouce d'abord : quand il passe sous la main, la paume le recouvre
   // paume + éminence du pouce + avant-bras (qui part vers le corps du joueur)
-  const k = [1, 2, 3, 4].map(i => base[i]), wy = top + kbH + hs * 1.5, sl = (W / 2 - px) * 0.12, up = hs * 0.3, wh = 1.05 * ww;
+  const k = [1, 2, 3, 4].map(i => base[i]), wy = top + kbH + hs * 1.5, sl = (W / 2 - px) * 0.12, up = hs * 0.3, wh = 1.05 * ww * handScale;
   const tb = base[0], thumbSide = { x: tb.x - sg * hs * 0.45, y: tb.y + hs * 0.2 };
   const poly = sg > 0 ? [[px + sl - wh, wy], [thumbSide.x, thumbSide.y], ...k.map(p => [p.x - 0, p.y - up]), [k[3].x + hs * 0.3, k[3].y], [px + sl + wh, wy]]
                       : [[px + sl + wh, wy], [thumbSide.x, thumbSide.y], ...k.map(p => [p.x + 0, p.y - up]), [k[3].x - hs * 0.3, k[3].y], [px + sl - wh, wy]];
@@ -809,6 +1123,7 @@ function drawHand(side, ev, G, onTop) {
   ctx.fillStyle = skin; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.lineJoin = 'round'; ctx.lineWidth = 1.5; ctx.strokeStyle = edge; ctx.stroke();
   [4, 3, 2, 1].forEach(finger);
   [0, 1, 2, 3, 4].forEach(label);
+  ctx.restore();
   ctx.restore();
 }
 
@@ -899,7 +1214,7 @@ function rakeSVG(side, cur) {
   return g + '</svg>';
 }
 function drawKeyboard(W, top, kbH, active) {
-  const ww = W / NW, bh = kbH * 0.62;
+  const ww = W / VIEW.n, bh = kbH * 0.62;
   ctx.fillStyle = '#05060d'; ctx.fillRect(0, top, W, kbH);
   for (let m = FIRST; m <= LAST; m++) {
     if (isBlack(m)) continue;
@@ -945,6 +1260,7 @@ async function startExport() {
   if (sampler && !samplerReady) return showError('Attendez la fin du chargement du piano avant d\'exporter.');
   pause(); seek(startPos());
   try { if (typeof Tone !== 'undefined') await Tone.start(); } catch (e) {}
+  if (stepMode || playing) return;   // pendant l'attente du son (Safari : parfois longue), on a pu passer en pas à pas : la lecture ne démarre plus
   let audioStream;
   if (sampler && samplerReady) {
     const d = Tone.getContext().createMediaStreamDestination(); Tone.getDestination().connect(d);
@@ -1015,21 +1331,69 @@ document.addEventListener('fullscreenchange', refreshFs); document.addEventListe
 let drawErrShown = false;
 function reportDrawError(err) { console.error(err); if (!drawErrShown) { drawErrShown = true; try { showError('Erreur d\u2019affichage : ' + (err && err.message || err)); } catch (e) {} } }
 function frame(ts) {
+  const frameT0 = performance.now();
+  if (stepMode && playing) pause();   // filet : jamais de lecture rythmée en mode pas à pas
   const dt = Math.min(0.25, (ts - lastTs) / 1000); lastTs = ts;
   { const target = (playing && !exp.active) ? audioLatency() + syncMs / 1000 : 0; vlag += (target - vlag) * Math.min(1, dt * 10); }
   if (playing && song) {
     pos += dt * speed;
+    countClicks(); previewTick();
     while (speed > 0 && nextIdx < song.notes.length && song.notes[nextIdx].t0 <= pos) playNote(song.notes[nextIdx++]);
+    if (stopAt !== null && pos >= stopAt) { pos = stopAt; stopAt = null; pause(true); }      // pas à pas : on se fige sur la touche enfoncée (le son continue de résonner)
+    else loopTick();
     const END = song.durationSec + BUBBLE_MIN + BURST_SEC; // on laisse finir la dernière bulle (sinon elle reste figée au début de son éclatement)
     if (pos >= END) { pos = END; playing = false; refreshButtons(); }
   }
+  if (stepAuto && stepMode && stepProgressTs && performance.now() - stepProgressTs > (stepDuration() + stepPause()) * 3000 + 5000) {   // filet de sécurité : le défilement n'avance plus depuis très longtemps → on le relance
+    stepAnim = null; stepWait = 0; stepProgressTs = performance.now();
+  }
+  try { if (stepMode) stepTick(dt); } catch (err) { reportDrawError(err); stepAnim = null; }   // une erreur ne doit jamais figer la boucle
   if (exp.active && exp.started) exportTick(ts);
-  try { draw(); } catch (err) { reportDrawError(err); } // une erreur de dessin ne doit JAMAIS arrêter la boucle (donc le son : les notes sont déclenchées plus haut)
+  try { updateZoom(dt); } catch (err) { reportDrawError(err); }
+  try { draw(); } catch (err) { reportDrawError(err); }
+  { const d = performance.now() - frameT0; if (d > 250) { slowN++; slowLast = Math.round(d); } }   // images très lentes : comptées et affichées dans la barre // une erreur de dessin ne doit JAMAIS arrêter la boucle (donc le son : les notes sont déclenchées plus haut)
   requestAnimationFrame(frame);
 }
 
+// ---------- Barre de commandes (décomposition) ----------
+addEventListener('click', e => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); });
+function toggleRoll() { rollVisible = !rollVisible; }
+function togglePanel() { panelOpen = !panelOpen; $('panel').hidden = !panelOpen; }
+function toggleStep() {
+  loopOn = false; stepMode = !stepMode; if (stepMode) { rollVisible = false; stepPre = true; } stopAt = null; stepAnim = null; stepAuto = false; markPlan();
+  if (song && stepMode) { if (playing) pause(); const E = eventTimes(); let i = E.length - 1; while (i >= 0 && E[i] > pos + 0.02) i--; stepE = i; pos = i >= 0 ? E[i] : E[0] - 0.9; releaseAll(); }
+  else if (song) seek(Math.max(startPos(), pos));
+}
+function cycleHand() { handView = handView === 'both' ? 'R' : handView === 'R' ? 'L' : 'both'; }
+function refreshBar() {
+  const on = (id, v) => $(id).classList.toggle('pressed', !!v);
+  on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bTraj', showTraj);
+  on('bZoom', zoomAuto); on('bCurl', curlFingers); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhR', handView === 'R'); on('bhL', handView === 'L'); on('bh2', handView === 'both');
+  [['bs25', 0.25], ['bs50', 0.5], ['bs75', 0.75], ['bs100', 1]].forEach(([id, v]) => on(id, Math.abs(speed - v) < 1e-9));
+  $('bPlay').textContent = !stepMode && playing ? '⏸ Pause' : '▶ Lecture'; $('bScroll').textContent = stepMode && stepAuto ? '⏸ Pause' : '▶ Pas à pas';
+  $('bLoop').textContent = loopRunning() ? '■ Arrêter la boucle' : '↻ Lecture en boucle'; on('bPlay', !stepMode && playing); on('bScroll', stepMode && stepAuto);
+  if (song) { const nb0 = eventTimes().length; if ($('bLA').dataset.n !== String(nb0)) { $('bLA').dataset.n = nb0; $('bLA').max = $('bLB').max = nb0; $('bLA').value = 1; $('bLB').value = nb0; } }
+  $('bSpd').textContent = '×' + speed.toFixed(2).replace('.', ',');
+  ['bRew', 'bPrev', 'bPlay', 'bScroll', 'bNext', 'bLoop'].forEach(id => { $(id).disabled = !song || exp.active; });
+    const nb = song ? eventTimes().length : 0;
+  const boucle = loopOn ? 'Boucle : pas ' + $('bLA').value + ' à ' + $('bLB').value + ' · tour ' + (loopCount + 1) : '';
+  $('bInfo').textContent = song ? [stepMode ? 'un pas toutes les ' + (stepDuration() + stepPause()).toFixed(1).replace('.', ',') + ' s' : '', boucle].filter(Boolean).join('   |   ') : '';
+  if (slowN) $('bInfo').textContent += '   |   images lentes : ' + slowN + ' (dernière : ' + (slowLast / 1000).toFixed(1).replace('.', ',') + ' s)';
+}
+$('bPanel').onclick = togglePanel; $('bRoll').onclick = toggleRoll;
+$('bRew').onclick = rewind; $('bPrev').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepPrev(); }; $('bNext').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepNext(); };   // un pas à la main = mode pas à pas
+$('bPlay').onclick = () => { unlockAudio(); if (playing && !stepMode) pause(); else { enterRoll(); play(); } };
+$('bScroll').onclick = () => { unlockAudio(); if (!stepMode) { if (playing) pause(); enterScroll(); } toggleStepAuto(); };
+$('bSld').oninput = () => setSpeed(+$('bSld').value); $('bs25').onclick = () => setSpeed(0.25); $('bs50').onclick = () => setSpeed(0.5); $('bs75').onclick = () => setSpeed(0.75); $('bs100').onclick = () => setSpeed(1);
+$('bhR').onclick = () => { handView = 'R'; }; $('bhL').onclick = () => { handView = 'L'; }; $('bh2').onclick = () => { handView = 'both'; }; $('bKeep').onclick = () => { keepOther = !keepOther; };
+$('bLoop').onclick = startLoop; $('bRamp').onclick = () => { rampOn = !rampOn; };
+$('bPre').onclick = () => { if (stepMode) stepPre = !stepPre; else preListen = !preListen; }; $('bCount').onclick = () => { countIn = !countIn; if (song && !playing && pos <= 0) pos = startPos(); };
+$('bHm').onclick = () => { handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100); }; $('bHp').onclick = () => { handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); };
+$('bCurl').onclick = () => { curlFingers = !curlFingers; };
+$('bTraj').onclick = () => { showTraj = !showTraj; }; $('bZoom').onclick = () => { zoomAuto = !zoomAuto; };
+
 // ---------- Démarrage ----------
-setSpeed(0.5); refreshFingButton(); refreshButtons(); initSampler();
+setSpeed(0.25); refreshFingButton(); refreshButtons(); initSampler();
 requestAnimationFrame(ts => { lastTs = ts; frame(ts); });
 // accès pour les tests automatiques
 window.__app = { stats, get song() { return song; }, get pos() { return pos; }, get playing() { return playing; }, get speed() { return speed; } };

@@ -110,7 +110,8 @@
   const TOL_NOTE = 0, TOL_ACCORD = 0; // la main est asservie au doigt qui joue : elle se place EXACTEMENT en face de sa touche (pour un accord : en face de leur moyenne)
   const LIFT_GAP = 0.05, HELD_OVERLAP = 0.1, TM_BASE = 0.12, MIN_FRAC = 0.25; // durée mini du déplacement de la main ; fraction mini de la note où le doigt reste posé
   const PALM_SEC = 0.30;  // la paume se déplace pendant les 0,30 s qui précèdent la note qui l'exige
-  function buildPlan(notes, hand) {
+  function buildPlan(notes, hand, opt) {
+    opt = opt || {};
     const sg = hand === 'L' ? -1 : 1, off = f => sg * (f - 3);
     const presses = [];
     notes.forEach(n => {
@@ -125,6 +126,7 @@
       } else presses.push({ f, midi: n.midi, u, a, b: a + dur });
     });
     presses.sort((x, y) => x.a - y.a || x.f - y.f);
+    if (opt.gesture) presses.forEach(p => { p.b = Math.min(p.b, p.a + 0.3); });   // geste : le doigt lève et se replie peu après la frappe (affichage seulement, le son garde ses durées)
     // Enchaînement de notes (hors accords et hors notes tenues) : on LÂCHE la touche qu'on jouait un instant avant d'en frapper une autre, même si dans le fichier
     // la fin de l'une et le début de l'autre sont simultanés. Une note vraiment tenue (qui dépasse le début de la suivante de plus de 0,1 s) reste posée.
     presses.forEach((p, i) => {
@@ -196,7 +198,7 @@
       // le doigt suit la main (asservie à lui) : il ne s'écarte d'elle que de ce que la main ne peut pas absorber au moment de la frappe / du relâchement
       const uP = i >= 0 ? L[i].u - (palmAt(L[i].b) + off(f)) : 0, uN = j < L.length ? L[j].u - (palmAt(L[j].a) + off(f)) : 0;
       const x = r + uP * wP * (1 - wN) + uN * wN;
-      return { x, depth, wN, blk, pressed: false, midi: 0, lift: (1 - depth) * (0.35 + 0.65 * 4 * wN * (1 - wN)) };
+      return { x, depth, wN, wP, blk, blkP: i >= 0 && isBlack(L[i].midi) ? 1 : 0, blkN: j < L.length && isBlack(L[j].midi) ? 1 : 0, pressed: false, midi: 0, lift: (1 - depth) * (0.35 + 0.65 * 4 * wN * (1 - wN)) };
     }
     // Un doigt posé sur sa touche est un mur : les doigts voisins (index, majeur, annulaire, auriculaire ; pas le pouce, qui passe sous la main) ne le traversent
     // pas, ils sont repoussés derrière lui, de moins en moins à mesure qu'ils s'enfoncent eux-mêmes (le résultat reste donc continu).
@@ -216,10 +218,26 @@
       if (i >= 0 && prefB[i] >= t) return 0;
       return Math.min(i >= 0 ? t - prefB[i] : Infinity, i + 1 < presses.length ? presses[i + 1].a - t : Infinity);
     }
+    // ---- gestes remarquables (annoncés à l'écran avant qu'ils n'arrivent) et événements (groupes de touches frappées ensemble)
+    const gestures = [], seen = new Set();
+    const addG = (t, label, u, f) => { const k = label + '@' + t.toFixed(3); if (!seen.has(k)) { seen.add(k); gestures.push({ t, label, u, f }); } };
+    ev.forEach((e, i) => {
+      const b = e.ps.length === 1 ? e.ps[0] : null, a = i && ev[i - 1].ps.length === 1 ? ev[i - 1].ps[0] : null;
+      if (a && b && b.f === 1 && a.f >= 2 && sg * (b.u - a.u) > 0) addG(e.t, 'Pouce sous la main', b.u, 1);
+      else if (a && b && a.f === 1 && b.f >= 2 && sg * (b.u - a.u) < 0) addG(e.t, 'Doigt par-dessus le pouce', b.u, b.f);
+      else if (i && Math.abs(palmAt(e.t) - palmAt(ev[i - 1].t)) >= 3) addG(e.t, 'Saut de position', e.ps[0].u, e.ps[0].f);
+      e.ps.forEach(p => { if (p.f === 1 && Math.abs(p.u - (palmAt(e.t) + off(1))) >= 2 && !(a && b && b.f === 1 && a.f >= 2)) addG(e.t, 'Écart du pouce', p.u, 1); });
+    });
+    presses.forEach(p => { if (p.sub) addG(p.a, 'Changement de doigt', p.u, p.f); });
+    gestures.sort((x, y) => x.t - y.t);
+    function nextEvent(t) { let lo = 0, hi = ev.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ev[m].t > t + 1e-3) hi = m; else lo = m + 1; } return ev[lo] || null; }
     return {
-      hand, sg, presses, empty: !presses.length, palm: palmAt, finger, near,
+      hand, sg, presses, events: ev, gestures, nextEvent, empty: !presses.length, palm: palmAt, finger, near,
       at(t) { return { palm: palmAt(t), fingers: wall([1, 2, 3, 4, 5].map(f => finger(f, t))), near: near(t) }; },
     };
   }
-  return { ux, isBlack, pairCost, assignFingerings, buildPlan };
+  // nom d'un intervalle (en demi-tons, signé : positif = vers l'aigu)
+  const INTERVALS = ['même note', '2de mineure', '2de majeure', '3ce mineure', '3ce majeure', '4te', 'triton', '5te', '6te mineure', '6te majeure', '7e mineure', '7e majeure', 'octave'];
+  function intervalName(semi) { const a = Math.abs(semi); if (!a) return INTERVALS[0]; const o = Math.floor(a / 12); return (semi > 0 ? '↑ ' : '↓ ') + (a <= 12 ? INTERVALS[a] : (o === 1 ? 'octave' : o + ' octaves') + (a % 12 ? ' + ' + INTERVALS[a % 12] : '')); }
+  return { ux, isBlack, pairCost, assignFingerings, buildPlan, intervalName };
 });
