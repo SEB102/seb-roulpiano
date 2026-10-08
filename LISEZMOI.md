@@ -6,7 +6,7 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 (échantillons de piano + Tone.js) ; sans connexion, un synthé de secours prend le relais.
 
 - **Fichiers** : .mid / .midi, .musicxml / .xml, .mxl (partition exportée de MuseScore, Finale, Sibelius…).
-  Glisser-déposer possible. Deux exemples intégrés : « Exemple : Élise » = début de « Lettre à Élise » (Beethoven, saisi de mémoire : à vérifier sur la partition) et « Exemple : Bach » = Variation 30 des Variations Goldberg (avec doigtés).
+  Glisser-déposer possible. Trois exemples intégrés : « Exemple : J'ai du bon tabac » (très simple : une main à cinq doigts do–sol, accompagnement facile, avec doigtés ; arrangement de https://dechiffrerpiano.fr), « Exemple : Élise » = début de « Lettre à Élise » (Beethoven, saisi de mémoire : à vérifier sur la partition) et « Exemple : Bach » = Variation 30 des Variations Goldberg (avec doigtés).
 - **Commandes** : voir « Barre de commandes » plus bas. Le panneau **☰ Réglages** (H) contient les fichiers, exemples, export vidéo, tempo, doigtés, mains virtuelles, synchro et mesures visibles ; la barre du haut contient tout le reste. Raccourcis clavier : Espace = lecture / pas à pas automatique, ← → = pas précédent / suivant, ↑ ↓ = vitesse, Début = retour au début.
 - **Couleurs** : orange = main droite (M.D.), bleu = main gauche (M.G.) ; la couleur suit la main du doigté (M.D. ou M.G.), indépendamment des clés : une note déclarée M.D. est orange, une note déclarée M.G. est bleue. Teinte plus foncée = touche noire.
   Mains : 2 pistes/parties/portées si le fichier en a deux (la plus aiguë = droite), sinon coupure au Do central.
@@ -50,9 +50,9 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 
 ## Licence et crédits
 Code de SEB-ROULPIANO : licence MIT, © 2026 Sébastien Gay (fichier `LICENSE`) : réutilisation libre à condition de conserver ce crédit.
-Sons de piano : **Salamander Grand Piano V3** par Alexander Holm, licence CC BY 3.0 (https://github.com/sfzinstruments/SalamanderGrandPiano), chargés depuis Internet via Tone.js (MIT). Les partitions de Beethoven et de Bach sont dans le domaine public.
+Sons de piano : **Salamander Grand Piano V3** par Alexander Holm, licence CC BY 3.0 (https://github.com/sfzinstruments/SalamanderGrandPiano), chargés depuis Internet via Tone.js (MIT). Les partitions de Beethoven et de Bach sont dans le domaine public. « J'ai du bon tabac » : chanson traditionnelle, arrangement pour piano de https://dechiffrerpiano.fr (ses droits ne sont pas couverts par la licence MIT du code).
 
 Mode d'emploi illustré : `MODE-D-EMPLOI.html` (autonome, images intégrées) et `MODE-D-EMPLOI.pdf` (même contenu, imprimable).
 
 Fichiers : `index.html` (généré : `node construire.js`), `index.template.html` (source), `core.js` (lecture MIDI/MusicXML/MXL), `hands.js` (doigtés automatiques, mouvement des mains, gestes, événements), `hands_legacy.js` (moteur d'origine des mains, affichage « sans trajectoire »), `test_core.js` et `test_hands.js` (tests : `node test_core.js && node test_hands.js`),
-`exemples.js` (génère les exemples), `exemple.musicxml` (Élise), `exemple-goldberg.musicxml` (Bach).
+`exemples.js` (génère les exemples), `exemple.musicxml` (Élise), `exemple-goldberg.musicxml` (Bach), `exemple-tabac.musicxml` (J'ai du bon tabac).
