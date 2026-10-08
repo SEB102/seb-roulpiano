@@ -28,6 +28,16 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     const h = fp([{ midi: 60, t0: 0, t1: 2, finger: 1 }, { midi: 64, t0: 0.5, t1: 1, finger: 3 }]);   // note tenue : le doigt 1 reste posé
     assert.ok(h.finger(1, 0.9).pressed && h.finger(1, 1.5).pressed, 'note tenue');
   });
+  await t('Gestes remarquables : passage du pouce, saut de position, changement de doigt ; événements et noms d\'intervalles', () => {
+    const ns = mk([60, 62, 64, 65, 67], 0.5, 0.45); [1, 2, 3, 1, 2].forEach((f, i) => { ns[i].finger = f; });
+    const p = H.buildPlan(ns, 'R'); assert.strictEqual(p.events.length, 5);
+    assert.ok(p.gestures.some(g => g.label === 'Pouce sous la main' && Math.abs(g.t - 1.5) < 1e-6), JSON.stringify(p.gestures));
+    assert.strictEqual(p.nextEvent(0.6).t, 1.0); assert.strictEqual(p.nextEvent(2.0), null);
+    const j = H.buildPlan([{ midi: 48, t0: 0, t1: 0.4, finger: 1 }, { midi: 72, t0: 0.5, t1: 0.9, finger: 5 }], 'R');
+    assert.ok(j.gestures.some(g => g.label === 'Saut de position'), JSON.stringify(j.gestures));
+    const c = H.buildPlan([{ midi: 60, t0: 0, t1: 1, finger: 3, finger2: 1 }], 'R'); assert.ok(c.gestures.some(g => g.label === 'Changement de doigt'));
+    assert.strictEqual(H.intervalName(4), '↑ 3ce majeure'); assert.strictEqual(H.intervalName(-7), '↓ 5te'); assert.strictEqual(H.intervalName(0), 'même note'); assert.strictEqual(H.intervalName(12), '↑ octave'); assert.strictEqual(H.intervalName(-17), '↓ octave + 4te'); assert.strictEqual(H.intervalName(24), '↑ 2 octaves');
+  });
   await t('Gamme descendante à la main gauche : image miroir de la main droite (pouce sur la note la plus haute)', () => {
     const ns = mk([60, 59, 57, 55, 53, 52, 50, 48]); H.assignFingerings(ns, 'L');
     const f = ns.map(x => x.af); assert.strictEqual(f[0], 1, f.join('')); for (let i = 1; i < f.length; i++) if (f[i] === 1) assert.ok(f[i - 1] === 3 || f[i - 1] === 4, f.join('')); // 1 2 3 1 2 3 … : image miroir de la main droite

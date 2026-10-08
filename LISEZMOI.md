@@ -1,18 +1,18 @@
-# SEB-ROULPIANO (piano roll d'apprentissage)
+# SEB-ROULPIANO (piano roll d'apprentissage et décomposition lente des gestes)
+
+Deux façons de travailler : **▶ Pas à pas** (au départ) décompose lentement le geste, un pas par note ou accord, pour anticiper à la fois le mouvement des doigts et le résultat sonore ; **▶ Lecture** joue le morceau avec son rythme devant le rouleau de notes.
 
 En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `index.html` dans Chrome / Safari / Firefox (double-clic). Internet requis au 1er lancement
 (échantillons de piano + Tone.js) ; sans connexion, un synthé de secours prend le relais.
 
 - **Fichiers** : .mid / .midi, .musicxml / .xml, .mxl (partition exportée de MuseScore, Finale, Sibelius…).
   Glisser-déposer possible. Deux exemples intégrés : « Exemple : Élise » = début de « Lettre à Élise » (Beethoven, saisi de mémoire : à vérifier sur la partition) et « Exemple : Bach » = Variation 30 des Variations Goldberg (avec doigtés).
-- **Commandes** : ⏮ Début · ▶ Lecture · ⏸ Pause (garde la position) · vitesse 0 à 3 (1× = tempo du fichier ; **½× par défaut**, boutons ¼× / ½× / 1× dont celui de la vitesse courante est allumé)
-  · **Tempo ♩ =** (noires/min) : par défaut celui du fichier (60 pour l'exemple), modifiable (20–300), ↺ pour revenir au tempo du fichier
-  · barre de progression cliquable. Clavier : Espace = lecture/arrêt, Début = retour, ← → = mesure précédente/suivante, ↑ ↓ = vitesse.
+- **Commandes** : voir « Barre de commandes » plus bas. Le panneau **☰ Réglages** (H) contient les fichiers, exemples, export vidéo, tempo, doigtés, mains virtuelles, synchro et mesures visibles ; la barre du haut contient tout le reste. Raccourcis clavier : Espace = lecture / pas à pas automatique, ← → = pas précédent / suivant, ↑ ↓ = vitesse, Début = retour au début.
 - **Couleurs** : orange = main droite (M.D.), bleu = main gauche (M.G.) ; la couleur suit la main du doigté (M.D. ou M.G.), indépendamment des clés : une note déclarée M.D. est orange, une note déclarée M.G. est bleue. Teinte plus foncée = touche noire.
   Mains : 2 pistes/parties/portées si le fichier en a deux (la plus aiguë = droite), sinon coupure au Do central.
   Quand les deux mains sont écrites sur la même portée (ex. Hanon n°1 : début en clé de fa pour les deux mains), deux voix de rythme identique sur cette portée sont attribuées à deux mains : la voix haute = M.D., la basse = M.G. Sinon la main reste corrigeable note par note dans la bulle de saisie.
 - **Synchro son/image** : la latence audio (100 ms de marge de Tone.js supprimés, + délai du navigateur et de la sortie audio) est compensée en retardant l'image ; le champ « Synchro » (ms, −300 à 1000, mémorisé) permet d'affiner (Bluetooth…).
-- **Clavier** : un seul, en bas et grand (environ la moitié de la hauteur avec les mains virtuelles) ; adapté à l'étendue du morceau (octaves entières, 3 minimum) : moins d'octaves = touches plus larges.
+- **Clavier** : un seul, grand (en pas à pas : toute la hauteur de l'écran ; en lecture rythmée : environ la moitié, sous le rouleau) ; adapté à l'étendue du morceau (octaves entières, 3 minimum) : moins d'octaves = touches plus larges.
 - **🖐 Mains virtuelles** : deux mains dessinées sur le clavier du bas ; chaque doigt porte son numéro et s'allume en orange (M.D.) ou bleu (M.G.) seulement pendant une note jouée. Gestes modélisés : passage du pouce sous la main (et d'un doigt par-dessus le pouce), mains croisées (la main qui joue passe devant), changement de doigt sur une touche tenue (« puis » dans la bulle de saisie). Le pouce a une longueur fixe et reste attaché à la paume : il pivote jusqu'à 80° vers l'extérieur et jusqu'à 40° vers les autres doigts ; si sa touche est trop loin, c'est toute la main qui se décale. **doigtés auto** : pour les notes sans doigté, l'application en propose un (plus pâle) ; ceux du fichier ou saisis sont toujours respectés. Le module `hands.js` calcule doigtés et mouvements (sans dessin, testé sous Node).
 - **Doigtés** : sélecteur à 3 positions — « Masquer les doigtés », « Doigtés simples » (mode de départ à chaque ouverture de l'application, le choix n'est pas mémorisé ; étiquettes « M.D. 1 » / « M.G. 4 » au-dessus des notes qui défilent ; sur le clavier, le chiffre et M.D./M.G. sur la touche jouée) ou « Doigtés illustrés ».
   Doigtés illustrés : un petit schéma de main en « râteau » (une barre par doigt, pouces courts, mains opposées) au-dessus de chaque note, avec le doigt à utiliser en orange et son numéro dans une pastille ; les schémas des notes rapprochées s'empilent dans l'ordre chronologique (la prochaine à jouer au premier plan, les suivantes estompées derrière). Sur le clavier, une bulle centrée sur la touche apparaît quand la note est jouée, flotte tant qu'elle sonne (0,3 s au minimum) et éclate à sa fin.
@@ -28,11 +28,32 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
   Garder l'onglet visible pendant l'export ; Échap ou le même bouton annule. Impossible à la vitesse 0.
 - Non géré : répétitions/reprises MusicXML (jouées une seule fois), PDF/images de partitions.
 
+## Barre de commandes (en haut) et raccourcis
+| Fonction | Bouton | Touche |
+|---|---|---|
+| Réglages (fichiers, tempo, doigtés, export, ancien panneau) | ☰ Réglages | H |
+| Rouleau de notes complet (sinon : simple ruban au-dessus du clavier) | rouleau | R |
+| Lecture rythmée (active le rouleau, coupe défilement et pré-écoute) | ▶ Lecture | Espace |
+| **Pas à pas** : il n'imite ni la mélodie ni son rythme. Chaque pas déroule UN geste de durée toujours identique : 1) la hauteur de la prochaine note sonne doucement et s'affiche, 2) le doigt se lève, la main se déplace, le doigt descend, 3) la note sonne (1,2 s). **▶ Pas à pas (ou Espace) = défilement automatique des pas, rouleau masqué, pré-écoute active** ; → = un pas à la main ; ← = pas précédent | ◀ pas, pas ▶, ▶ Pas à pas (plus de bouton « Pas à pas » : cliquer sur un pas ou sur Défilement entre dans ce mode) | Espace ; → ; ← |
+| **Vitesse** : en pas à pas, la **cadence du défilement automatique des pas** (¼× ≈ un pas toutes les 5,7 s, ½× ≈ 2,9 s, 1× ≈ 1,4 s) ; hors pas à pas, la vitesse de lecture du morceau | ¼× ½× ¾× 1× | ↑ ↓ (réglage fin) |
+| Une seule main affichée (D, G ou 2) ; l'autre peut rester audible | D G 2, « son de l'autre » | M |
+| **Boucle** : tapez le numéro du pas de départ et celui du pas d'arrivée, puis cliquez **↻ Lecture en boucle** (en pas à pas : défilement en boucle ; sinon : lecture rythmée). Recliquez pour arrêter. **↗ accélérer** fait monter la vitesse (¼× → ½× → ¾× → 1×) tous les 2 tours. Le compteur « x:y » en haut à gauche du clavier donne le pas courant sur le total | cases de pas, ↻, ↗ accélérer | L |
+| **Pré-écoute** : on entend la note AVANT le geste (en lecture rythmée : un instant avant la frappe ; en pas à pas : au début du pas), à plein volume et avec sa durée. **Quand elle est active, le son de la frappe est supprimé** : on n'entend que la pré-écoute. Allumée au départ en pas à pas, éteinte en lecture rythmée | 🔊 pré-écoute | P |
+| **Décompte** d'une mesure avec un clic par temps, avant le départ | décompte | C |
+| **Trajectoire** des doigts qui jouent au prochain pas : une chaîne de perles (même style que les repères) qui suit le chemin réel du bout du doigt virtuel jusqu'à son point d'atterrissage ; elle raccourcit à mesure que le doigt approche et clignote avec sa pastille | trajectoires | T |
+| **Taille des mains** (2,4 = maximum, par défaut ; de 0,8 à 2,4) | mains − / mains + | − / + |
+| **Doigts repliés** (essai) : les doigts qui ne jouent pas sont repliés vers la paume, sauf le pouce ; un doigt se déplie en approchant de sa touche et se replie après | doigts repliés | V |
+| **Zoom automatique** : le clavier suit les mains, avec une zone morte (il ne bouge que si les mains en sortent) ; **allumé par défaut** | zoom auto | Z |
+
+## Ce qu'on voit sur le clavier
+- **Repères** : uniquement ceux du **prochain pas** (la prochaine note ou le prochain accord), posés là où le bout du doigt se posera réellement, avec le numéro du doigt ; un anneau se resserre à l'approche de la frappe. Aucun texte (ni nom de note, ni intervalle, ni nom de geste).
+- Les doigts qui vont jouer clignotent ; le doigt qui joue porte une grosse pastille ; les autres sont en transparence ; la main se déplace seulement quand aucun doigt n'est posé.
+
 ## Licence et crédits
 Code de SEB-ROULPIANO : licence MIT, © 2026 Sébastien Gay (fichier `LICENSE`) : réutilisation libre à condition de conserver ce crédit.
 Sons de piano : **Salamander Grand Piano V3** par Alexander Holm, licence CC BY 3.0 (https://github.com/sfzinstruments/SalamanderGrandPiano), chargés depuis Internet via Tone.js (MIT). Les partitions de Beethoven et de Bach sont dans le domaine public.
 
 Mode d'emploi illustré : `MODE-D-EMPLOI.html` (autonome, images intégrées) et `MODE-D-EMPLOI.pdf` (même contenu, imprimable).
 
-Fichiers : `index.html` (généré : `node construire.js`), `index.template.html` (source), `core.js` (lecture MIDI/MusicXML/MXL), `hands.js` (doigtés automatiques + mouvement des mains), `test_core.js` et `test_hands.js` (tests : `node test_core.js && node test_hands.js`),
+Fichiers : `index.html` (généré : `node construire.js`), `index.template.html` (source), `core.js` (lecture MIDI/MusicXML/MXL), `hands.js` (doigtés automatiques, mouvement des mains, gestes, événements), `test_core.js` et `test_hands.js` (tests : `node test_core.js && node test_hands.js`),
 `exemples.js` (génère les exemples), `exemple.musicxml` (Élise), `exemple-goldberg.musicxml` (Bach).
