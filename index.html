@@ -72,8 +72,8 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261008c"></script>
-<script src="hands.js?v=20261008c"></script>
+<script src="core.js?v=20261008d"></script>
+<script src="hands.js?v=20261008d"></script>
 </head>
 <body>
 <header>
@@ -100,8 +100,7 @@
     <div class="grp">
       <button id="bPre" title="Pré-écoute (P) : on entend la note AVANT le geste, à la place du son de la frappe (la frappe ne sonne plus). En pas à pas : la hauteur sonne avant le geste.">🔊 pré-écoute</button>
       <button id="bCount" title="Décompte d'une mesure avant le départ (C)">décompte</button>
-      <button id="bTraj" title="Trajectoire de chaque doigt (T)">trajectoires</button>
-      <button id="bCurl" title="Essai : les doigts qui ne jouent pas sont repliés, sauf le pouce (V)">doigts repliés</button>
+      <span class="lab">Mains virtuelles</span><button id="bM0" title="Sans mains virtuelles : seulement le clavier (T pour changer)">aucune</button><button id="bM1" title="Mains virtuelles avec trajectoires : doigts repliés, repères d'atterrissage et chemin de chaque doigt (T pour changer)">avec trajectoires</button><button id="bM2" title="Mains virtuelles sans trajectoires : doigts tendus, ni repères ni chemins (T pour changer)">sans trajectoire</button>
       <button id="bZoom" title="Le clavier suit les mains (Z)">zoom auto</button>
       <button id="bHm" title="Mains plus petites (−)">mains −</button><button id="bHp" title="Mains plus grandes (+)">mains +</button>
       <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button></div>
@@ -145,7 +144,7 @@
       <input id="fingFile" type="file" accept=".json,application/json">
     </div>
     <div class="grp">
-      <button id="hands" class="pressed" title="Afficher les mains virtuelles sur le clavier : on voit les doigts jouer, le pouce passer sous la main, les mains se croiser">🖐 Mains virtuelles</button>
+      <button id="hands" class="pressed" style="display:none" title="Afficher les mains virtuelles sur le clavier : on voit les doigts jouer, le pouce passer sous la main, les mains se croiser">🖐 Mains virtuelles</button>
       <label class="chk" title="Pour les notes sans doigté, l'application propose un doigté plausible (utilisé pour animer les mains ; vos doigtés saisis ou ceux du fichier sont toujours respectés)"><input type="checkbox" id="autoFing" checked> doigtés auto</label>
     </div>
     <div class="grp">
@@ -192,7 +191,7 @@ const startPos = () => countIn ? -beatSec() * song.measures[0].num : 0;
 let song = null, pos = 0, playing = false, speed = 0.5, visMeasures = 1, nextIdx = 0, lastTs = 0, seeking = false;
 // ---- décomposition du geste : tout est désactivable depuis la barre de commandes
 let rollVisible = false, panelOpen = false, stepMode = true, stepAuto = false, stepWait = 0, stopAt = null, handView = 'both', keepOther = true;
-let slowN = 0, slowLast = 0, stepProgressTs = 0, loopAS = null, loopBS = null, loopA = null, loopB = null, loopOn = false, rampOn = false, loopCount = 0, preListen = false, countIn = true, showTraj = true, curlFingers = true, zoomAuto = true;
+let handsMode = 'traj', slowN = 0, slowLast = 0, stepProgressTs = 0, loopAS = null, loopBS = null, loopA = null, loopB = null, loopOn = false, rampOn = false, loopCount = 0, preListen = false, countIn = true, showTraj = true, curlFingers = true, zoomAuto = true;
 let handScale = 2.4, preIdx = 0, lastBeat = 0, stepE = -1, stepAnim = null, stepPre = true; // pas à pas : événement affiché, animation en cours, pré-écoute de la hauteur avant le geste
 const RAMP = [0.25, 0.5, 0.75, 1], RAMP_EVERY = 2, STEP_HOLD = 0.45, PRE_LEAD = 0.7; // PRE_LEAD : avance de la pré-écoute (secondes réelles)
 const VIEW = { x0: 0, n: 1 };                       // fenêtre visible du clavier, en touches blanches (fractionnaire : le zoom est continu)
@@ -658,8 +657,8 @@ addEventListener('keydown', e => {
   if (exp.active) { if (e.code === 'Escape') stopExport(true); return; }
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
   const k = e.metaKey || e.ctrlKey || e.altKey ? '' : e.key.toLowerCase();
-  if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') showTraj = !showTraj; 
-  else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'v') curlFingers = !curlFingers; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'm') cycleHand(); else if (k === 'l') startLoop();
+  if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') cycleHandsMode(); 
+  else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'm') cycleHand(); else if (k === 'l') startLoop();
   else if (k === '+' || k === '=') handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); else if (k === '-') handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100);
   else if (e.code === 'Space') { e.preventDefault(); unlockAudio(); if (stepMode) toggleStepAuto(); else if (playing) pause(); else { enterRoll(); play(); } }
   else if (e.code === 'Home') { e.preventDefault(); rewind(); }
@@ -890,8 +889,7 @@ const noteName = m => NOMS[m % 12] + (Math.floor(m / 12) - 1);
 function drawOverlays(W, top, kbH, sp, active, posTick) {
   if (!song || !song.plan) return;
   const G = makeG(W, top, kbH, sp);
-  drawUpcoming(G, sp);
-  if (showTraj && showHands) drawTrajectories(G, sp);
+  if (handsMode === 'traj') { drawUpcoming(G, sp); drawTrajectories(G, sp); }   // repères d'atterrissage et chemins : seulement avec les mains « avec trajectoires »
   { // compteur de pas « x:y » en haut à gauche du clavier
     const nb = eventTimes().length, x = stepMode ? (stepAnim ? stepAnim.j + 1 : stepE + 1) : firstEventAfter(sp + 0.02), txt = Math.max(0, x) + ':' + nb;
     ctx.save(); ctx.font = '700 ' + Math.max(12, Math.round(kbH * 0.032)) + 'px -apple-system, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
@@ -1357,6 +1355,9 @@ function frame(ts) {
 
 // ---------- Barre de commandes (décomposition) ----------
 addEventListener('click', e => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); });
+// Mains virtuelles, trois états : aucune / avec trajectoires (doigts repliés, repères, chemins) / sans trajectoires (doigts tendus, ni repères ni chemins)
+function setHandsMode(m) { handsMode = m; showHands = m !== 'off'; showTraj = curlFingers = m === 'traj'; markPlan(); }
+function cycleHandsMode() { setHandsMode(handsMode === 'traj' ? 'plain' : handsMode === 'plain' ? 'off' : 'traj'); }
 function toggleRoll() { rollVisible = !rollVisible; }
 function togglePanel() { panelOpen = !panelOpen; $('panel').hidden = !panelOpen; }
 function toggleStep() {
@@ -1369,8 +1370,8 @@ function cycleHand() { handView = handView === 'both' ? 'R' : handView === 'R' ?
 const setT = (e, t) => { if (e.textContent !== t) e.textContent = t; };
 function refreshBar() {
   const on = (id, v) => $(id).classList.toggle('pressed', !!v);
-  on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bTraj', showTraj);
-  on('bZoom', zoomAuto); on('bCurl', curlFingers); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhR', handView === 'R'); on('bhL', handView === 'L'); on('bh2', handView === 'both');
+  on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bM0', handsMode === 'off'); on('bM1', handsMode === 'traj'); on('bM2', handsMode === 'plain');
+  on('bZoom', zoomAuto); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhR', handView === 'R'); on('bhL', handView === 'L'); on('bh2', handView === 'both');
   [['bs25', 0.25], ['bs50', 0.5], ['bs75', 0.75], ['bs100', 1]].forEach(([id, v]) => on(id, Math.abs(speed - v) < 1e-9));
   setT($('bPlay'), !stepMode && playing ? '⏸ Pause' : '▶ Lecture'); setT($('bScroll'), stepMode && stepAuto ? '⏸ Pause' : '▶ Pas à pas');
   setT($('bLoop'), loopRunning() ? '■ Arrêter la boucle' : '↻ Lecture en boucle'); on('bPlay', !stepMode && playing); on('bScroll', stepMode && stepAuto);
@@ -1390,8 +1391,7 @@ $('bhR').onclick = () => { handView = 'R'; }; $('bhL').onclick = () => { handVie
 $('bLoop').onclick = startLoop; $('bRamp').onclick = () => { rampOn = !rampOn; };
 $('bPre').onclick = () => { if (stepMode) stepPre = !stepPre; else preListen = !preListen; }; $('bCount').onclick = () => { countIn = !countIn; if (song && !playing && pos <= 0) pos = startPos(); };
 $('bHm').onclick = () => { handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100); }; $('bHp').onclick = () => { handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); };
-$('bCurl').onclick = () => { curlFingers = !curlFingers; };
-$('bTraj').onclick = () => { showTraj = !showTraj; }; $('bZoom').onclick = () => { zoomAuto = !zoomAuto; };
+$('bM0').onclick = () => setHandsMode('off'); $('bM1').onclick = () => setHandsMode('traj'); $('bM2').onclick = () => setHandsMode('plain'); $('bZoom').onclick = () => { zoomAuto = !zoomAuto; };
 
 // ---------- Démarrage ----------
 setSpeed(0.25); refreshFingButton(); refreshButtons(); initSampler();

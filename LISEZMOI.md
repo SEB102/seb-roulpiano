@@ -40,9 +40,8 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 | **Boucle** : tapez le numéro du pas de départ et celui du pas d'arrivée, puis cliquez **↻ Lecture en boucle** (en pas à pas : défilement en boucle ; sinon : lecture rythmée). Recliquez pour arrêter. **↗ accélérer** fait monter la vitesse (¼× → ½× → ¾× → 1×) tous les 2 tours. Le compteur « x:y » en haut à gauche du clavier donne le pas courant sur le total | cases de pas, ↻, ↗ accélérer | L |
 | **Pré-écoute** : on entend la note AVANT le geste (en lecture rythmée : un instant avant la frappe ; en pas à pas : au début du pas), à plein volume et avec sa durée. **Quand elle est active, le son de la frappe est supprimé** : on n'entend que la pré-écoute. Allumée au départ en pas à pas, éteinte en lecture rythmée | 🔊 pré-écoute | P |
 | **Décompte** d'une mesure avec un clic par temps, avant le départ | décompte | C |
-| **Trajectoire** des doigts qui jouent au prochain pas : une chaîne de perles (même style que les repères) qui suit le chemin réel du bout du doigt virtuel jusqu'à son point d'atterrissage ; elle raccourcit à mesure que le doigt approche et clignote avec sa pastille | trajectoires | T |
+| **Mains virtuelles**, trois affichages : **aucune** (le clavier seul) ; **avec trajectoires** (affichage de départ : doigts repliés vers la paume sauf le pouce, repères d'atterrissage du prochain pas et chaîne de perles qui suit le chemin réel du bout de chaque doigt qui joue) ; **sans trajectoire** (les mains seules, doigts tendus, ni repères ni chemins) | aucune / avec trajectoires / sans trajectoire | T (passe de l'un à l'autre) |
 | **Taille des mains** (2,4 = maximum, par défaut ; de 0,8 à 2,4) | mains − / mains + | − / + |
-| **Doigts repliés** (essai) : les doigts qui ne jouent pas sont repliés vers la paume, sauf le pouce ; un doigt se déplie en approchant de sa touche et se replie après | doigts repliés | V |
 | **Zoom automatique** : le clavier suit les mains, avec une zone morte (il ne bouge que si les mains en sortent) ; **allumé par défaut** | zoom auto | Z |
 
 ## Ce qu'on voit sur le clavier
