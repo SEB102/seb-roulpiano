@@ -695,8 +695,18 @@ function ensurePlan() {
   if (!planDirty || !song) return; planDirty = false;
   const plan = {};
   ['R', 'L'].forEach(h => {
-    const ns = song.notes.filter(n => noteHand(n) === h);
+    const all = song.notes.filter(n => noteHand(n) === h);
+    // Unissons : deux voix écrites sur la MÊME note au même instant se jouent avec UNE touche et UN doigt. On garde celle qui porte un doigté du fichier (sinon la plus longue) ;
+    // l'autre n'entre pas dans le calcul des doigts ni des mains, et affiche le même doigt.
+    const ns = [], dups = [];
+    all.forEach(n => {
+      const k = ns.find(m => m.midi === n.midi && Math.abs(m.t0 - n.t0) < 0.03);
+      if (!k) { ns.push(n); return; }
+      const nWins = (n.finger && !k.finger) || (!!n.finger === !!k.finger && n.dur > k.dur);
+      if (nWins) { ns[ns.indexOf(k)] = n; dups.push([k, n]); } else dups.push([n, k]);
+    });
     if (autoFing) PianoHands.assignFingerings(ns, h); else ns.forEach(n => { n.af = 0; });
+    dups.forEach(([d, k]) => { d.af = k.finger || k.af || 0; });
     plan[h] = PianoHands.buildPlan(ns, h);
   });
   song.plan = plan;
