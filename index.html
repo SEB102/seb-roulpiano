@@ -72,8 +72,9 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261008f"></script>
-<script src="hands.js?v=20261008f"></script>
+<script src="core.js?v=20261008g"></script>
+<script src="hands.js?v=20261008g"></script>
+<script src="hands_legacy.js?v=20261008g"></script>
 </head>
 <body>
 <header>
@@ -996,7 +997,12 @@ function ensurePlan() {
     });
     if (autoFing) PianoHands.assignFingerings(ns, h); else ns.forEach(n => { n.af = 0; });
     dups.forEach(([d, k]) => { d.af = k.finger || k.af || 0; });
-    plan[h] = PianoHands.buildPlan(ns, h, { gesture: stepMode && handsMode !== 'plain' });
+    plan[h] = (handsMode === 'plain' ? PianoHandsLegacy : PianoHands).buildPlan(ns, h, { gesture: stepMode });   // « sans trajectoire » : moteur d'origine des mains (doigts qui s'étirent)
+    if (!plan[h].nextEvent) {   // le moteur d'origine ne fournit pas les événements (zoom automatique) : on les reconstitue
+      const ev = [], pl = plan[h]; pl.presses.filter(q => !q.sub).forEach(q => { const l = ev[ev.length - 1]; if (l && q.a - l.t < 0.03) l.ps.push(q); else ev.push({ t: q.a, ps: [q] }); });
+      pl.events = ev; pl.gestures = [];
+      pl.nextEvent = t => { let lo = 0, hi = ev.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ev[m].t > t + 1e-3) hi = m; else lo = m + 1; } return ev[lo] || null; };
+    }
   });
   song.plan = plan;
 }
