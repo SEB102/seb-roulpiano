@@ -257,8 +257,10 @@
               return;
             }
             const n = { midi, tick: tickAbs, dur: Math.max(1, durT), vel: 80, staff, voice: parseInt(txt(e, 'voice') || '1', 10) };
-            const fg = parseInt(txt(kid(kid(e, 'notations') || { children: [] }, 'technical') || { children: [] }, 'fingering'), 10);
+            const fgT = txt(kid(kid(e, 'notations') || { children: [] }, 'technical') || { children: [] }, 'fingering'), fgM = /^\s*(?:M\.?\s*)?([DG])\.?\s*([1-5])\s*$/i.exec(fgT || '');   // « 3 » ou « MD3 » / « MG2 » : doigt, avec la main (D = droite, G = gauche) quand elle ne se déduit pas de la portée
+            const fg = fgM ? parseInt(fgM[2], 10) : parseInt(fgT, 10);
             if (fg >= 1 && fg <= 5) n.finger = fg; // doigté inscrit dans la partition
+            if (fgM) n.fileHand = fgM[1].toUpperCase() === 'G' ? 'L' : 'R';
             const tech = kid(kid(e, 'notations') || { children: [] }, 'technical');
             if (tech) { // « 3-1 » : doigté de substitution (on change de doigt sur la touche tenue)
               const sub = kids(tech, 'fingering').find(x => x.attrs.substitution === 'yes'), sf = sub ? parseInt(sub.text.trim(), 10) : 0;
@@ -292,6 +294,7 @@
           n.tick += tick; n.track = pi;
           if (hasTwoStaves) n.hand = (parallel && parallel[n.staff + '/' + n.voice]) || (n.staff >= 2 ? 'L' : 'R');
           else if (twoParts) n.hand = pi === 0 ? 'R' : 'L';
+          if (n.fileHand) n.hand = n.fileHand;   // main indiquée dans le doigté (« MD3 », « MG2 ») : prioritaire sur la portée
           notes.push(n);
         });
       });
