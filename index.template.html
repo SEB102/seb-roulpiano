@@ -99,6 +99,7 @@
       <button id="bLoop" title="Répète les pas de départ à arrivée en boucle (L). En mode pas à pas : défilement en boucle ; sinon : lecture rythmée en boucle">↻ Lecture en boucle</button><button id="bRamp" title="Accélération : tous les 2 tours de boucle, la vitesse monte d'un cran (¼× → ½× → ¾× → 1×)">↗ accélérer</button></div>
     <div class="sepv"></div>
     <div class="grp">
+      <button id="bAnt" title="Anticipation de la prochaine note sur le clavier (A) : repères d'atterrissage, trajectoires et pastille clignotante du prochain doigt. Éteinte : seule la note jouée apparaît">anticipation</button>
       <button id="bPre" title="Pré-écoute (P) : on entend la note AVANT le geste, à la place du son de la frappe (la frappe ne sonne plus). En pas à pas : la hauteur sonne avant le geste.">🔊 pré-écoute</button>
       <button id="bCount" title="Décompte d'une mesure avant le départ (C)">décompte</button>
       <span class="lab">Mains virtuelles</span><button id="bM0" title="Sans mains virtuelles : le clavier et les repères d'atterrissage du prochain pas (T pour changer)">aucune</button><button id="bM1" title="Mains virtuelles avec trajectoires : doigts repliés, repères d'atterrissage et chemin de chaque doigt (T pour changer)">avec trajectoires</button><button id="bM2" title="Mains virtuelles sans trajectoires : doigts tendus, ni repères ni chemins (T pour changer)">sans trajectoire</button>
@@ -193,7 +194,7 @@ const startPos = () => countIn ? -beatSec() * song.measures[0].num : 0;
 let song = null, pos = 0, playing = false, speed = 0.5, visMeasures = 1, nextIdx = 0, lastTs = 0, seeking = false;
 // ---- décomposition du geste : tout est désactivable depuis la barre de commandes
 let rollVisible = false, panelOpen = false, stepMode = true, stepAuto = false, stepWait = 0, stopAt = null, handView = 'both', keepOther = true;
-let handsMode = 'traj', slowN = 0, slowLast = 0, stepProgressTs = 0, loopAS = null, loopBS = null, loopA = null, loopB = null, loopOn = false, rampOn = false, loopCount = 0, preListen = false, countIn = true, showTraj = true, curlFingers = true, zoomAuto = true;
+let anticip = true, handsMode = 'traj', slowN = 0, slowLast = 0, stepProgressTs = 0, loopAS = null, loopBS = null, loopA = null, loopB = null, loopOn = false, rampOn = false, loopCount = 0, preListen = false, countIn = true, showTraj = true, curlFingers = true, zoomAuto = true;
 let handScale = 2.4, preIdx = 0, lastBeat = 0, stepE = -1, stepAnim = null, stepPre = true; // pas à pas : événement affiché, animation en cours, pré-écoute de la hauteur avant le geste
 const RAMP = [0.25, 0.5, 0.75, 1], RAMP_EVERY = 2, STEP_HOLD = 0.45, PRE_LEAD = 0.7; // PRE_LEAD : avance de la pré-écoute (secondes réelles)
 const VIEW = { x0: 0, n: 1 };                       // fenêtre visible du clavier, en touches blanches (fractionnaire : le zoom est continu)
@@ -660,7 +661,7 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
   const k = e.metaKey || e.ctrlKey || e.altKey ? '' : e.key.toLowerCase();
   if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') cycleHandsMode(); 
-  else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'm') cycleHand(); else if (k === 'l') startLoop();
+  else if (k === 'a') anticip = !anticip; else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'm') cycleHand(); else if (k === 'l') startLoop();
   else if (k === '+' || k === '=') handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); else if (k === '-') handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100);
   else if (e.code === 'Space') { e.preventDefault(); unlockAudio(); if (stepMode) toggleStepAuto(); else if (playing) pause(); else { enterRoll(); play(); } }
   else if (e.code === 'Home') { e.preventDefault(); rewind(); }
@@ -892,8 +893,8 @@ const noteName = m => NOMS[m % 12] + (Math.floor(m / 12) - 1);
 function drawOverlays(W, top, kbH, sp, active, posTick) {
   if (!song || !song.plan) return;
   const G = makeG(W, top, kbH, sp);
-  if (handsMode !== 'plain') drawUpcoming(G, sp);      // repères d'atterrissage du prochain pas : sans mains (« aucune ») comme avec les mains « avec trajectoires »
-  if (handsMode === 'traj') drawTrajectories(G, sp);   // chemins des doigts : seulement avec les mains « avec trajectoires »
+  if (anticip && handsMode !== 'plain') drawUpcoming(G, sp);      // repères d'atterrissage du prochain pas : sans mains (« aucune ») comme avec les mains « avec trajectoires »
+  if (anticip && handsMode === 'traj') drawTrajectories(G, sp);   // chemins des doigts : seulement avec les mains « avec trajectoires »
   { // compteur de pas « x:y » en haut à gauche du clavier
     const nb = eventTimes().length, x = stepMode ? (stepAnim ? stepAnim.j + 1 : stepE + 1) : firstEventAfter(sp + 0.02), txt = Math.max(0, x) + ':' + nb;
     ctx.save(); ctx.font = '700 ' + Math.max(12, Math.round(kbH * 0.032)) + 'px -apple-system, sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
@@ -1094,7 +1095,7 @@ function drawHand(side, ev, G, onTop) {
   let { tip, base, px } = handGeometry(side, ev, G);
   const FADE = 0.38; // les doigts qui ne jouent pas sont en transparence
   const finger = i => {
-    const nextF = !tip[i].f.pressed && (tip[i].f.wN || 0) > 0.02; // doigt qui va jouer la prochaine note
+    const nextF = anticip && !tip[i].f.pressed && (tip[i].f.wN || 0) > 0.02; // doigt qui va jouer la prochaine note
     ctx.save(); if (!tip[i].f.pressed) ctx.globalAlpha = nextF ? 0.75 : FADE;
     const b = base[i], t = tip[i], w = hs * FWID[i] * (1 + 0.3 * (t.curl || 0)), bow = (b.x - t.x) * 0.12;   // replié : plus court (géométrie) et un peu plus épais
     const { dir, w1, L, R } = limbPath(b, t, w, bow);
@@ -1125,7 +1126,7 @@ function drawHand(side, ev, G, onTop) {
   const label = i => { // numéro du doigt, au bout
     const t = tip[i], d = t.f.depth;
     ctx.save(); if (!t.f.pressed) ctx.globalAlpha = FADE;
-    ctx.fillStyle = (t.f.pressed || (t.f.wN || 0) > 0.02) ? '#10121f' : edge; ctx.font = '800 ' + Math.max(9, Math.round(hs * 0.38)) + 'px -apple-system, sans-serif';
+    ctx.fillStyle = (t.f.pressed || (anticip && (t.f.wN || 0) > 0.02)) ? '#10121f' : edge; ctx.font = '800 ' + Math.max(9, Math.round(hs * 0.38)) + 'px -apple-system, sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(i + 1), t.x, t.y + 0.5); ctx.textBaseline = 'alphabetic'; ctx.restore();
   };
   ctx.save();
@@ -1389,7 +1390,7 @@ function cycleHand() { handView = handView === 'both' ? 'R' : handView === 'R' ?
 const setT = (e, t) => { if (e.textContent !== t) e.textContent = t; };
 function refreshBar() {
   const on = (id, v) => $(id).classList.toggle('pressed', !!v);
-  on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bM0', handsMode === 'off'); on('bM1', handsMode === 'traj'); on('bM2', handsMode === 'plain');
+  on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bAnt', anticip); on('bM0', handsMode === 'off'); on('bM1', handsMode === 'traj'); on('bM2', handsMode === 'plain');
   on('bZoom', zoomAuto); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhR', handView === 'R'); on('bhL', handView === 'L'); on('bh2', handView === 'both');
   [['bs25', 0.25], ['bs50', 0.5], ['bs75', 0.75], ['bs100', 1]].forEach(([id, v]) => on(id, Math.abs(speed - v) < 1e-9));
   setT($('bPlay'), !stepMode && playing ? '⏸ Pause' : '▶ Lecture'); setT($('bScroll'), stepMode && stepAuto ? '⏸ Pause' : '▶ Pas à pas');
@@ -1410,7 +1411,7 @@ $('bhR').onclick = () => { handView = 'R'; }; $('bhL').onclick = () => { handVie
 $('bLoop').onclick = startLoop; $('bRamp').onclick = () => { rampOn = !rampOn; };
 $('bPre').onclick = () => { if (stepMode) stepPre = !stepPre; else preListen = !preListen; }; $('bCount').onclick = () => { countIn = !countIn; if (song && !playing && pos <= 0) pos = startPos(); };
 $('bHm').onclick = () => { handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100); }; $('bHp').onclick = () => { handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); };
-$('bM0').onclick = () => setHandsMode('off'); $('bM1').onclick = () => setHandsMode('traj'); $('bM2').onclick = () => setHandsMode('plain'); $('bZoom').onclick = () => { zoomAuto = !zoomAuto; };
+$('bAnt').onclick = () => { anticip = !anticip; }; $('bM0').onclick = () => setHandsMode('off'); $('bM1').onclick = () => setHandsMode('traj'); $('bM2').onclick = () => setHandsMode('plain'); $('bZoom').onclick = () => { zoomAuto = !zoomAuto; };
 
 // ---------- Démarrage ----------
 setSpeed(0.25); refreshFingButton(); refreshButtons(); initSampler();
