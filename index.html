@@ -32,7 +32,11 @@
   #title { font-weight:600; max-width:34ch; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #status { color:var(--muted); font-size:13px; margin-left:auto; }
   #status.err { color:#ff7b7b; }
+  #progwrap { flex:1; min-width:160px; position:relative; display:flex; }
   #progress { flex:1; min-width:160px; }
+  #mbubble { position:absolute; top:calc(100% + 3px); transform:translateX(-50%); background:var(--accent); color:#fff; font-size:12px; font-weight:700; padding:2px 9px; border-radius:8px; white-space:nowrap; pointer-events:none; z-index:7; box-shadow:0 2px 8px rgba(0,0,0,.4); }
+  #mbubble[hidden] { display:none; }
+  header { position:relative; z-index:6; }
   #info { color:var(--muted); font-variant-numeric:tabular-nums; min-width:21ch; text-align:right; }
   .tip { position:relative; }
   .tiptext { display:none; position:absolute; top:calc(100% + 8px); left:0; width:max-content; max-width:min(520px, 90vw); z-index:20;
@@ -108,6 +112,12 @@
       <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button></div>
     <span id="bInfo"></span><span id="status"></span>
   </div>
+  <div class="row">
+    <span id="title">Aucun morceau</span>
+    <span id="progwrap"><input id="progress" title="Curseur de position : faire glisser pour rembobiner ou avancer ; la bulle donne le numéro de mesure" type="range" min="0" max="1" step="0.001" value="0" disabled><span id="mbubble" hidden></span></span>
+    <span id="info">—</span>
+    <button id="fs" title="Afficher toute l'application en plein écran, réglages compris (Échap pour quitter)">⛶ Plein écran</button>
+  </div>
   <div id="panel" hidden>
   <div class="row">
     <label class="btn" for="file">📂 Ouvrir un fichier…</label>
@@ -161,12 +171,6 @@
     </div>
     <span class="legend" title="La couleur suit la main du doigté (modifiable note par note) : orange = main droite, bleu = main gauche"><span class="sw" style="background:var(--R)"></span>M.D.
       <span class="sw" style="background:var(--L);margin-left:10px"></span>M.G.</span>
-  </div>
-  <div class="row">
-    <span id="title">Aucun morceau</span>
-    <input id="progress" title="Position dans le morceau" type="range" min="0" max="1" step="0.001" value="0" disabled>
-    <span id="info">—</span>
-    <button id="fs" title="Afficher toute l'application en plein écran, réglages compris (Échap pour quitter)">⛶ Plein écran</button>
   </div>
   </div>
 </header>
@@ -646,7 +650,17 @@ $('tempoReset').onclick = () => { if (song) applyTempo(song.fileBpm); };
 $('sync').value = syncMs;
 $('sync').onchange = e => { const v = parseInt(e.target.value, 10); syncMs = isFinite(v) ? Math.max(-300, Math.min(1000, v)) : 0; e.target.value = syncMs; try { localStorage.setItem('seb-roulpiano-sync', String(syncMs)); } catch (er) {} };
 $('vis').onchange = e => { visMeasures = parseInt(e.target.value, 10); if (song && pos < 0) pos = startPos(); };
-$('progress').oninput = e => { seeking = true; const a = startPos(); seek(a + parseFloat(e.target.value) * (song.durationSec - a)); };
+// Indicateur de mesure du curseur de position : une bulle suit le curseur (ou la souris au survol) et donne le numéro de mesure correspondant
+let hoverFrac = null;
+function showMeasureBubble(v) {
+  const b = $('mbubble'), p = $('progress'); if (!song || p.disabled) { b.hidden = true; return; }
+  const a = startPos(), t = a + v * (song.durationSec - a), M = t < 0 ? null : song.measures[measureIndexAt(song.timeline.secToTick(t))];
+  b.textContent = !M ? 'Début' : M.label === '0' ? 'Anacrouse' : 'Mesure ' + M.label;
+  b.style.left = (8 + v * Math.max(0, p.offsetWidth - 16)) + 'px'; b.hidden = false;
+}
+$('progress').addEventListener('pointermove', e => { const r = $('progress').getBoundingClientRect(); hoverFrac = Math.max(0, Math.min(1, (e.clientX - r.left - 8) / Math.max(1, r.width - 16))); showMeasureBubble(hoverFrac); });
+$('progress').addEventListener('pointerleave', () => { hoverFrac = null; });
+$('progress').oninput = e => { seeking = true; const a = startPos(); seek(a + parseFloat(e.target.value) * (song.durationSec - a)); showMeasureBubble(parseFloat(e.target.value)); };
 $('progress').onchange = () => { seeking = false; };
 addEventListener('keydown', e => {
   if (e.key === 'Escape' && selGroup.size) { clearGroup(); return; }
@@ -744,6 +758,7 @@ function updateInfo() {
   const bpm = song.timeline.bpmAtTick(posTick) * speed;
   $('info').textContent = 'Mesure ' + M.label + ' / ' + song.measures[song.measures.length - 1].label + '  ·  ♩=' + Math.round(bpm) + '  ·  ' + fmt(Math.max(0, Math.min(pos, song.durationSec))) + ' / ' + fmt(song.durationSec);
   if (!seeking) { const a = startPos(); $('progress').value = song.durationSec ? Math.max(0, Math.min(1, (pos - a) / (song.durationSec - a))) : 0; }
+  showMeasureBubble(seeking ? parseFloat($('progress').value) : hoverFrac !== null ? hoverFrac : parseFloat($('progress').value));
 }
 // dessine la scène dans le contexte c (écran ou canvas d'export) ; W,H en pixels logiques, k = facteur d'échelle
 function renderScene(c, W, H, k) {
@@ -1099,7 +1114,7 @@ function drawHand(side, ev, G, onTop) {
     ctx.save(); if (!tip[i].f.pressed) ctx.globalAlpha = nextF ? 0.75 : FADE;
     const b = base[i], t = tip[i], w = hs * FWID[i] * (1 + 0.3 * (t.curl || 0)), bow = (b.x - t.x) * 0.12;   // replié : plus court (géométrie) et un peu plus épais
     const { dir, w1, L, R } = limbPath(b, t, w, bow);
-    ctx.lineJoin = 'round'; ctx.strokeStyle = edge; ctx.lineWidth = 3; ctx.stroke(); ctx.fillStyle = skin; ctx.fill();
+    ctx.lineJoin = 'round'; ctx.strokeStyle = edge; ctx.lineWidth = 6; ctx.stroke(); ctx.fillStyle = skin; ctx.fill();   // contour épais : on distingue mieux les deux mains quand elles se croisent
     ctx.lineWidth = 1; ctx.strokeStyle = edge + '55'; // plis des articulations
     [4, 7].forEach(k => { const a = L[k], c = R[k]; ctx.beginPath(); ctx.moveTo(a[0] + (c[0] - a[0]) * 0.22, a[1] + (c[1] - a[1]) * 0.22); ctx.lineTo(a[0] + (c[0] - a[0]) * 0.78, a[1] + (c[1] - a[1]) * 0.78); ctx.stroke(); });
     // ongle (vu de dessus) : pâle ; le bout s'éclaire dans la couleur de la main quand le doigt appuie
@@ -1138,7 +1153,7 @@ function drawHand(side, ev, G, onTop) {
   const poly = sg > 0 ? [[px + sl - wh, wy], [thumbSide.x, thumbSide.y], ...k.map(p => [p.x - 0, p.y - up]), [k[3].x + hs * 0.3, k[3].y], [px + sl + wh, wy]]
                       : [[px + sl + wh, wy], [thumbSide.x, thumbSide.y], ...k.map(p => [p.x + 0, p.y - up]), [k[3].x - hs * 0.3, k[3].y], [px + sl - wh, wy]];
   ctx.beginPath(); ctx.moveTo(poly[0][0], poly[0][1]); poly.slice(1).forEach(p => ctx.lineTo(p[0], p[1])); ctx.closePath();
-  ctx.fillStyle = skin; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.lineJoin = 'round'; ctx.lineWidth = 1.5; ctx.strokeStyle = edge; ctx.stroke();
+  ctx.fillStyle = skin; ctx.fill(); ctx.shadowColor = 'transparent'; ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = edge; ctx.stroke();
   [4, 3, 2, 1].forEach(finger);
   [0, 1, 2, 3, 4].forEach(label);
   ctx.restore();
