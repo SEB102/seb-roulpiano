@@ -822,10 +822,11 @@ function scene(W, H, dpr) {
   }
 
   // notes visibles
-  const vis = [];
+  const vis = [], vh = visibleHands();
   for (let i = lowerBoundTick(posTick - song.maxDur); i < song.notes.length && song.notes[i].tick < topTick; i++) {
     const n = song.notes[i];
     if (n.tick + n.dur <= posTick) continue;
+    if (!vh.includes(noteHand(n))) continue;   // une seule main affichée : on n'affiche rien de ce que joue l'autre (rouleau et clavier), même si on l'entend
     vis.push(n);
     if (n.tick <= posTick) active.set(n.midi, n);
   }
@@ -1198,7 +1199,7 @@ function drawBubbles(W, top, kbH, posTick, sp) {
   // remonter assez loin : une note déjà finie peut encore avoir sa bulle (durée minimale) puis son éclatement
   const back = posTick - song.timeline.secToTick(sp - (BUBBLE_MIN + BURST_SEC));
   for (let i = lowerBoundTick(posTick - song.maxDur - back); i < song.notes.length && song.notes[i].tick <= posTick; i++) {
-    const n = song.notes[i]; if (!n.finger) continue;
+    const n = song.notes[i]; if (!n.finger || !visibleHands().includes(noteHand(n))) continue;
     const endShow = Math.max(n.t1, n.t0 + BUBBLE_MIN), age = sp - n.t0, gone = sp - endShow;
     if (age < 0 || gone >= BURST_SEC || (gone >= 0 && !playing)) continue; // à l'arrêt, pas d'éclatement figé à mi-course
     const kr = keyRect(n.midi, W), D = Math.max(56, Math.min(100, kr.w * 1.7)), cx = kr.x + kr.w / 2;
