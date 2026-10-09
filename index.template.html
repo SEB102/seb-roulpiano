@@ -96,7 +96,7 @@
       <button id="bs25">¼×</button><button id="bs50">½×</button><button id="bs75">¾×</button><button id="bs100">1×</button><input type="range" id="bSld" min="0.25" max="1" step="0.05" title="Vitesse (curseur)" style="width:110px"><span id="bSpd" class="lab"></span></div>
     <div class="sepv"></div>
     <div class="grp"><span class="lab">Main</span>
-      <button id="bhR" title="Main droite seule (M)">D</button><button id="bhL" title="Main gauche seule (M)">G</button><button id="bh2" title="Les deux mains (M)">2</button>
+      <button id="bhL" title="Afficher / masquer la main gauche">M.G.</button><button id="bhR" title="Afficher / masquer la main droite">M.D.</button>
       <button id="bKeep" title="Garder le son de l'autre main quand une seule main est affichée">son de l'autre</button></div>
     <div class="sepv"></div>
     <div class="grp"><span class="lab">Boucle : du pas</span><input type="number" id="bLA" min="1" value="1" title="Numéro du pas de départ"><span class="lab">au pas</span><input type="number" id="bLB" min="1" value="1" title="Numéro du pas d'arrivée">
@@ -169,8 +169,8 @@
       <label for="vis">Mesures visibles</label>
       <select id="vis"><option selected>1</option><option>2</option><option>3</option><option>4</option></select>
     </div>
-    <span class="legend" title="La couleur suit la main du doigté (modifiable note par note) : orange = main droite, bleu = main gauche"><span class="sw" style="background:var(--R)"></span>M.D.
-      <span class="sw" style="background:var(--L);margin-left:10px"></span>M.G.</span>
+    <span class="legend" title="La couleur suit la main du doigté (modifiable note par note) : bleu = main gauche, orange = main droite"><span class="sw" style="background:var(--L)"></span>M.G.
+      <span class="sw" style="background:var(--R);margin-left:10px"></span>M.D.</span>
   </div>
   </div>
 </header>
@@ -197,12 +197,12 @@ const beatSec = () => song.timeline.tickToSec(Math.round(song.ppq * 4 / song.mea
 const startPos = () => countIn ? -beatSec() * song.measures[0].num : 0;
 let song = null, pos = 0, playing = false, speed = 0.5, visMeasures = 1, nextIdx = 0, lastTs = 0, seeking = false;
 // ---- décomposition du geste : tout est désactivable depuis la barre de commandes
-let rollVisible = false, panelOpen = false, stepMode = true, stepAuto = false, stepWait = 0, stopAt = null, handView = 'both', keepOther = true;
+let rollVisible = false, panelOpen = false, stepMode = true, stepAuto = false, stepWait = 0, stopAt = null, showL = true, showR = true, keepOther = true;
 let anticip = true, handsMode = 'traj', slowN = 0, slowLast = 0, stepProgressTs = 0, loopAS = null, loopBS = null, loopA = null, loopB = null, loopOn = false, rampOn = false, loopCount = 0, preListen = false, countIn = true, showTraj = true, curlFingers = true, zoomAuto = true;
 let handScale = 2.4, preIdx = 0, lastBeat = 0, stepE = -1, stepAnim = null, stepPre = true; // pas à pas : événement affiché, animation en cours, pré-écoute de la hauteur avant le geste
 const RAMP = [0.25, 0.5, 0.75, 1], RAMP_EVERY = 2, STEP_HOLD = 0.45, PRE_LEAD = 0.7; // PRE_LEAD : avance de la pré-écoute (secondes réelles)
 const VIEW = { x0: 0, n: 1 };                       // fenêtre visible du clavier, en touches blanches (fractionnaire : le zoom est continu)
-const visibleHands = () => handView === 'both' ? ['R', 'L'] : [handView];
+const visibleHands = () => [showR && 'R', showL && 'L'].filter(Boolean);
 
 // ---------- Clavier 88 touches ----------
 let FIRST = 21, LAST = 108; // étendue affichée : tout le piano tant qu'aucun morceau n'est chargé, puis adaptée au morceau
@@ -280,7 +280,7 @@ function audioLatency() {
 }
 function playNote(n, quiet, durOverride) { // quiet = c'est la pré-écoute (anticipation) ; quand la pré-écoute est active, le son de la frappe est supprimé : on n'entend qu'elle
   if (!quiet && (stepMode ? stepPre : preListen)) return;
-  if (handView !== 'both' && !keepOther && noteHand(n) !== handView) return;   // une seule main : l'autre peut être coupée
+  if (!keepOther && !visibleHands().includes(noteHand(n))) return;   // main masquée : son coupé si « son de l'autre » est éteint
   if (!quiet) stats.played++;
   const dur = durOverride || Math.min(60, Math.max(0.06, (n.t1 - n.t0) / speed)); // vitesse 0 : jamais appelée (cf. frame)
   const vel = n.vel;
@@ -675,7 +675,7 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
   const k = e.metaKey || e.ctrlKey || e.altKey ? '' : e.key.toLowerCase();
   if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') cycleHandsMode(); 
-  else if (k === 'a') anticip = !anticip; else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'm') cycleHand(); else if (k === 'l') startLoop();
+  else if (k === 'a') anticip = !anticip; else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'l') startLoop();
   else if (k === '+' || k === '=') handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); else if (k === '-') handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100);
   else if (e.code === 'Space') { e.preventDefault(); unlockAudio(); if (stepMode) toggleStepAuto(); else if (playing) pause(); else { enterRoll(); play(); } }
   else if (e.code === 'Home') { e.preventDefault(); rewind(); }
@@ -1401,13 +1401,12 @@ function toggleStep() {
   if (song && stepMode) { if (playing) pause(); const E = eventTimes(); let i = E.length - 1; while (i >= 0 && E[i] > pos + 0.02) i--; stepE = i; pos = i >= 0 ? E[i] : E[0] - 0.9; releaseAll(); }
   else if (song) seek(Math.max(startPos(), pos));
 }
-function cycleHand() { handView = handView === 'both' ? 'R' : handView === 'R' ? 'L' : 'both'; }
 // Texte réécrit seulement s'il change : remplacer le contenu d'un bouton à chaque image peut faire perdre le clic (Safari)
 const setT = (e, t) => { if (e.textContent !== t) e.textContent = t; };
 function refreshBar() {
   const on = (id, v) => $(id).classList.toggle('pressed', !!v);
   on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bAnt', anticip); on('bM0', handsMode === 'off'); on('bM1', handsMode === 'traj'); on('bM2', handsMode === 'plain');
-  on('bZoom', zoomAuto); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhR', handView === 'R'); on('bhL', handView === 'L'); on('bh2', handView === 'both');
+  on('bZoom', zoomAuto); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhL', showL); on('bhR', showR);
   [['bs25', 0.25], ['bs50', 0.5], ['bs75', 0.75], ['bs100', 1]].forEach(([id, v]) => on(id, Math.abs(speed - v) < 1e-9));
   setT($('bPlay'), !stepMode && playing ? '⏸ Pause' : '▶ Lecture'); setT($('bScroll'), stepMode && stepAuto ? '⏸ Pause' : '▶ Pas à pas');
   setT($('bLoop'), loopRunning() ? '■ Arrêter la boucle' : '↻ Lecture en boucle'); on('bPlay', !stepMode && playing); on('bScroll', stepMode && stepAuto);
@@ -1423,7 +1422,7 @@ $('bRew').onclick = rewind; $('bPrev').onclick = () => { unlockAudio(); if (!ste
 $('bPlay').onclick = () => { unlockAudio(); if (playing && !stepMode) pause(); else { enterRoll(); play(); } };
 $('bScroll').onclick = () => { unlockAudio(); if (!stepMode) { if (playing) pause(); enterScroll(); } toggleStepAuto(); };
 $('bSld').oninput = () => setSpeed(+$('bSld').value); $('bs25').onclick = () => setSpeed(0.25); $('bs50').onclick = () => setSpeed(0.5); $('bs75').onclick = () => setSpeed(0.75); $('bs100').onclick = () => setSpeed(1);
-$('bhR').onclick = () => { handView = 'R'; }; $('bhL').onclick = () => { handView = 'L'; }; $('bh2').onclick = () => { handView = 'both'; }; $('bKeep').onclick = () => { keepOther = !keepOther; };
+$('bhL').onclick = () => { showL = !showL; }; $('bhR').onclick = () => { showR = !showR; }; $('bKeep').onclick = () => { keepOther = !keepOther; };
 $('bLoop').onclick = startLoop; $('bRamp').onclick = () => { rampOn = !rampOn; };
 $('bPre').onclick = () => { if (stepMode) stepPre = !stepPre; else preListen = !preListen; }; $('bCount').onclick = () => { countIn = !countIn; if (song && !playing && pos <= 0) pos = startPos(); };
 $('bHm').onclick = () => { handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100); }; $('bHp').onclick = () => { handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); };
