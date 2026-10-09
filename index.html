@@ -898,7 +898,7 @@ function scene(W, H, dpr) {
   // ligne de jeu
   ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillRect(0, rollH - 2, W, 2);
   drawKeyboard(W, rollH, kbH, active);
-  if (showHands) { try { drawHands(W, rollH, kbH, sp); } catch (err) { reportDrawError(err); } } else if (fingIllus) drawBubbles(W, rollH, kbH, posTick, sp);
+  if (showHands) { try { drawHands(W, rollH, kbH, sp); } catch (err) { reportDrawError(err); } } else if (fingIllus) drawBubbles(W, rollH, kbH, posTick, sp); else drawPastilles(W, rollH, kbH, active);
   try { drawOverlays(W, rollH, kbH, sp, active, posTick); } catch (err) { reportDrawError(err); }
 }
 
@@ -1195,6 +1195,18 @@ function drawMiniRake(side, finger, x, y, w, onLight) {
 // Bulles de doigté sur le clavier : elle apparaît (en grossissant) au moment où la note est jouée, centrée sur la touche, flotte
 // tant que la note sonne (0,3 s au minimum), puis éclate (anneau + gouttelettes) quand elle est terminée.
 const BUBBLE_MIN = 0.3, BUBBLE_POP = 0.15, BURST_SEC = 0.4; // secondes de temps de morceau
+// Sans mains virtuelles : le doigté de chaque note jouée, dans la pastille des mains (couleur vive de la main, liseré sombre puis blanc), au bas de la touche.
+function drawPastilles(W, top, kbH, active) {
+  active.forEach((an, m) => {
+    const f = fof(an); if (!f || !showFing || !visibleHands().includes(noteHand(an))) return;
+    const side = noteHand(an), kr = keyRect(m, W), R = Math.max(10, Math.min(24, kr.w * 0.5)), cx = kr.x + kr.w / 2, cy = top + kbH - R - 10;
+    ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+    ctx.fillStyle = side === 'R' ? '#ffc23a' : '#7fd0ff'; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
+    ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+    ctx.fillStyle = '#10121f'; ctx.font = '800 ' + Math.round(R * 1.1) + 'px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(String(f), cx, cy + 1); ctx.restore();
+  });
+}
 function drawBubbles(W, top, kbH, posTick, sp) {
   // remonter assez loin : une note déjà finie peut encore avoir sa bulle (durée minimale) puis son éclatement
   const back = posTick - song.timeline.secToTick(sp - (BUBBLE_MIN + BURST_SEC));
@@ -1260,11 +1272,6 @@ function drawKeyboard(W, top, kbH, active) {
       ctx.fillStyle = hand ? '#1b1b2a' : '#6a6f88'; ctx.font = '600 11px -apple-system, sans-serif'; ctx.textAlign = 'center';
       ctx.fillText('Do' + (Math.floor(m / 12) - 1), r.x + r.w / 2, top + kbH - 9);
     }
-    if (an && showFing && !showHands && !fingIllus && fof(an) && ww >= 14) { // doigté simple sur la touche : « M.D. » puis le chiffre
-      ctx.fillStyle = '#10121f'; ctx.textAlign = 'center';
-      ctx.font = '800 17px -apple-system, sans-serif'; ctx.fillText(String(fof(an)), r.x + r.w / 2, top + kbH - 24);
-      ctx.font = '700 9px -apple-system, sans-serif'; ctx.fillText(handTxt(an), r.x + r.w / 2, top + kbH - 40);
-    }
   }
   for (let m = FIRST; m <= LAST; m++) {
     if (!isBlack(m)) continue;
@@ -1272,10 +1279,6 @@ function drawKeyboard(W, top, kbH, active) {
     ctx.fillStyle = hand ? COL[hand].keyB : '#15161f';
     rrect(r.x, top + 2, r.w, bh, 3); ctx.fill();
     ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
-    if (an && showFing && !showHands && !fingIllus && fof(an) && r.w >= 9) { // doigté simple, touche noire : chiffre seul
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.font = '800 13px -apple-system, sans-serif';
-      ctx.fillText(String(fof(an)), r.x + r.w / 2, top + bh - 6);
-    }
   }
   ctx.fillStyle = 'rgba(255,255,255,.9)'; ctx.fillRect(0, top, W, 2);
 }
