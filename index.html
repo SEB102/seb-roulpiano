@@ -1199,7 +1199,7 @@ const BUBBLE_MIN = 0.3, BUBBLE_POP = 0.15, BURST_SEC = 0.4; // secondes de temps
 function drawPastilles(W, top, kbH, active) {
   active.forEach((an, m) => {
     const f = fof(an); if (!f || !showFing || !visibleHands().includes(noteHand(an))) return;
-    const side = noteHand(an), kr = keyRect(m, W), blk = isBlack(m), R = Math.max(blk ? 8 : 10, Math.min(24, kr.w * 0.5)), cx = kr.x + kr.w / 2, cy = blk ? top + kbH * 0.62 - R - 6 : top + kbH - R - 10; // touche noire : sur la touche noire elle-même
+    const side = noteHand(an), kr = keyRect(m, W), blk = isBlack(m), R = Math.max(10, Math.min(24, W / VIEW.n * 0.5)), cx = kr.x + kr.w / 2, cy = blk ? top + kbH * 0.62 - R - 6 : top + kbH - R - 10; // touche noire : sur la touche noire elle-même
     ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fillStyle = side === 'R' ? '#ffc23a' : '#7fd0ff'; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
     ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
