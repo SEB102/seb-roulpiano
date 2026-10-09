@@ -49,8 +49,8 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 - Les doigts qui vont jouer clignotent ; le doigt qui joue porte une grosse pastille ; les autres sont en transparence ; la main se déplace seulement quand aucun doigt n'est posé.
 
 ## Licence et crédits
-Code de SEB-ROULPIANO : licence MIT, © 2026 Sébastien Gay (fichier `LICENSE`) : réutilisation libre à condition de conserver ce crédit.
-Sons de piano : **Salamander Grand Piano V3** par Alexander Holm, licence CC BY 3.0 (https://github.com/sfzinstruments/SalamanderGrandPiano), chargés depuis Internet via Tone.js (MIT). Les partitions de Beethoven et de Bach sont dans le domaine public. « J'ai du bon tabac » : chanson traditionnelle, arrangement pour piano de https://dechiffrerpiano.fr (ses droits ne sont pas couverts par la licence MIT du code).
+SEB-ROULPIANO (code et documents) : licence **CC BY-NC 4.0** (Attribution - Pas d'Utilisation Commerciale), © 2026 Sébastien Gay (fichier `LICENSE`) : partage et adaptation libres à condition de citer l'auteur et de ne pas en faire un usage commercial.
+Sons de piano : **Salamander Grand Piano V3** par Alexander Holm, licence CC BY 3.0 (https://github.com/sfzinstruments/SalamanderGrandPiano), chargés depuis Internet via Tone.js (MIT). Les partitions de Beethoven et de Bach sont dans le domaine public. « J'ai du bon tabac » : chanson traditionnelle, arrangement pour piano de https://dechiffrerpiano.fr (ses droits ne sont pas couverts par la licence du code).
 
 Mode d'emploi illustré : `MODE-D-EMPLOI.html` (autonome, images intégrées) et `MODE-D-EMPLOI.pdf` (même contenu, imprimable).
 
