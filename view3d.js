@@ -185,9 +185,16 @@ const View3D = (() => {
       // Mouvements : la première articulation (base du doigt, côté paume) est la seule à pivoter latéralement ; les deux suivantes ne font que fléchir / s'étendre
       // dans le plan vertical du doigt (cinématique inverse ci-dessous).
       const kx = a.fingers.map((f, i) => px + sg * (i - 2) * 0.84);   // bases des doigts : fixes sur la paume
+      // Poignet : légère rotation dans les trois dimensions (≈ ±10° au plus) de la main entière autour du poignet W :
+      //  lacet vers le côté où les doigts vont jouer, tangage (main un peu relevée au repos, abaissée à l'appui), roulis vers le côté du doigt qui appuie.
+      const W0 = V(px, 1.1, 6.3), mf = kws.slice(1), mk = mf.reduce((u, v) => u + v, 0) / 4, wsum = kws.reduce((u, v) => u + v, 0) || 1;
+      const dxm = a.fingers.reduce((u, f, i) => u + kws[i] * (xs[i] - kx[i]), 0) / wsum, side = a.fingers.reduce((u, f, i) => u + kws[i] * sg * (i - 2), 0) / wsum;
+      const wrot = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.max(-0.1, Math.min(0.1, 0.14 * (0.5 - mk))), -Math.max(-0.17, Math.min(0.17, dxm * 0.07)), -Math.max(-0.1, Math.min(0.1, 0.05 * side)), 'YXZ'));
+      const rotW = p => p.sub(W0).applyMatrix4(wrot).add(W0);
+      { const e = new THREE.Euler().setFromRotationMatrix(wrot, 'YXZ'); stats.rot = stats.rot || [0, 0, 0]; stats.rot[0] = Math.max(stats.rot[0], Math.abs(e.y)); stats.rot[1] = Math.max(stats.rot[1], Math.abs(e.x)); stats.rot[2] = Math.max(stats.rot[2], Math.abs(e.z)); }
       H.fingers.forEach(F => {
         const f = a.fingers[F.f - 1], fx = xs[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
-        const K = V(thumb ? px + off * 0.95 : kx[F.f - 1], thumb ? 0.8 : 1.1, thumb ? 4.3 : 3.95), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
+        const K = rotW(V(thumb ? px + off * 0.95 : kx[F.f - 1], thumb ? 0.8 : 1.1, thumb ? 4.3 : 3.95)), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
         const blk = f.blk || 0, zt = 1.7 + (-0.9 - 1.7) * blk, yk = blk ? 0.55 : 0.1;
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
