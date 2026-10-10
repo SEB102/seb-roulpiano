@@ -5,7 +5,7 @@ const View3D = (() => {
   const KEY_L = 6, BLK_L = 3.6, BACK = -3, AHEAD = 3.2, SPEED = 4;       // longueur des touches ; fond du clavier ; secondes de rouleau visibles ; unités par seconde
   const CR = 0xffb347, CL = 0x5fb4ff;                                     // couleurs vives : main droite, main gauche
   const DEF = { az: 0, el: 55 * Math.PI / 180, zoom: 1.1 };
-  let orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
+  let marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
   const V = (x, y, z) => new THREE.Vector3(x, y, z), Y = V(0, 1, 0);
 
   function digit(n, col) {
@@ -52,7 +52,7 @@ const View3D = (() => {
 
   // construit clavier, rouleau et mains pour la plage de notes du morceau
   function build(song, ux, isBlack) {
-    keys = {}; bars = []; hands = {};
+    keys = {}; bars = []; hands = {}; marks = []; pastilles = [];
     while (scene.children.length > 2) scene.remove(scene.children[scene.children.length - 1]);
     let lo = 127, hi = 0; song.notes.forEach(n => { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); });
     const m0 = Math.max(21, lo - 10), m1 = Math.min(108, hi + 10);
@@ -88,6 +88,14 @@ const View3D = (() => {
       }
       scene.add(g); hands[h] = H;
     });
+    // anticipation : repères d'atterrissage (anneau + disque + numéro) et chaînes de perles des trajectoires ; pastilles des touches jouées (mode « aucune »)
+    for (let i = 0; i < 10; i++) {
+      const m = { ring: new THREE.Mesh(new THREE.RingGeometry(0.44, 0.58, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true })), disc: new THREE.Mesh(new THREE.CircleGeometry(0.43, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true })), sp: new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true })), beads: [] };
+      m.ring.rotation.x = m.disc.rotation.x = -Math.PI / 2; m.sp.scale.set(0.9, 0.9, 1); m.sp.renderOrder = 11; scene.add(m.ring); scene.add(m.disc); scene.add(m.sp);
+      for (let k = 0; k < 8; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true })); b.visible = false; scene.add(b); m.beads.push(b); }
+      m.ring.visible = m.disc.visible = m.sp.visible = false; marks.push(m);
+    }
+    for (let i = 0; i < 12; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true })); sp.scale.set(0.95, 0.95, 1); sp.renderOrder = 12; sp.visible = false; scene.add(sp); pastilles.push(sp); }
     built = { song, cx, w, ux, isBlack };
     layout();
   }
@@ -105,6 +113,7 @@ const View3D = (() => {
     if (!built || built.song !== song) build(song, st.ux, st.isBlack);
     layout();
     const sp = st.sp, vis = st.vis, S = song.notes;
+    const tips = {};   // positions courantes des bouts de doigts (départ des chaînes de perles)
     // touches : couleur de la main qui joue, enfoncées
     const on = {};
     for (let i = st.lowerBoundSec(sp - 10); i < S.length && S[i].t0 <= sp + AHEAD; i++) {
@@ -125,7 +134,7 @@ const View3D = (() => {
     for (; bi < bars.length; bi++) bars[bi].visible = false;
     // mains
     ['L', 'R'].forEach(h => {
-      const H = hands[h], pl = st.plan && st.plan[h], show = vis.includes(h) && pl && !pl.empty; H.g.visible = !!show; if (!show) return;
+      const H = hands[h], pl = st.plan && st.plan[h], show = vis.includes(h) && pl && !pl.empty && st.handsMode !== 'off'; H.g.visible = !!show; if (!show) return;
       const a = pl.at(sp), sg = h === 'L' ? -1 : 1, px = a.palm, col = h === 'R' ? CR : CL;
       H.palm.position.set(px, 1.05, 3.6); H.thenar.position.set(px - sg * 1.7, 0.85, 3.75);
       limb(H.arm, V(px, 1.0, 4.6), V(px, 3.4, 13));
@@ -170,8 +179,39 @@ const View3D = (() => {
         limb(F.p, K, M); limb(F.m, M, D); limb(F.d, D, T); F.j1.position.copy(K); F.j2.position.copy(M); F.j3.position.copy(D); F.tip.position.copy(T);
         F.tip.material.color.setHex(f.pressed ? col : (h === 'R' ? 0xe9b996 : 0xdcbca8)); F.tip.material.emissive && F.tip.material.emissive.setHex(f.pressed ? 0x553300 : 0x000000);
         F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
+        const nextF = st.anticip && !f.pressed && (f.wN || 0) > 0.02;   // prochain doigt : pastille qui clignote (3 fois par seconde), bout du doigt qui s'éclaire
+        if (nextF) { const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * performance.now() / 1000); F.sp.material.opacity = 1; F.sp.scale.setScalar(1.05 + 0.5 * bl); F.tip.material.color.setHex(col); F.tip.material.emissive && F.tip.material.emissive.setHex(bl > 0.5 ? 0x553300 : 0x221100); }
+        else F.sp.scale.setScalar(0.9);
+        tips[h + F.f] = T.clone();
       });
     });
+    // repères d'atterrissage du prochain pas (anticipation, sauf « sans trajectoire ») et chemins des doigts (« avec trajectoires »)
+    marks.forEach(m => { m.ring.visible = m.disc.visible = m.sp.visible = false; m.beads.forEach(b => { b.visible = false; }); });
+    if (st.anticip && st.next && st.handsMode !== 'plain') {
+      let mi = 0; const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * performance.now() / 1000);
+      Object.keys(st.next.hands).forEach(h => st.next.hands[h].ps.forEach(p => {
+        const m = marks[mi++]; if (!m) return;
+        const blk = built.isBlack(p.midi), col = h === 'R' ? CR : CL, L = V(p.u, blk ? 0.7 : 0.18, blk ? BACK + BLK_L * 0.5 : 1.7), k = Math.max(0, Math.min(1, (st.next.hands[h].t - sp) / 0.9));
+        m.ring.visible = m.disc.visible = m.sp.visible = true; m.ring.position.copy(L); m.disc.position.copy(L); m.sp.position.set(L.x, L.y + 0.7, L.z);
+        m.ring.scale.setScalar(1 + 1.3 * k); m.ring.material.color.setHex(col); m.disc.material.color.setHex(col); m.disc.material.opacity = 0.55 + 0.45 * bl; m.ring.material.opacity = 0.9;
+        m.sp.material.map = digit(p.f, h === 'R' ? '#ffc23a' : '#7fd0ff'); m.sp.material.needsUpdate = true;
+        const T0 = tips[h + p.f];
+        if (st.handsMode === 'traj' && T0 && T0.distanceTo(L) > 0.9) m.beads.forEach((b, i) => {
+          const u = (i + 1) / (m.beads.length + 1) * 0.86, P = T0.clone().lerp(L, u); P.y += 0.9 * Math.sin(Math.PI * u) * (1 - 0.5 * k * 0);
+          b.visible = true; b.position.copy(P); b.material.color.setHex(col); b.material.opacity = 0.5 + 0.5 * bl;
+        });
+      }));
+    }
+    // mode « aucune » (sans mains) : le doigt de chaque note jouée apparaît dans une pastille au-dessus de sa touche
+    pastilles.forEach(sp => { sp.visible = false; });
+    if (st.handsMode === 'off' && st.fof) {
+      let pi = 0;
+      for (let i = st.lowerBoundSec(sp - 10); i < S.length && S[i].t0 <= sp && pi < pastilles.length; i++) {
+        const n = S[i]; if (!(n.t0 <= sp && sp < n.t1) || !vis.includes(st.noteHand(n))) continue; const f = st.fof(n); if (!f) continue;
+        const blk = built.isBlack(n.midi), sp2 = pastilles[pi++]; sp2.visible = true; sp2.position.set(built.ux(n.midi), blk ? 1.2 : 0.8, blk ? BACK + BLK_L * 0.5 : 1.9);
+        sp2.material.map = digit(f, st.noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'); sp2.material.needsUpdate = true;
+      }
+    }
     renderer.render(scene, cam);
   }
   const el = () => renderer && renderer.domElement;
