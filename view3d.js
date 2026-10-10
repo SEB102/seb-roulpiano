@@ -125,16 +125,19 @@ const View3D = (() => {
         const K = V(px + off * (thumb ? 0.95 : 0.84), thumb ? 0.8 : 1.1, thumb ? 3.4 : 2.45), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
         const blk = f.blk || 0, zt = 1.7 + (-0.9 - 1.7) * blk, yk = blk ? 0.55 : 0.1;
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
-        const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + (f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
+        const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
         const T = V(f.x, tipY, f.pressed ? zt : zt + (1 - f.depth) * (0.5 + 0.8 * (1 - blk)) - 0.45 * prep);
         // doigt à 2 articulations (cinématique inverse dans le plan vertical K→T) : segments de longueur fixe ; il se replie quand la touche est proche
         // (doigt arrondi) et se tend jusqu'à l'extension complète quand la touche est loin (touche noire, doigt tendu vers l'avant)
         const dv = T.clone().sub(K), dist = dv.length(), dir = dv.clone().multiplyScalar(1 / (dist || 1e-4));
-        if (dist > TOT * 0.999) T.copy(K).add(dir.clone().multiplyScalar(TOT * 0.999));
-        const dd = Math.min(dist, TOT * 0.999), xx = (dd * dd + L1 * L1 - L2 * L2) / (2 * dd), hh = Math.sqrt(Math.max(0, L1 * L1 - xx * xx));
+        if (!thumb && dist > TOT * 0.999) T.copy(K).add(dir.clone().multiplyScalar(TOT * 0.999));
+        let dd, xx, hh;
+        if (thumb) {   // le pouce ne se replie pas comme les autres doigts : il reste presque droit (très léger arc), sa longueur apparente suit la distance à la touche
+          dd = Math.max(dist, 0.5); xx = dd * 0.5; hh = Math.min(0.28, Math.max(0, 2.0 - dd) * 0.5 + 0.12);
+        } else { dd = Math.min(dist, TOT * 0.999); xx = (dd * dd + L1 * L1 - L2 * L2) / (2 * dd); hh = Math.sqrt(Math.max(0, L1 * L1 - xx * xx)); }
         const up = Y.clone().sub(dir.clone().multiplyScalar(Y.dot(dir))); if (up.lengthSq() < 1e-4) up.set(0, 0, 1); up.normalize();
         const M = K.clone().add(dir.clone().multiplyScalar(xx)).add(up.multiplyScalar(hh));
-        const D = M.clone().lerp(T, 0.55); D.y += 0.06 + 0.12 * Math.min(1, hh / 1.4);
+        const D = M.clone().lerp(T, 0.55); D.y += thumb ? 0.03 : 0.06 + 0.12 * Math.min(1, hh / 1.4);
         limb(F.p, K, M); limb(F.m, M, D); limb(F.d, D, T); F.j1.position.copy(K); F.j2.position.copy(M); F.j3.position.copy(D); F.tip.position.copy(T);
         F.tip.material.color.setHex(f.pressed ? col : (h === 'R' ? 0xe9b996 : 0xdcbca8)); F.tip.material.emissive && F.tip.material.emissive.setHex(f.pressed ? 0x553300 : 0x000000);
         F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
