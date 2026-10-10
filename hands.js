@@ -40,13 +40,26 @@
     notes.forEach(n => { n.af = 0; });
     const ev = [];
     sorted.forEach(n => { const l = ev[ev.length - 1]; if (l && n.t0 - l.t < 0.03) l.all.push(n); else ev.push({ t: n.t0, all: [n] }); });
+    // Arpège de 4 notes (quatre notes seules qui montent ou descendent, par intervalles de 3 à 5 demi-tons, sur au plus 14 demi-tons) : le doigté naturel suit la hauteur —
+    // main droite 1-2-3-5 de la note la plus grave à la plus aiguë, main gauche 5-3-2-1. Il est imposé aux notes sans doigté (un doigté du fichier reste prioritaire).
+    notes.forEach(n => { delete n._arp; });
+    for (let i = 0; i + 3 < ev.length; ) {
+      const w = ev.slice(i, i + 4), one = w.every(e => e.all.length === 1), m = one ? w.map(e => e.all[0]) : null;
+      const iv = m ? [1, 2, 3].map(k => m[k].midi - m[k - 1].midi) : null;
+      const up = iv && iv.every(d => d >= 3 && d <= 5), down = iv && iv.every(d => d <= -3 && d >= -5);
+      if (m && (up || down) && Math.abs(m[3].midi - m[0].midi) <= 14 && m.every(n => !n.finger) && w.every((e, k) => !k || e.t - w[k - 1].t < 0.9)) {
+        const fing = hand === 'L' ? [5, 3, 2, 1] : [1, 2, 3, 5], byPitch = m.slice().sort((x, y) => x.midi - y.midi);
+        byPitch.forEach((n, k) => { n._arp = fing[k]; }); i += 4;
+      } else i++;
+    }
+    const imposed = n => n.finger || n._arp || 0;
     ev.forEach(e => {
       e.all.sort((a, b) => q(a) - q(b));
       e.ns = e.all.slice(0, 5);                              // au-delà de 5 notes simultanées, les autres restent sans doigt
       e.t1 = Math.max.apply(null, e.all.map(n => n.t1));
       const k = e.ns.length, st = [];
-      subsets(k).forEach(S => { if (e.ns.every((n, i) => !n.finger || n.finger === S[i])) st.push(S); });
-      if (!st.length) st.push(e.ns.map(n => n.finger || 0));  // doigtés imposés incohérents entre eux : on les garde tels quels
+      subsets(k).forEach(S => { if (e.ns.every((n, i) => !imposed(n) || imposed(n) === S[i])) st.push(S); });
+      if (!st.length) st.push(e.ns.map(n => imposed(n)));  // doigtés imposés incohérents entre eux : on les garde tels quels
       e.st = st;
       e.own = st.map(S => {
         let c = 0;
