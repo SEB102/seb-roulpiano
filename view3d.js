@@ -251,12 +251,15 @@ const View3D = (() => {
         } else { dd = Math.min(dist, TOT * 0.999); xx = (dd * dd + L1 * L1 - L2 * L2) / (2 * dd); hh = Math.sqrt(Math.max(0, L1 * L1 - xx * xx)); }
         const up = Y.clone().sub(dir.clone().multiplyScalar(Y.dot(dir))); if (up.lengthSq() < 1e-4) up.set(0, 0, 1); up.normalize();
         const M = K.clone().add(dir.clone().multiplyScalar(xx)).add(up.multiplyScalar(hh));
-        // le premier segment (côté paume) ne bascule jamais vers l'arrière ni à plus de 65° au-dessus de l'horizontale : un doigt qui se soulève se replie vers l'avant
+        // le premier segment (côté paume) pointe toujours vers l'avant et ne monte jamais à plus de 35° au-dessus de l'horizontale (il est presque à plat sur la paume) ;
+        // le doigt qui se soulève ou se replie le fait surtout aux articulations suivantes
         if (!thumb) {
-          const fwd = K.z - M.z, c65 = Math.cos(65 * Math.PI / 180), s65 = Math.sin(65 * Math.PI / 180);
-          if (fwd < L1 * c65) {
-            M.set(K.x, K.y + L1 * s65, K.z - L1 * c65);
-          }
+          const dm = M.clone().sub(K), hl = Math.hypot(dm.x, dm.z), E = Math.min(Math.atan2(dm.y, hl || 1e-4), 35 * Math.PI / 180);
+          let hx = hl > 1e-4 ? dm.x / hl : 0, hz2 = hl > 1e-4 ? dm.z / hl : -1;
+          if (hz2 > -0.5) { const tx = T.x - K.x, tz = T.z - K.z, tl = Math.hypot(tx, tz) || 1; hx = tx / tl; hz2 = tz / tl; if (hz2 > -0.5) { hx = 0; hz2 = -1; } }
+          const cE = Math.cos(Math.max(E, 0)), sE = Math.sin(Math.max(E, 0));
+          M.set(K.x + L1 * hx * cE, K.y + L1 * sE, K.z + L1 * hz2 * cE);
+          if (!f.pressed) { const dt = T.clone().sub(M), l = dt.length() || 1e-4, lc = Math.max(0.55 * L2, Math.min(1.3 * L2, l)); T.copy(M).addScaledVector(dt, lc / l); }
         }
         const D = M.clone().lerp(T, 0.55); D.y += thumb ? 0 : 0.06 + 0.12 * Math.min(1, hh / 1.4);
         const tm = H.sk.fing[F.f - 1].tipMat; tm.color.setHex(f.pressed ? col : 0xffffff); tm.emissive.setHex(f.pressed ? 0x553300 : 0x444444);   // bout du doigt qui joue : couleur vive
