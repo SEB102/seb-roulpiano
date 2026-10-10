@@ -37,7 +37,7 @@ const View3D = (() => {
     const La = TOT * 0.37, Lb = TOT * 0.32, Lc = TOT * 0.31, R = Math.PI / 180; let m = Infinity;
     for (let d1 = -15; d1 <= 45; d1 += 6) for (let f2 = 0; f2 <= 90; f2 += 10) {   // d1 : flexion de la 1re articulation par rapport à la paume (0 = plat dans son prolongement)
       const a1 = (th - d1) * R, a2 = a1 - f2 * R, a3 = a2 - 0.45 * f2 * R;
-      if (a2 < -85 * R || a3 < -90 * R) continue;   // RÈGLE : le dernier segment ne pointe jamais vers l'arrière (angle absolu ≥ −90°) et le segment moyen ne dépasse pas −85°
+      if (a2 < -100 * R || a3 < -115 * R) continue;   // RÈGLE : le dernier segment ne pointe jamais vers l'arrière (angle absolu ≥ −115° : au plus 25° au-delà de la verticale) et le segment moyen ne dépasse pas −100°
       const u = La * Math.cos(a1) + Lb * Math.cos(a2) + Lc * Math.cos(a3), y = La * Math.sin(a1) + Lb * Math.sin(a2) + Lc * Math.sin(a3);
       const err = Math.hypot(u - tu, y - ty) + 0.006 * Math.abs(d1); if (err < m) m = err;
     }
@@ -220,7 +220,9 @@ const View3D = (() => {
       }
       // Mouvements : la première articulation (base du doigt, côté paume) est la seule à pivoter latéralement ; les deux suivantes ne font que fléchir / s'étendre
       // dans le plan vertical du doigt (cinématique inverse ci-dessous).
-      const kx = a.fingers.map((f, i) => px + sg * (i - 2) * 0.84);   // bases des doigts : fixes sur la paume
+      // éventail des métacarpiens : quand la main s'ouvre, les bases des doigts s'écartent (jusqu'à 1,3 touche) vers leurs touches — comme une vraie main (la paume s'élargit)
+      const fan = i => i === 0 ? 0 : Math.max(-1.3, Math.min(1.3, (xs[i] - (px + sg * (i - 2) * 0.84)) * 0.55 * Math.min(1, kws[i] * 1.5)));
+      const kx = a.fingers.map((f, i) => px + sg * (i - 2) * 0.84 + fan(i)); enforceOrder(kx, pin, sg);
       // Poignet : légère rotation dans les trois dimensions (≈ ±10° ; jusqu'à ≈ 20° en lacet quand le pouce vise une touche éloignée) de la main entière autour du poignet W :
       //  lacet vers le côté où les doigts vont jouer, tangage (main un peu relevée au repos, abaissée à l'appui), roulis vers le côté du doigt qui appuie.
       // proportions d'une main réelle (en largeurs de touche blanche, ≈ 2,35 cm) : paume ≈ 4 de long et 3,4 de large, index ≈ 3,2, majeur ≈ 3,6, annulaire ≈ 3,3,
@@ -238,7 +240,7 @@ const View3D = (() => {
         for (let c = -1.2; c <= 2.001; c += 0.4) for (let tt = -24; tt <= 4; tt += 4) for (let hh0 = 1.0; hh0 <= 1.9; hh0 += 0.45) {
           let worst = 0, tot = 0;
           eng.forEach(({ f, i }) => {
-            const bk = H.fingers[i].blkS, zt = (i === 0 ? 2.3 : 1.7) + (0.15 - (i === 0 ? 2.3 : 1.7)) * bk, bx = i === 0 ? px - sg * 1.5 : px + sg * (i - 2) * 0.84, bz = (i === 0 ? 5.0 : 3.3) - c;
+            const bk = H.fingers[i].blkS, zt = (i === 0 ? 2.3 : 1.7) + (0.15 - (i === 0 ? 2.3 : 1.7)) * bk, bx = i === 0 ? px - sg * 1.5 : px + sg * (i - 2) * 0.84 + fan(i), bz = (i === 0 ? 5.0 : 3.3) - c;
             const tu = Math.hypot(xs[i] - bx, bz - zt), ty = (bk ? 0.7 : 0.3) - (i === 0 ? hh0 - 0.1 : hh0);
             const er = i === 0 ? Math.max(0, Math.hypot(tu, ty) - REACHF[0]) : chainErr(REACHF[i], tu, ty, tt); worst = Math.max(worst, er); tot += er * er;
           });
@@ -292,20 +294,20 @@ const View3D = (() => {
           let best = null; const R2D = Math.PI / 180;
           for (let e1 = th - 45; e1 <= th + 15; e1 += 3) for (let f2 = 0; f2 <= 90; f2 += 3) {
             const a1 = e1 * R2D, a2 = a1 - f2 * R2D, a3 = a2 - 0.45 * f2 * R2D;
-            if (a2 < -85 * R2D || a3 < -90 * R2D) continue;   // RÈGLE : le dernier segment ne pointe jamais vers l'arrière (angle absolu ≥ −90°) et le segment moyen ne dépasse pas −85°
+            if (a2 < -100 * R2D || a3 < -115 * R2D) continue;   // RÈGLE : le dernier segment ne pointe jamais vers l'arrière (angle absolu ≥ −115° : au plus 25° au-delà de la verticale) et le segment moyen ne dépasse pas −100°
             const mu = La * Math.cos(a1), my = La * Math.sin(a1), du = mu + Lb * Math.cos(a2), dy = my + Lb * Math.sin(a2), tu2 = du + Lc * Math.cos(a3), ty2 = dy + Lc * Math.sin(a3);
             const err = Math.hypot(tu2 - tu, ty2 - ty) + 0.006 * Math.abs(th - e1) + 0.0005 * f2;
             if (!best || err < best.err) best = { err, e1, f2, mu, my, du, dy, tu2, ty2 };
           }
-          if (f.pressed) { stats.press = (stats.press || 0) + 1; stats.frameErr = Math.max(stats.frameErr || 0, best.err); if (best.err > 0.12) { if (best.err > 0.3) stats.big = (stats.big || 0) + 1; stats.miss = (stats.miss || 0) + 1; stats.me = stats.me || {}; const q = F.f + (blk ? 'n' : 'b') + (hz > 1.9 ? 'H' : ''); stats.me[q] = stats.me[q] || [0, 0]; stats.me[q][0]++; stats.me[q][1] = Math.max(stats.me[q][1], best.err); if (!stats.dbg || best.err > stats.dbg.err) stats.dbg = { err: +best.err.toFixed(2), f: F.f, tu: +tu.toFixed(2), ty: +ty.toFixed(2), got: [+best.tu2.toFixed(2), +best.ty2.toFixed(2)], hz: +hz.toFixed(2), TOT, blk }; } }
           // lissage temporel : les angles retenus sont filtrés (≈ 70 ms) pour que les doigts ne « tremblent » pas quand la meilleure pose change d'une image à l'autre
           { const sn = F.f2S === undefined || SNAP; F.e1S = sn ? best.e1 : F.e1S + (best.e1 - F.e1S) * AL; F.f2S = sn ? best.f2 : F.f2S + (best.f2 - F.f2S) * AL;
             const a1 = F.e1S * R2D, a2 = a1 - F.f2S * R2D, a3 = a2 - 0.45 * F.f2S * R2D;
             best.mu = La * Math.cos(a1); best.my = La * Math.sin(a1); best.du = best.mu + Lb * Math.cos(a2); best.dy = best.my + Lb * Math.sin(a2); best.tu2 = best.du + Lc * Math.cos(a3); best.ty2 = best.dy + Lc * Math.sin(a3); }
           { const A1 = F.e1S, A2 = A1 - F.f2S, A3 = A2 - 0.45 * F.f2S, v = stats.val = stats.val || { n: 0, mcp: 0, pip: 0, dip: 0, back: 0 };
-            v.n++; if (A1 < th - 46 || A1 > th + 16) v.mcp++; if (F.f2S < -0.5 || F.f2S > 91) v.pip++; if (0.45 * F.f2S > 41 || 0.45 * F.f2S < -0.5) v.dip++; if (A2 < -86 || A3 < -91 || Math.cos(A2 * R2D) < 0.05 || Math.cos(A3 * R2D) < -0.01) v.back++; }
+            v.n++; if (A1 < th - 46 || A1 > th + 16) v.mcp++; if (F.f2S < -0.5 || F.f2S > 91) v.pip++; if (0.45 * F.f2S > 41 || 0.45 * F.f2S < -0.5) v.dip++; if (A2 < -101 || A3 < -116 || Math.cos(A2 * R2D) < -0.2 || Math.cos(A3 * R2D) < -0.45) v.back++; }
           const at = (u, y) => V(K.x + u * ux, K.y + y, K.z + u * uz);
           M = at(best.mu, best.my); D = at(best.du, best.dy); T.copy(at(best.tu2, best.ty2));
+          if (f.pressed) { const real = Math.hypot(best.tu2 - tu, best.ty2 - ty); stats.press = (stats.press || 0) + 1; stats.frameErr = Math.max(stats.frameErr || 0, real); if (real > 0.12) stats.miss = (stats.miss || 0) + 1; if (real > 0.3) { stats.big = (stats.big || 0) + 1; (stats.bl = stats.bl || []).push([F.f, +real.toFixed(2), +tu.toFixed(2), +ty.toFixed(2), +best.tu2.toFixed(2), +best.ty2.toFixed(2), +th.toFixed(0), +hz.toFixed(1), +hy.toFixed(1), +blk.toFixed(1), +(T.x - K.x).toFixed(1), +(xs[F.f - 1] - K.x).toFixed(1)]); } }   // écart réel entre le bout du doigt et la touche visée (en largeurs de touche)
         }
         const tm = H.sk.fing[F.f - 1].tipMat; tm.color.setHex(f.pressed ? col : 0xffffff); tm.emissive.setHex(f.pressed ? 0x553300 : 0x444444);   // bout du doigt qui joue : couleur vive
         F.sp.visible = st.fing !== false; F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
