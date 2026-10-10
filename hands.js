@@ -37,7 +37,7 @@
   function assignFingerings(notes, hand) {
     const sgn = hand === 'L' ? -1 : 1, q = n => sgn * n.midi;
     const sorted = notes.slice().sort((a, b) => a.t0 - b.t0 || a.midi - b.midi);
-    notes.forEach(n => { n.af = 0; });
+    notes.forEach(n => { n.af = 0; n.af2 = 0; });
     const ev = [];
     sorted.forEach(n => { const l = ev[ev.length - 1]; if (l && n.t0 - l.t < 0.03) l.all.push(n); else ev.push({ t: n.t0, all: [n] }); });
     // Arpège de 4 notes (quatre notes seules qui montent ou descendent, par intervalles de 3 à 5 demi-tons, sur au plus 14 demi-tons) : le doigté naturel suit la hauteur —
@@ -116,6 +116,22 @@
       });
       e.ns.forEach(n => held.push({ n }));
     });
+    // Changement de doigt AUTOMATIQUE sur une touche tenue (comme le font les pianistes pour réaliser un grand écart sans rejouer la note) :
+    // si une note tenue et une note qui commence pendant sa tenue sont trop éloignées pour leurs doigts, la note tenue passe, juste avant, à un doigt libre
+    // qui convient (n.af2, sur la même touche : rien n'est rejoué). Jamais si le doigté de la note est imposé (n.finger) ou déjà un changement (n.finger2).
+    const MX = [0, 5, 7, 9, 12], fo = n => n.finger || n.af, ok2 = (a, fa, b, fb) => { const df = Math.abs(fa - fb); return fa !== fb && Math.sign(q(a) - q(b)) === Math.sign(fa - fb) && Math.abs(q(a) - q(b)) <= MX[Math.min(4, df)] + 0.5; };
+    ev.forEach((e, i) => {
+      if (!i) return;
+      for (let j = 0; j < i; j++) ev[j].ns.forEach(h => {
+        if (h.finger || h.finger2 || h.af2 || h.t1 <= e.t + 0.12 || !fo(h)) return;
+        const bad = e.ns.some(n => fo(n) && !ok2(n, fo(n), h, fo(h)) && Math.abs(q(n) - q(h)) > MX[Math.min(4, Math.abs(fo(n) - fo(h)))] + 0.5);
+        if (!bad) return;
+        const used = new Set(); e.ns.forEach(n => used.add(fo(n)));
+        for (let k = j + 1; k < i; k++) ev[k].ns.forEach(n => { if (n.t1 > e.t) used.add(fo(n)); });
+        const free = c => !notes.some(m => m !== h && fo(m) === c && m.t0 < h.t1 + 0.1 && m.t1 > e.t - 0.55), alt = [1, 2, 3, 4, 5].filter(c => c !== fo(h) && !used.has(c) && free(c) && e.ns.every(n => !fo(n) || ok2(n, fo(n), h, c))).sort((a, b) => Math.abs(a - fo(h)) - Math.abs(b - fo(h)))[0];
+        if (alt) { h.af2 = alt; h.swapT = e.t - 0.15; }
+      });
+    });
   }
 
   // ---------- Plan d'une main ----------
@@ -131,9 +147,9 @@
     notes.forEach(n => {
       const f = n.finger || n.af; if (!f) return;
       const a = n.t0, dur = Math.max(0.1, n.t1 - n.t0), u = ux(n.midi);
-      const f2 = n.finger2 && n.finger2 !== f ? n.finger2 : 0;
+      const f2 = n.finger2 && n.finger2 !== f ? n.finger2 : (!n.finger && n.af2 && n.af2 !== f ? n.af2 : 0);
       if (f2) { // changement de doigt sur la touche tenue : les deux doigts se chevauchent un instant
-        let fr = n.swapFrac != null ? n.swapFrac : (n.swapTick != null && n.dur ? (n.swapTick - n.tick) / n.dur : 0.55);
+        let fr = (!n.finger2 && n.af2 && n.swapT != null) ? (n.swapT - a) / dur : n.swapFrac != null ? n.swapFrac : (n.swapTick != null && n.dur ? (n.swapTick - n.tick) / n.dur : 0.55);
         fr = clamp(fr, 0.2, 0.85); const ts = a + dur * fr, ov = Math.min(0.08, dur * 0.15);
         presses.push({ f, midi: n.midi, u, a, b: ts + ov });
         presses.push({ f: f2, midi: n.midi, u, a: ts - ov, b: a + dur, sub: true });
