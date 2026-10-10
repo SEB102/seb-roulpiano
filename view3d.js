@@ -87,8 +87,8 @@ const View3D = (() => {
     // mains
     ['L', 'R'].forEach(h => {
       const g = new THREE.Group(), skin = new THREE.MeshLambertMaterial({ color: h === 'R' ? 0xe9b996 : 0xdcbca8 }), H = { g, fingers: [] };
-      H.palm = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), skin); H.palm.scale.set(2.15, 0.36, 1.85); g.add(H.palm);
-      H.thenar = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), skin); H.thenar.scale.set(0.62, 0.38, 0.95); g.add(H.thenar);   // base du pouce
+      H.palm = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), skin); H.palm.scale.set(1.6, 0.27, 1.5); g.add(H.palm);
+      H.thenar = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), skin); H.thenar.scale.set(0.5, 0.28, 0.8); g.add(H.thenar);   // base du pouce
       H.arm = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.9, 1, 16), skin); g.add(H.arm);
       for (let f = 1; f <= 5; f++) {
         const r = f === 1 ? 0.36 : 0.3, F = { f };
@@ -168,7 +168,7 @@ const View3D = (() => {
     ['L', 'R'].forEach(h => {
       const H = hands[h], pl = st.plan && st.plan[h], show = vis.includes(h) && pl && !pl.empty && st.handsMode !== 'off'; H.g.visible = !!show; if (!show) return;
       const a = pl.at(sp), sg = h === 'L' ? -1 : 1, px = a.palm, col = h === 'R' ? CR : CL;
-      H.palm.position.set(px, 1.05, 3.45); H.thenar.position.set(px - sg * 2.0, 0.85, 3.65);   // paume allongée vers les doigts : les articulations de base reposent sur elle
+      H.palm.position.set(px, 1.0, 3.35); H.thenar.position.set(px - sg * 2.0, 0.85, 3.65);   // paume allongée vers les doigts : les articulations de base reposent sur elle
       limb(H.arm, V(px, 1.0, 4.9), V(px, 3.4, 13));
       const xs = a.fingers.map(f => f.x), pin = a.fingers.map(f => !!f.pressed || (f.depth || 0) > 0.6 || (f.wN || 0) > 0.85);
       enforceOrder(xs, pin, sg);
@@ -184,8 +184,8 @@ const View3D = (() => {
       const kx = a.fingers.map((f, i) => { const k0 = px + sg * (i - 2) * 0.84; return i === 0 ? k0 : k0 + (xs[i] - k0) * Math.min(1, kws[i]); });
       enforceOrder(kx, pin, sg);
       // paume extensible : elle s'élargit (et se décale) pour que la base de chaque doigt reste toujours sur elle
-      { const bx = kx.slice(1).concat([px - sg * 1.9]), lo = Math.min(...bx), hi = Math.max(...bx);
-        H.palm.position.x = (lo + hi) / 2; H.palm.scale.x = Math.max(2.15, (hi - lo) / 2 + 0.8); H.thenar.position.x = px - sg * 1.9 - sg * 0.1; }
+      { const bx = kx.slice(1), lo = Math.min(...bx), hi = Math.max(...bx);
+        H.palm.position.x = (lo + hi) / 2; H.palm.scale.x = Math.max(1.6, (hi - lo) / 2 + 0.45); H.thenar.position.x = px - sg * 1.9 - sg * 0.1; }
       H.fingers.forEach(F => {
         const f = a.fingers[F.f - 1], fx = xs[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
         const K = V(thumb ? px + off * 0.95 : kx[F.f - 1], thumb ? 0.8 : 1.1, thumb ? 3.4 : 2.45), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
