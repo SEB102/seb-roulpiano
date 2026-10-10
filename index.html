@@ -76,9 +76,11 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261010c"></script>
-<script src="hands.js?v=20261010c"></script>
-<script src="hands_legacy.js?v=20261010c"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="view3d.js?v=20261010d"></script>
+<script src="core.js?v=20261010d"></script>
+<script src="hands.js?v=20261010d"></script>
+<script src="hands_legacy.js?v=20261010d"></script>
 </head>
 <body>
 <header>
@@ -109,7 +111,8 @@
       <span class="lab">Mains virtuelles</span><button id="bM0" title="Sans mains virtuelles : le clavier et les repères d'atterrissage du prochain pas (T pour changer)">aucune</button><button id="bM1" title="Mains virtuelles avec trajectoires : doigts repliés, repères d'atterrissage et chemin de chaque doigt (T pour changer)">avec trajectoires</button><button id="bM2" title="Mains virtuelles sans trajectoires : doigts tendus, ni repères ni chemins (T pour changer)">sans trajectoire</button>
       <button id="bZoom" title="Le clavier suit les mains (Z)">zoom auto</button>
       <button id="bHm" title="Mains plus petites (−)">mains −</button><button id="bHp" title="Mains plus grandes (+)">mains +</button>
-      <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button></div>
+      <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button>
+      <button id="b3d" title="Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en volume ; glisser pour tourner, molette pour zoomer, double-clic pour revenir (V)">vue 3D</button></div>
     <span id="bInfo"></span><span id="status"></span>
   </div>
   <div class="row">
@@ -675,7 +678,7 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
   const k = e.metaKey || e.ctrlKey || e.altKey ? '' : e.key.toLowerCase();
   if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') cycleHandsMode(); 
-  else if (k === 'a') anticip = !anticip; else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'l') startLoop();
+  else if (k === 'v') toggle3D(); else if (k === 'a') anticip = !anticip; else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'l') startLoop();
   else if (k === '+' || k === '=') handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); else if (k === '-') handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100);
   else if (e.code === 'Space') { e.preventDefault(); unlockAudio(); if (stepMode) toggleStepAuto(); else if (playing) pause(); else { enterRoll(); play(); } }
   else if (e.code === 'Home') { e.preventDefault(); rewind(); }
@@ -1389,6 +1392,7 @@ function frame(ts) {
   if (exp.active && exp.started) exportTick(ts);
   try { updateZoom(dt); } catch (err) { reportDrawError(err); }
   try { draw(); } catch (err) { reportDrawError(err); }
+  try { render3D(); } catch (err) { reportDrawError(err); }
   { const d = performance.now() - frameT0; if (d > 250) { slowN++; slowLast = Math.round(d); } }   // images très lentes : comptées et affichées dans la barre // une erreur de dessin ne doit JAMAIS arrêter la boucle (donc le son : les notes sont déclenchées plus haut)
   requestAnimationFrame(frame);
 }
@@ -1398,6 +1402,18 @@ addEventListener('click', e => { const b = e.target.closest && e.target.closest(
 // Mains virtuelles, trois états : aucune / avec trajectoires (doigts repliés, repères, chemins) / sans trajectoires (doigts tendus, ni repères ni chemins)
 function setHandsMode(m) { handsMode = m; showHands = m !== 'off'; showTraj = curlFingers = m === 'traj'; markPlan(); }
 function cycleHandsMode() { setHandsMode(handsMode === 'traj' ? 'plain' : handsMode === 'plain' ? 'off' : 'traj'); }
+// ---------- Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en volume (glisser pour tourner, molette pour zoomer, double-clic pour revenir) ----------
+let view3dOn = false;
+function toggle3D() {
+  if (typeof THREE === 'undefined' || typeof View3D === 'undefined') { showError('Vue 3D indisponible : la bibliothèque Three.js n\'a pas pu être chargée (connexion ?).'); return; }
+  if (!View3D.el()) View3D.init($('cv').parentElement);
+  view3dOn = !view3dOn; View3D.el().style.display = view3dOn ? 'block' : 'none'; $('b3d').classList.toggle('pressed', view3dOn);
+}
+function render3D() {
+  if (!view3dOn || !song) return;
+  ensurePlan();
+  View3D.render({ song, sp: pos - vlag * speed, plan: song.plan, vis: visibleHands(), noteHand, lowerBoundSec, ux: PianoHands.ux, isBlack: PianoHands.isBlack });
+}
 function toggleRoll() { rollVisible = !rollVisible; }
 function togglePanel() { panelOpen = !panelOpen; $('panel').hidden = !panelOpen; }
 function toggleStep() {
@@ -1421,7 +1437,7 @@ function refreshBar() {
   const boucle = loopOn ? 'Boucle : pas ' + $('bLA').value + ' à ' + $('bLB').value + ' · tour ' + (loopCount + 1) : '';
   setT($('bInfo'), (song ? [stepMode ? 'un pas toutes les ' + (stepDuration() + stepPause()).toFixed(1).replace('.', ',') + ' s' : '', boucle].filter(Boolean).join('   |   ') : '') + (slowN ? '   |   images lentes : ' + slowN + ' (dernière : ' + (slowLast / 1000).toFixed(1).replace('.', ',') + ' s)' : ''));
 }
-$('bPanel').onclick = togglePanel; $('bRoll').onclick = toggleRoll;
+$('bPanel').onclick = togglePanel; $('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll;
 $('bRew').onclick = rewind; $('bPrev').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepPrev(); }; $('bNext').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepNext(); };   // un pas à la main = mode pas à pas
 $('bPlay').onclick = () => { unlockAudio(); if (playing && !stepMode) pause(); else { enterRoll(); play(); } };
 $('bScroll').onclick = () => { unlockAudio(); if (!stepMode) { if (playing) pause(); enterScroll(); } toggleStepAuto(); };

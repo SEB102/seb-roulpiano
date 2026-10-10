@@ -213,8 +213,8 @@
     const palmAt = t => {
       for (const g of gaps) if (t > g.g0 && t < g.g1) {
         const h = homeAt(t), f0 = isFinite(g.g0), f1 = isFinite(g.g1), A = f0 ? palmAt0(g.g0) : h, B = f1 ? palmAt0(g.g1) : h;
-        const len = g.g1 - g.g0, d1 = Math.min(0.5, 0.4 * len), d2 = Math.min(0.8, 0.4 * len);   // durées d'aller et de retour, raccourcies pour les silences courts
-        const s1 = f0 ? ease((t - g.g0 - 0.05) / d1) : 1, s2 = f1 ? ease((t - (g.g1 - d2)) / d2) : 0, p = A + (h - A) * s1;
+        const len = g.g1 - g.g0, d1 = Math.min(0.3, 0.4 * len), d2 = Math.min(0.8, 0.4 * len);   // durées d'aller et de retour, raccourcies pour les silences courts
+        const s1 = f0 ? ease((t - g.g0 - 0.02) / d1) : 1, s2 = f1 ? ease((t - (g.g1 - d2)) / d2) : 0, p = A + (h - A) * s1;
         return p + (B - p) * s2;
       }
       return palmAt0(t);
