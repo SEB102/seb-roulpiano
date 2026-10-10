@@ -204,11 +204,11 @@ const View3D = (() => {
       // Mouvements : la première articulation (base du doigt, côté paume) est la seule à pivoter latéralement ; les deux suivantes ne font que fléchir / s'étendre
       // dans le plan vertical du doigt (cinématique inverse ci-dessous).
       const kx = a.fingers.map((f, i) => px + sg * (i - 2) * 0.84);   // bases des doigts : fixes sur la paume
-      // Poignet : légère rotation dans les trois dimensions (≈ ±10° au plus) de la main entière autour du poignet W :
+      // Poignet : légère rotation dans les trois dimensions (≈ ±10° ; jusqu'à ≈ 20° en lacet quand le pouce vise une touche éloignée) de la main entière autour du poignet W :
       //  lacet vers le côté où les doigts vont jouer, tangage (main un peu relevée au repos, abaissée à l'appui), roulis vers le côté du doigt qui appuie.
       const W0 = V(px, 1.1, 6.3), mf = kws.slice(1), mk = mf.reduce((u, v) => u + v, 0) / 4, wsum = kws.reduce((u, v) => u + v, 0) || 1;
       const dxm = a.fingers.reduce((u, f, i) => u + kws[i] * (xs[i] - kx[i]), 0) / wsum, side = a.fingers.reduce((u, f, i) => u + kws[i] * sg * (i - 2), 0) / wsum;
-      const wrot = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.max(-0.1, Math.min(0.1, 0.14 * (0.5 - mk))), -Math.max(-0.17, Math.min(0.17, dxm * 0.07)), -Math.max(-0.1, Math.min(0.1, 0.05 * side)), 'YXZ'));
+      const wrot = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.max(-0.1, Math.min(0.1, 0.14 * (0.5 - mk))), -Math.max(-0.35, Math.min(0.35, dxm * 0.07 + (xs[0] - kx[0]) * kws[0] / 4.5)), -Math.max(-0.1, Math.min(0.1, 0.05 * side)), 'YXZ'));
       const rotW = p => p.sub(W0).applyMatrix4(wrot).add(W0);
       { const e = new THREE.Euler().setFromRotationMatrix(wrot, 'YXZ'); stats.rot = stats.rot || [0, 0, 0]; stats.rot[0] = Math.max(stats.rot[0], Math.abs(e.y)); stats.rot[1] = Math.max(stats.rot[1], Math.abs(e.x)); stats.rot[2] = Math.max(stats.rot[2], Math.abs(e.z)); }
       H.fingers.forEach(F => {
@@ -228,8 +228,8 @@ const View3D = (() => {
         // doigt à 2 articulations (cinématique inverse dans le plan vertical K→T) : segments de longueur fixe ; il se replie quand la touche est proche
         // (doigt arrondi) et se tend jusqu'à l'extension complète quand la touche est loin (touche noire, doigt tendu vers l'avant)
         if (!thumb) { const lim = Math.abs(K.z - T.z) * Math.tan(28 * Math.PI / 180) + 0.25; T.x = K.x + Math.max(-lim, Math.min(lim, T.x - K.x)); }   // rotation latérale uniquement à la première articulation (base du doigt), limitée à ±28°
-        if (thumb) {   // pouce à 2 phalanges, longueur quasi fixe (1,8 à 2,5 touches) : c'est sa base qui glisse vers la touche, il ne s'étire pas
-          const d0 = T.clone().sub(K), l0 = d0.length(), le = Math.max(1.8, Math.min(2.5, l0)); if (l0 > 1e-4 && Math.abs(l0 - le) > 1e-4) K.copy(T).sub(d0.multiplyScalar(le / l0));
+        if (thumb) {   // pouce : sa base (près du poignet) reste fixe ; il pivote autour d'elle avec une longueur bornée à 2,5 touches (il ne s'étire plus) ; si la touche est plus loin, le bout s'arrête avant
+          const d0 = T.clone().sub(K), l0 = d0.length(); if (l0 > 2.5) T.copy(K).add(d0.multiplyScalar(2.5 / l0));
         }
         const dv = T.clone().sub(K), dist = dv.length(), dir = dv.clone().multiplyScalar(1 / (dist || 1e-4));
         if (!thumb && dist > TOT * 0.999) T.copy(K).add(dir.clone().multiplyScalar(TOT * 0.999));
