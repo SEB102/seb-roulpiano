@@ -85,7 +85,6 @@
 <body>
 <header>
   <div id="bar">
-    <button id="bPanel" title="Fichiers, tempo, doigtés, export… (H)">☰ Réglages</button>
     <div class="grp">
       <button id="bRew" title="Retour au début (Début)">⏮</button>
       <button id="bPrev" title="Pas précédent (←)">◀ pas</button>
@@ -121,7 +120,7 @@
     <span id="info">—</span>
     <button id="fs" title="Afficher toute l'application en plein écran, réglages compris (Échap pour quitter)">⛶ Plein écran</button>
   </div>
-  <div id="panel" hidden>
+  <div id="panel">
   <div class="row">
     <label class="btn" for="file">📂 Ouvrir un fichier…</label>
     <input id="file" type="file" accept=".mid,.midi,.musicxml,.xml,.mxl">
@@ -200,7 +199,7 @@ const beatSec = () => song.timeline.tickToSec(Math.round(song.ppq * 4 / song.mea
 const startPos = () => countIn ? -beatSec() * song.measures[0].num : 0;
 let song = null, pos = 0, playing = false, speed = 0.5, visMeasures = 1, nextIdx = 0, lastTs = 0, seeking = false;
 // ---- décomposition du geste : tout est désactivable depuis la barre de commandes
-let rollVisible = false, panelOpen = false, stepMode = true, stepAuto = false, stepWait = 0, stopAt = null, showL = true, showR = true, keepOther = true;
+let rollVisible = false, stepMode = true, stepAuto = false, stepWait = 0, stopAt = null, showL = true, showR = true, keepOther = true;
 let anticip = true, handsMode = 'traj', slowN = 0, slowLast = 0, stepProgressTs = 0, loopAS = null, loopBS = null, loopA = null, loopB = null, loopOn = false, rampOn = false, loopCount = 0, preListen = false, countIn = true, showTraj = true, curlFingers = true, zoomAuto = true;
 let view3dOn = false, fingBefore3d = null;   // vue 3D : anticipation, pré-écoute, trajectoires, zoom auto, taille des mains et rouleau y sont désactivés ; pas de doigtés illustrés
 let handScale = 2.4, preIdx = 0, lastBeat = 0, stepE = -1, stepAnim = null, stepPre = true; // pas à pas : événement affiché, animation en cours, pré-écoute de la hauteur avant le geste
@@ -679,7 +678,7 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
   const k = e.metaKey || e.ctrlKey || e.altKey ? '' : e.key.toLowerCase();
   if (view3dOn && k && 'aptzr'.includes(k)) return;   // en 3D : anticipation, pré-écoute, mains virtuelles, zoom auto et rouleau sont inaccessibles
-  if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') cycleHandsMode(); 
+  if (k === 'r') toggleRoll(); else if (k === 't') cycleHandsMode(); 
   else if (k === 'v') toggle3D(); else if (k === 'a') anticip = !anticip; else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'l') startLoop();
   else if (view3dOn && (k === '+' || k === '=')) View3D.zoomBy(1 / 1.15); else if (view3dOn && k === '-') View3D.zoomBy(1.15);
   else if (k === '+' || k === '=') handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); else if (k === '-') handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100);
@@ -794,7 +793,7 @@ function scene(W, H, dpr) {
   const active = new Map(); // midi -> note en cours
   if (!song) {
     ctx.fillStyle = '#8d94b3'; ctx.font = '600 18px -apple-system, sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('Glissez un fichier MIDI / MusicXML ici, ou ouvrez un exemple dans ☰ Réglages', W / 2, rollH / 2);
+    ctx.fillText('Glissez un fichier MIDI / MusicXML ici, ou ouvrez un exemple ci-dessus', W / 2, rollH / 2);
     drawKeyboard(W, rollH, kbH, active); return;
   }
 
@@ -1429,7 +1428,6 @@ function render3D() {
   View3D.render({ song, sp, plan: song.plan, vis: visibleHands(), noteHand, lowerBoundSec, ux: PianoHands.ux, isBlack: PianoHands.isBlack, anticip: false, handsMode: 'plain', next: null, fof, fing: showFing, grid: grid3d(pos - vlag * speed, 3.6) });
 }
 function toggleRoll() { rollVisible = !rollVisible; }
-function togglePanel() { panelOpen = !panelOpen; $('panel').hidden = !panelOpen; }
 function toggleStep() {
   loopOn = false; stepMode = !stepMode; if (stepMode) { rollVisible = false; stepPre = true; } stopAt = null; stepAnim = null; stepAuto = false; markPlan();
   if (song && stepMode) { if (playing) pause(); const E = eventTimes(); let i = E.length - 1; while (i >= 0 && E[i] > pos + 0.02) i--; stepE = i; pos = i >= 0 ? E[i] : E[0] - 0.9; releaseAll(); }
@@ -1443,7 +1441,7 @@ function refreshBar() {
   { const ill = document.querySelector('#fingMode button[data-m="illus"]'); if (ill) ill.style.display = view3dOn ? 'none' : ''; }   // pas de doigtés illustrés en 3D
   const on = (id, v) => $(id).classList.toggle('pressed', !!v);
   on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bAnt', anticip); on('bM0', handsMode === 'off'); on('bM1', handsMode === 'traj'); on('bM2', handsMode === 'plain');
-  on('bZoom', zoomAuto); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhL', showL); on('bhR', showR);
+  on('bZoom', zoomAuto); on('bRoll', rollVisible); on('bKeep', keepOther); on('bhL', showL); on('bhR', showR);
   [['bs25', 0.25], ['bs50', 0.5], ['bs75', 0.75], ['bs100', 1]].forEach(([id, v]) => on(id, Math.abs(speed - v) < 1e-9));
   setT($('bPlay'), !stepMode && playing ? '⏸ Pause' : '▶ Lecture'); setT($('bScroll'), stepMode && stepAuto ? '⏸ Pause' : '▶ Pas à pas');
   setT($('bLoop'), loopRunning() ? '■ Arrêter la boucle' : '↻ Lecture en boucle'); on('bPlay', !stepMode && playing); on('bScroll', stepMode && stepAuto);
@@ -1454,7 +1452,7 @@ function refreshBar() {
   const boucle = loopOn ? 'Boucle : pas ' + $('bLA').value + ' à ' + $('bLB').value + ' · tour ' + (loopCount + 1) : '';
   setT($('bInfo'), (song ? [stepMode ? 'un pas toutes les ' + (stepDuration() + stepPause()).toFixed(1).replace('.', ',') + ' s' : '', boucle].filter(Boolean).join('   |   ') : '') + (slowN ? '   |   images lentes : ' + slowN + ' (dernière : ' + (slowLast / 1000).toFixed(1).replace('.', ',') + ' s)' : ''));
 }
-$('bPanel').onclick = togglePanel; $('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll;
+$('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll;
 $('bRew').onclick = rewind; $('bPrev').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepPrev(); }; $('bNext').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepNext(); };   // un pas à la main = mode pas à pas
 $('bPlay').onclick = () => { unlockAudio(); if (playing && !stepMode) pause(); else { enterRoll(); play(); } };
 $('bScroll').onclick = () => { unlockAudio(); if (!stepMode) { if (playing) pause(); enterScroll(); } toggleStepAuto(); };
