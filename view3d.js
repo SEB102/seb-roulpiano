@@ -65,15 +65,17 @@ const View3D = (() => {
     // mains
     ['L', 'R'].forEach(h => {
       const g = new THREE.Group(), skin = new THREE.MeshLambertMaterial({ color: h === 'R' ? 0xe9b996 : 0xdcbca8 }), H = { g, fingers: [] };
-      H.palm = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), skin); H.palm.scale.set(2.4, 0.55, 1.7); g.add(H.palm);
-      H.arm = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.15, 1, 16), skin); g.add(H.arm);
+      H.palm = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), skin); H.palm.scale.set(1.75, 0.36, 1.2); g.add(H.palm);
+      H.thenar = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), skin); H.thenar.scale.set(0.62, 0.38, 0.95); g.add(H.thenar);   // base du pouce
+      H.arm = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.9, 1, 16), skin); g.add(H.arm);
       for (let f = 1; f <= 5; f++) {
         const r = f === 1 ? 0.36 : 0.3, F = { f };
-        F.p = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 10), skin); F.d = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.88, r, 1, 10), skin);
+        F.p = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 10), skin); F.m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.94, r, 1, 10), skin); F.d = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.86, r * 0.94, 1, 10), skin);
+        F.j3 = new THREE.Mesh(new THREE.SphereGeometry(r * 0.9, 10, 8), skin);
         F.j1 = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), skin); F.j2 = new THREE.Mesh(new THREE.SphereGeometry(r * 0.95, 10, 8), skin);
         F.tip = new THREE.Mesh(new THREE.SphereGeometry(r * 0.88, 10, 8), new THREE.MeshLambertMaterial({ color: h === 'R' ? 0xe9b996 : 0xdcbca8 }));
         F.sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: digit(f, h === 'R' ? '#ffc23a' : '#7fd0ff'), depthTest: false, transparent: true })); F.sp.scale.set(0.9, 0.9, 1); F.sp.renderOrder = 10;
-        [F.p, F.d, F.j1, F.j2, F.tip, F.sp].forEach(o => g.add(o)); H.fingers.push(F);
+        [F.p, F.m, F.d, F.j1, F.j2, F.j3, F.tip, F.sp].forEach(o => g.add(o)); H.fingers.push(F);
       }
       scene.add(g); hands[h] = H;
     });
@@ -116,17 +118,24 @@ const View3D = (() => {
     ['L', 'R'].forEach(h => {
       const H = hands[h], pl = st.plan && st.plan[h], show = vis.includes(h) && pl && !pl.empty; H.g.visible = !!show; if (!show) return;
       const a = pl.at(sp), sg = h === 'L' ? -1 : 1, px = a.palm, col = h === 'R' ? CR : CL;
-      const palmC = V(px, 1.25, 4.1); H.palm.position.copy(palmC);
-      limb(H.arm, V(px, 1.2, 5.2), V(px, 3.6, 13)); H.arm.scale.x = 1; H.arm.scale.z = 1;
+      H.palm.position.set(px, 1.05, 3.6); H.thenar.position.set(px - sg * 1.7, 0.85, 3.75);
+      limb(H.arm, V(px, 1.0, 4.6), V(px, 3.4, 13));
       H.fingers.forEach(F => {
         const f = a.fingers[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
-        const K = V(px + off * (thumb ? 1.0 : 0.88), thumb ? 0.85 : 1.15, thumb ? 3.5 : 2.55);
+        const K = V(px + off * (thumb ? 0.95 : 0.84), thumb ? 0.8 : 1.1, thumb ? 3.4 : 2.45), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
         const blk = f.blk || 0, zt = 1.7 + (-0.9 - 1.7) * blk, yk = blk ? 0.55 : 0.1;
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + (f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
         const T = V(f.x, tipY, f.pressed ? zt : zt + (1 - f.depth) * (0.5 + 0.8 * (1 - blk)) - 0.45 * prep);
-        const M = K.clone().lerp(T, 0.52); M.y += 0.4 + 0.55 * (f.lift || 0) + 0.3 * prep - 0.3 * f.depth;
-        limb(F.p, K, M); limb(F.d, M, T); F.j1.position.copy(K); F.j2.position.copy(M); F.tip.position.copy(T);
+        // doigt à 2 articulations (cinématique inverse dans le plan vertical K→T) : segments de longueur fixe ; il se replie quand la touche est proche
+        // (doigt arrondi) et se tend jusqu'à l'extension complète quand la touche est loin (touche noire, doigt tendu vers l'avant)
+        const dv = T.clone().sub(K), dist = dv.length(), dir = dv.clone().multiplyScalar(1 / (dist || 1e-4));
+        if (dist > TOT * 0.999) T.copy(K).add(dir.clone().multiplyScalar(TOT * 0.999));
+        const dd = Math.min(dist, TOT * 0.999), xx = (dd * dd + L1 * L1 - L2 * L2) / (2 * dd), hh = Math.sqrt(Math.max(0, L1 * L1 - xx * xx));
+        const up = Y.clone().sub(dir.clone().multiplyScalar(Y.dot(dir))); if (up.lengthSq() < 1e-4) up.set(0, 0, 1); up.normalize();
+        const M = K.clone().add(dir.clone().multiplyScalar(xx)).add(up.multiplyScalar(hh));
+        const D = M.clone().lerp(T, 0.55); D.y += 0.06 + 0.12 * Math.min(1, hh / 1.4);
+        limb(F.p, K, M); limb(F.m, M, D); limb(F.d, D, T); F.j1.position.copy(K); F.j2.position.copy(M); F.j3.position.copy(D); F.tip.position.copy(T);
         F.tip.material.color.setHex(f.pressed ? col : (h === 'R' ? 0xe9b996 : 0xdcbca8)); F.tip.material.emissive && F.tip.material.emissive.setHex(f.pressed ? 0x553300 : 0x000000);
         F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
       });
