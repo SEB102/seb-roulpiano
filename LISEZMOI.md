@@ -25,7 +25,7 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 - **Introduction vide** : au chargement (et avec ⏮ Début) le rouleau est vide ; au lancement les premières notes descendent du haut du rouleau jusqu'au clavier du bas, où elles sont jouées au temps 0 de la partition. La durée de cette introduction = une fenêtre entière (mesures visibles × mesure), donc elle suit le réglage « Mesures visibles » et le tempo ; le temps affiché reste 0:00 pendant ce temps.
 - **Plein écran** : bouton « ⛶ Plein écran » (à droite de la barre de progression) : toute l'application, réglages compris, passe en plein écran ; Échap ou le même bouton pour quitter. Absent sur les navigateurs sans cette fonction (iPhone).
 - **Mesures visibles** : 1 à 4 (1 par défaut), numéros de mesure sur les barres.
-- **Export vidéo** : bouton « 🎬 Export vidéo » (720p ou 1080p). Enregistre en temps réel image + son, à la vitesse
+- **Export vidéo** : bouton « 🎬 Export vidéo » (720p ou 1080p). Enregistre en temps réel image + son, à la vitesse En vue 3D, la vidéo montre la scène 3D avec l'angle et le zoom choisis ; le mode Pas à pas n'est pas exportable (cliquer d'abord sur « Lecture »).
   réglée (durée = durée du morceau ÷ vitesse), puis télécharge un .mp4 (ou .webm selon le navigateur ; Chrome recommandé).
   Garder l'onglet visible pendant l'export ; Échap ou le même bouton annule. Impossible à la vitesse 0.
 - Non géré : répétitions/reprises MusicXML (jouées une seule fois), PDF/images de partitions.
