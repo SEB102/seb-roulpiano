@@ -32,6 +32,16 @@ const View3D = (() => {
     g.fillStyle = '#fff'; g.font = '700 38px -apple-system, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(label), 64, 34);
     return (lblTex[label] = new THREE.CanvasTexture(cv));
   }
+  // erreur minimale entre le bout visé (tu horizontal, ty vertical depuis la base du doigt) et l'ensemble des poses anatomiquement possibles d'un doigt de longueur totale TOT
+  function chainErr(TOT, tu, ty) {
+    const La = TOT * 0.44, Lb = TOT * 0.31, Lc = TOT * 0.25, R = Math.PI / 180; let m = Infinity;
+    for (let e1 = -30; e1 <= 24; e1 += 6) for (let f2 = 0; f2 <= 110; f2 += 8) {
+      const a1 = e1 * R, a2 = a1 - f2 * R, a3 = a2 - 0.66 * f2 * R;
+      const u = La * Math.cos(a1) + Lb * Math.cos(a2) + Lc * Math.cos(a3), y = La * Math.sin(a1) + Lb * Math.sin(a2) + Lc * Math.sin(a3);
+      const err = Math.hypot(u - tu, y - ty) + 0.004 * Math.max(0, e1 - 6); if (err < m) m = err;
+    }
+    return m;
+  }
   function limb(mesh, a, b) {
     const d = b.clone().sub(a), L = d.length() || 1e-4; mesh.position.copy(a).add(b).multiplyScalar(0.5); mesh.scale.set(1, L, 1);
     mesh.quaternion.setFromUnitVectors(Y, d.multiplyScalar(1 / L));
@@ -212,19 +222,32 @@ const View3D = (() => {
       // proportions d'une main réelle (en largeurs de touche blanche, ≈ 2,35 cm) : paume ≈ 4 de long et 3,4 de large, index ≈ 3,2, majeur ≈ 3,6, annulaire ≈ 3,3,
       // auriculaire ≈ 2,7, pouce (à partir de son articulation près du poignet) ≈ 3,8. La main avance (jusqu'à 2,0) pour atteindre une touche noire ou lointaine.
       const REACHF = [4.2, 3.4, 3.8, 3.5, 2.8];
-      let hz = 0; a.fingers.forEach((f, i) => { const e = Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0); if (e < 0.5) return;
-        const bk = f.blk || 0, zt = (i === 0 ? 2.3 : 1.7) + (-0.6 - (i === 0 ? 2.3 : 1.7)) * bk, bx = i === 0 ? px - sg * 1.5 : px + sg * (i - 2) * 0.84, bz = i === 0 ? 5.0 : 3.3;
-        const need = Math.hypot(xs[i] - bx, bz - zt) - REACHF[i] * 0.97; if (need > hz) hz = need; });
-      hz = Math.min(2.0, hz);
+      // la main avance ou recule (de −1,2 à +2 touches) pour que TOUS les doigts engagés atteignent leur touche avec une pose anatomiquement possible :
+      // on essaie plusieurs positions et on garde celle qui laisse la plus petite erreur (en cas d'égalité, la plus proche de la position neutre)
+      const eng = a.fingers.map((f, i) => ({ f, i, e: Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0) })).filter(o => o.e >= 0.5);
+      let hz = 0;
+      if (eng.length) {
+        let bestE = Infinity;
+        for (let c = -1.2; c <= 2.001; c += 0.4) {
+          let worst = 0;
+          eng.forEach(({ f, i }) => {
+            const bk = f.blk || 0, zt = (i === 0 ? 2.3 : 1.7) + (-0.6 - (i === 0 ? 2.3 : 1.7)) * bk, bx = i === 0 ? px - sg * 1.5 : px + sg * (i - 2) * 0.84, bz = (i === 0 ? 5.0 : 3.3) - c;
+            const tu = Math.hypot(xs[i] - bx, bz - zt), ty = (bk ? 0.75 : 0.3) - (i === 0 ? 1.3 : 1.4);
+            worst = Math.max(worst, i === 0 ? Math.max(0, Math.hypot(tu, ty) - REACHF[0]) : chainErr(REACHF[i], tu, ty));
+          });
+          const sc = worst + 0.01 * Math.abs(c);
+          if (sc < bestE) { bestE = sc; hz = c; }
+        }
+      }
       const WZ = 7.3 - hz;
-      const W0 = V(px, 2.2, WZ), mf = kws.slice(1), mk = mf.reduce((u, v) => u + v, 0) / 4, wsum = kws.reduce((u, v) => u + v, 0) || 1;
+      const W0 = V(px, 2.0, WZ), mf = kws.slice(1), mk = mf.reduce((u, v) => u + v, 0) / 4, wsum = kws.reduce((u, v) => u + v, 0) || 1;
       const dxm = a.fingers.reduce((u, f, i) => u + kws[i] * (xs[i] - kx[i]), 0) / wsum, side = a.fingers.reduce((u, f, i) => u + kws[i] * sg * (i - 2), 0) / wsum;
       const wrot = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.max(-0.1, Math.min(0.1, 0.14 * (0.5 - mk))), -Math.max(-0.35, Math.min(0.35, dxm * 0.07 + (xs[0] - kx[0]) * kws[0] / 4.5)), -Math.max(-0.1, Math.min(0.1, 0.05 * side)), 'YXZ'));
       const rotW = p => p.sub(W0).applyMatrix4(wrot).add(W0);
       { const e = new THREE.Euler().setFromRotationMatrix(wrot, 'YXZ'); stats.rot = stats.rot || [0, 0, 0]; stats.rot[0] = Math.max(stats.rot[0], Math.abs(e.y)); stats.rot[1] = Math.max(stats.rot[1], Math.abs(e.x)); stats.rot[2] = Math.max(stats.rot[2], Math.abs(e.z)); }
       H.fingers.forEach(F => {
         const f = a.fingers[F.f - 1], fx = xs[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
-        const K = rotW(V(thumb ? px - sg * 1.5 : kx[F.f - 1], thumb ? 1.45 : 1.6, thumb ? 5.0 - hz : 3.3 - hz)), TOT = REACHF[F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
+        const K = rotW(V(thumb ? px - sg * 1.5 : kx[F.f - 1], thumb ? 1.3 : 1.4, thumb ? 5.0 - hz : 3.3 - hz)), TOT = REACHF[F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
         const blk = f.blk || 0, zt = (thumb ? 2.3 : 1.7) + (-0.6 - (thumb ? 2.3 : 1.7)) * blk, yk = blk ? 0.55 : 0.1;
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
@@ -232,13 +255,13 @@ const View3D = (() => {
         // doigt qui ne joue pas : il se soulève et se replie À MOITIÉ (flexion partielle, bout du doigt en l'air devant la phalange) ; il se déplie vers sa touche
         // à mesure qu'elle approche (wN), reste déplié un instant après la frappe (wP) puis se relâche
         if (!thumb) {
-          const kw = kws[F.f - 1], curl = [0, 0.7, 0.7, 0.66, 0.6][F.f - 1];
-          const rest = V(K.x, 0.8 + 0.25 * (f.lift || 0), K.z - TOT * curl);
+          const kw = kws[F.f - 1], curl = [0, 0.82, 0.84, 0.8, 0.76][F.f - 1];   // 3D : pas de repli maximal des doigts qui ne jouent pas (réservé au 2D, pour la visibilité) ; ils restent détendus, légèrement fléchis, au ras des touches
+          const rest = V(K.x, 0.45 + 0.25 * (f.lift || 0), K.z - TOT * curl);
           T.lerp(rest, 1 - Math.min(1, kw));
         }
         // doigt à 2 articulations (cinématique inverse dans le plan vertical K→T) : segments de longueur fixe ; il se replie quand la touche est proche
         // (doigt arrondi) et se tend jusqu'à l'extension complète quand la touche est loin (touche noire, doigt tendu vers l'avant)
-        if (!thumb) { const lim = Math.abs(K.z - T.z) * Math.tan(28 * Math.PI / 180) + 0.25; T.x = K.x + Math.max(-lim, Math.min(lim, T.x - K.x)); }   // rotation latérale uniquement à la première articulation (base du doigt), limitée à ±28°
+        if (!thumb) { const lim = Math.abs(K.z - T.z) * Math.tan(40 * Math.PI / 180) + 0.35; T.x = K.x + Math.max(-lim, Math.min(lim, T.x - K.x)); }   // rotation latérale uniquement à la première articulation (base du doigt), limitée à ±28°
         if (thumb) {   // pouce : sa base (près du poignet) reste fixe ; il pivote autour d'elle avec une longueur bornée à 3,8 touches (il ne s'étire plus) ; si la touche est plus loin, le bout s'arrête avant
           const d0 = T.clone().sub(K), l0 = d0.length(); if (f.pressed && l0 > 3.85 && hz >= 1.99) { stats.miss = (stats.miss || 0) + 1; } if (l0 > REACHF[0]) T.copy(K).add(d0.multiplyScalar(REACHF[0] / l0));
         }
@@ -248,18 +271,22 @@ const View3D = (() => {
           if (f.pressed) stats.press = (stats.press || 0) + 1;
           M = K.clone().add(dir.clone().multiplyScalar(dist * 0.64)); D = M.clone().lerp(T, 0.55);
         } else {
-          // Doigt à trois segments (proximal 50 %, moyen 28 %, distal 22 % de la longueur) :
-          //  1) le premier segment pointe vers l'avant, plat dans le prolongement de la paume (de −15° à +5°), vers la touche à ±28° au plus (rotation à la première articulation) ;
-          //  2) les deux autres ne font que fléchir / s'étendre dans le plan vertical qui contient le bout visé (cinématique inverse à deux segments, coude vers le haut).
-          const La = TOT * 0.5, Lb = TOT * 0.28, Lc = TOT * 0.22, ht = Math.hypot(T.x - K.x, T.z - K.z) || 1e-4;
-          const E1 = Math.max(-15, Math.min(5, Math.atan2(T.y - K.y, ht) * 57.3 * 0.6)) * Math.PI / 180, hx = (T.x - K.x) / ht, hzz = Math.min(-0.5, (T.z - K.z) / ht), hn = Math.hypot(hx, hzz);
-          M = V(K.x + La * Math.cos(E1) * hx / hn, K.y + La * Math.sin(E1), K.z + La * Math.cos(E1) * hzz / hn);
-          const dm = T.clone().sub(M), d0 = dm.length() || 1e-4, dmax = Lb + Lc - 0.02, dmin = Math.abs(Lb - Lc) + 0.05;
-          if (f.pressed) { stats.press = (stats.press || 0) + 1; if (d0 > dmax + 0.05) { stats.miss = (stats.miss || 0) + 1; } }
-          const d = Math.max(dmin, Math.min(dmax, d0)), dir = dm.clone().multiplyScalar(1 / d0); if (d !== d0) T.copy(M).addScaledVector(dir, d);
-          const aa = (d * d + Lb * Lb - Lc * Lc) / (2 * d), hh = Math.sqrt(Math.max(0, Lb * Lb - aa * aa));
-          const up = Y.clone().sub(dir.clone().multiplyScalar(Y.dot(dir))); if (up.lengthSq() < 1e-4) up.set(0, 0, 1); up.normalize();
-          D = M.clone().addScaledVector(dir, aa).addScaledVector(up, hh);
+          // Doigt à trois segments (proximal 50 %, moyen 28 %, distal 22 % de la longueur), pose cherchée parmi les poses ANATOMIQUEMENT POSSIBLES :
+          //  • le premier segment pointe vers l'avant, à ±28° au plus de côté (rotation à la première articulation), plat dans le prolongement de la paume (−15° à +10°) ;
+          //  • la flexion de la 2e articulation va de 0° à 110° (aucune hyperextension), celle de la 3e vaut les deux tiers de la précédente (couplage naturel) ;
+          //  • on retient, parmi ces poses, celle dont le bout est le plus près du point visé (aucune pose impossible n'est jamais affichée).
+          const La = TOT * 0.44, Lb = TOT * 0.31, Lc = TOT * 0.25, ht = Math.hypot(T.x - K.x, T.z - K.z) || 1e-4;
+          const hx = (T.x - K.x) / ht, hzz = Math.min(-0.5, (T.z - K.z) / ht), hn = Math.hypot(hx, hzz), ux = hx / hn, uz = hzz / hn, tu = ht, ty = T.y - K.y;
+          let best = null; const R2D = Math.PI / 180;
+          for (let e1 = -30; e1 <= 24; e1 += 3) for (let f2 = 0; f2 <= 110; f2 += 4) {
+            const a1 = e1 * R2D, a2 = a1 - f2 * R2D, a3 = a2 - 0.66 * f2 * R2D;
+            const mu = La * Math.cos(a1), my = La * Math.sin(a1), du = mu + Lb * Math.cos(a2), dy = my + Lb * Math.sin(a2), tu2 = du + Lc * Math.cos(a3), ty2 = dy + Lc * Math.sin(a3);
+            const err = Math.hypot(tu2 - tu, ty2 - ty) + 0.004 * Math.max(0, -e1 - 12) + 0.004 * Math.max(0, e1 - 6) + 0.0005 * f2;
+            if (!best || err < best.err) best = { err, mu, my, du, dy, tu2, ty2 };
+          }
+          if (f.pressed) { stats.press = (stats.press || 0) + 1; if (best.err > 0.12) { if (best.err > 0.3) stats.big = (stats.big || 0) + 1; stats.miss = (stats.miss || 0) + 1; stats.me = stats.me || {}; const q = F.f + (blk ? 'n' : 'b') + (hz > 1.9 ? 'H' : ''); stats.me[q] = stats.me[q] || [0, 0]; stats.me[q][0]++; stats.me[q][1] = Math.max(stats.me[q][1], best.err); if (!stats.dbg || best.err > stats.dbg.err) stats.dbg = { err: +best.err.toFixed(2), f: F.f, tu: +tu.toFixed(2), ty: +ty.toFixed(2), got: [+best.tu2.toFixed(2), +best.ty2.toFixed(2)], hz: +hz.toFixed(2), TOT, blk }; } }
+          const at = (u, y) => V(K.x + u * ux, K.y + y, K.z + u * uz);
+          M = at(best.mu, best.my); D = at(best.du, best.dy); T.copy(at(best.tu2, best.ty2));
         }
         const tm = H.sk.fing[F.f - 1].tipMat; tm.color.setHex(f.pressed ? col : 0xffffff); tm.emissive.setHex(f.pressed ? 0x553300 : 0x444444);   // bout du doigt qui joue : couleur vive
         F.sp.visible = st.fing !== false; F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
@@ -269,7 +296,7 @@ const View3D = (() => {
         if (!thumb && (M.z > K.z + 0.05 || D.z > M.z + 0.05 || T.z > D.z + 0.05)) { stats.back++; stats.bk = stats.bk || [0,0,0]; if (M.z > K.z + 0.05) stats.bk[0]++; if (D.z > M.z + 0.05) stats.bk[1]++; if (T.z > D.z + 0.05) stats.bk[2]++; } tips[h + F.f] = T.clone(); F.pts = thumb ? [K.clone(), M.clone(), T.clone()] : [K.clone(), M.clone(), D.clone(), T.clone()];   // le pouce n'a que deux phalanges
       });
       // squelette : poignet, paume en polygone (poignet–pouce, poignet–index, poignet–auriculaire, ligne des bases des doigts), 3 traits et 4 points par doigt
-      { const sk = H.sk, W = V(px, 2.2, WZ); sk.wrist.position.copy(W);
+      { const sk = H.sk, W = V(px, 2.0, WZ); sk.wrist.position.copy(W);
         const P = H.fingers.map(F => F.pts);
         [[W, P[0][0]], [W, P[1][0]], [W, P[4][0]], [P[1][0], P[2][0]], [P[2][0], P[3][0]], [P[3][0], P[4][0]]].forEach(([a, b], i) => limb(sk.palmB[i], a, b));
         H.fingers.forEach((F, i) => { const o = sk.fing[i], q = F.pts, n = q.length; for (let k = 0; k < 3; k++) { o.b[k].visible = k < n - 1; if (k < n - 1) limb(o.b[k], q[k], q[k + 1]); } const ji = n === 3 ? [0, 1, 3] : [0, 1, 2, 3]; o.j.forEach((j, k) => { const at = ji.indexOf(k); j.visible = at >= 0; if (at >= 0) j.position.copy(q[at]); }); });
