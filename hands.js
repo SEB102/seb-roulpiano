@@ -144,7 +144,7 @@
       for (let c = 1; c <= 5; c++) {
         if (c === fh || !free(c) || !Nh.every(n => fo(n) !== c && Math.sign(q(n) - q(h)) === Math.sign(fo(n) - c))) continue;
         const gain = base - Nh.reduce((u, n) => u + pairCost(c, q(h), fo(n), q(n)), 0) - 0.25 * Math.abs(c - fh);
-        if (gain > 0.6 && (!best || gain > best.gain)) best = { c, gain };
+        if (gain > 2 && (!best || gain > best.gain)) best = { c, gain };
       }
       if (best) { h.af2 = best.c; h.swapT = sw; }
     });
