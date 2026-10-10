@@ -6,7 +6,7 @@ const View3D = (() => {
   const CR = 0xffb347, CL = 0x5fb4ff;                                     // couleurs vives : main droite, main gauche
   const DEF = { az: 0, el: 55 * Math.PI / 180, zoom: 1.1 };
   const stats = { back: 0, n: 0 };
-  let sun, barSp = [], ui, marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
+  let gridL = [], gridS = [], lblTex = {}, sun, barSp = [], ui, marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
   const V = (x, y, z) => new THREE.Vector3(x, y, z), Y = V(0, 1, 0);
 
   function digit(n, col) {
@@ -24,6 +24,13 @@ const View3D = (() => {
       const need = GAP - sg * (xs[i + 1] - xs[i]); if (need <= 0) continue;
       if (pin[i] && !pin[i + 1]) xs[i + 1] += sg * need; else if (!pin[i] && pin[i + 1]) xs[i] -= sg * need; else if (!pin[i] && !pin[i + 1]) { xs[i] -= sg * need / 2; xs[i + 1] += sg * need / 2; }
     }
+  }
+  function measureTex(label) {
+    if (lblTex[label]) return lblTex[label];
+    const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const g = cv.getContext('2d');
+    g.fillStyle = 'rgba(40,48,86,.95)'; g.beginPath(); g.moveTo(12, 6); g.lineTo(116, 6); g.quadraticCurveTo(124, 6, 124, 14); g.lineTo(124, 50); g.quadraticCurveTo(124, 58, 116, 58); g.lineTo(12, 58); g.quadraticCurveTo(4, 58, 4, 50); g.lineTo(4, 14); g.quadraticCurveTo(4, 6, 12, 6); g.fill();
+    g.fillStyle = '#fff'; g.font = '700 38px -apple-system, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(label), 64, 34);
+    return (lblTex[label] = new THREE.CanvasTexture(cv));
   }
   function limb(mesh, a, b) {
     const d = b.clone().sub(a), L = d.length() || 1e-4; mesh.position.copy(a).add(b).multiplyScalar(0.5); mesh.scale.set(1, L, 1);
@@ -89,6 +96,10 @@ const View3D = (() => {
     const bg = new THREE.BoxGeometry(1, 0.3, 1);
     barSp = []; for (let i = 0; i < 260; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); q.scale.set(0.8, 0.8, 1); q.renderOrder = 9; q.visible = false; scene.add(q); barSp.push(q); }
     for (let i = 0; i < 260; i++) { const b = new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0, envMapIntensity: 0.4 })); b.visible = false; scene.add(b); bars.push(b); }
+    // repères temporels : barres de mesure (épaisses, avec numéro) et temps (fins) posés sur le plan du rouleau ; ils tournent avec la scène
+    gridL = []; gridS = [];
+    for (let i = 0; i < 60; i++) { const l = new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false })); l.visible = false; l.renderOrder = 1; scene.add(l); gridL.push(l); }
+    for (let i = 0; i < 12; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); q.scale.set(2.4, 1.2, 1); q.renderOrder = 8; q.visible = false; scene.add(q); gridS.push(q); }
     // mains
     ['L', 'R'].forEach(h => {
       const g = new THREE.Group(), H = { g, fingers: [] };
@@ -168,6 +179,14 @@ const View3D = (() => {
     }
     for (; bi < bars.length; bi++) bars[bi].visible = false;
     for (let i = 0; i < barSp.length; i++) if (i >= bi || !bars[i].visible) barSp[i].visible = false;
+    // barres de mesure et temps
+    { const G = st.grid || [], x0 = built.cx - built.w / 2; let li = 0, si = 0;
+      G.forEach(e => {
+        const z = BACK - (e.t - sp) * SPEED, l = gridL[li++]; if (!l) return;
+        l.visible = true; l.position.set(built.cx, e.bar ? 0.17 : 0.15, z); l.scale.set(built.w, 1, e.bar ? 0.14 : 0.06); l.material.opacity = e.bar ? 0.75 : 0.38;
+        if (e.bar && e.label !== undefined) { const q = gridS[si++]; if (q) { const tex = measureTex(e.label); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.visible = true; q.position.set(x0 + 1.4, 0.7, z); } }
+      });
+      for (; li < gridL.length; li++) gridL[li].visible = false; for (; si < gridS.length; si++) gridS[si].visible = false; }
     stats.n++;
     // mains
     ['L', 'R'].forEach(h => {
