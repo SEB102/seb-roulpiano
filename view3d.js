@@ -127,17 +127,24 @@ const View3D = (() => {
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
         const T = V(f.x, tipY, f.pressed ? zt : zt + (1 - f.depth) * (0.5 + 0.8 * (1 - blk)) - 0.45 * prep);
+        // doigt qui ne joue pas : il se soulève et se replie À MOITIÉ (flexion partielle, bout du doigt en l'air devant la phalange) ; il se déplie vers sa touche
+        // à mesure qu'elle approche (wN), reste déplié un instant après la frappe (wP) puis se relâche
+        if (!thumb) {
+          const kw = Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0, 0.7 * (f.wP || 0)), curl = [0, 0.7, 0.7, 0.66, 0.6][F.f - 1];
+          const rest = V(K.x + (f.x - K.x) * 0.35, 0.8 + 0.25 * (f.lift || 0), K.z - TOT * curl);
+          T.lerp(rest, 1 - Math.min(1, kw));
+        }
         // doigt à 2 articulations (cinématique inverse dans le plan vertical K→T) : segments de longueur fixe ; il se replie quand la touche est proche
         // (doigt arrondi) et se tend jusqu'à l'extension complète quand la touche est loin (touche noire, doigt tendu vers l'avant)
         const dv = T.clone().sub(K), dist = dv.length(), dir = dv.clone().multiplyScalar(1 / (dist || 1e-4));
         if (!thumb && dist > TOT * 0.999) T.copy(K).add(dir.clone().multiplyScalar(TOT * 0.999));
         let dd, xx, hh;
-        if (thumb) {   // le pouce ne se replie pas comme les autres doigts : il reste presque droit (très léger arc), sa longueur apparente suit la distance à la touche
-          dd = Math.max(dist, 0.5); xx = dd * 0.5; hh = Math.min(0.28, Math.max(0, 2.0 - dd) * 0.5 + 0.12);
+        if (thumb) {   // le pouce ne se replie JAMAIS : il reste parfaitement droit, sa longueur apparente suit la distance à la touche
+          dd = Math.max(dist, 0.5); xx = dd * 0.5; hh = 0;
         } else { dd = Math.min(dist, TOT * 0.999); xx = (dd * dd + L1 * L1 - L2 * L2) / (2 * dd); hh = Math.sqrt(Math.max(0, L1 * L1 - xx * xx)); }
         const up = Y.clone().sub(dir.clone().multiplyScalar(Y.dot(dir))); if (up.lengthSq() < 1e-4) up.set(0, 0, 1); up.normalize();
         const M = K.clone().add(dir.clone().multiplyScalar(xx)).add(up.multiplyScalar(hh));
-        const D = M.clone().lerp(T, 0.55); D.y += thumb ? 0.03 : 0.06 + 0.12 * Math.min(1, hh / 1.4);
+        const D = M.clone().lerp(T, 0.55); D.y += thumb ? 0 : 0.06 + 0.12 * Math.min(1, hh / 1.4);
         limb(F.p, K, M); limb(F.m, M, D); limb(F.d, D, T); F.j1.position.copy(K); F.j2.position.copy(M); F.j3.position.copy(D); F.tip.position.copy(T);
         F.tip.material.color.setHex(f.pressed ? col : (h === 'R' ? 0xe9b996 : 0xdcbca8)); F.tip.material.emissive && F.tip.material.emissive.setHex(f.pressed ? 0x553300 : 0x000000);
         F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
