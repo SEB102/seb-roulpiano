@@ -7,7 +7,7 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 
 - **Fichiers** : .mid / .midi, .musicxml / .xml, .mxl (partition exportée de MuseScore, Finale, Sibelius…).
   Glisser-déposer possible. Trois exemples intégrés : « Exemple : J'ai du bon tabac » (très simple : une main à cinq doigts do–sol, accompagnement facile, avec doigtés ; arrangement de https://dechiffrerpiano.fr), « Exemple : Élise » = début de « Lettre à Élise » (Beethoven, saisi de mémoire : à vérifier sur la partition) et « Exemple : Bach » = Variation 30 des Variations Goldberg (avec doigtés).
-- **Commandes** : voir « Barre de commandes » plus bas. Le panneau **☰ Réglages** (H) contient les fichiers, exemples, export vidéo, tempo, doigtés, mains virtuelles, synchro et mesures visibles ; la barre du haut contient tout le reste. Raccourcis clavier : Espace = lecture / pas à pas automatique, ← → = pas précédent / suivant, ↑ ↓ = vitesse, Début = retour au début.
+- **Commandes** : voir « Barre de commandes » plus bas. Le panneau sous la barre (toujours visible) contient les fichiers, exemples, export vidéo, tempo, doigtés, mains virtuelles, synchro et mesures visibles ; la barre du haut contient tout le reste. Raccourcis clavier : Espace = lecture / pas à pas automatique, ← → = pas précédent / suivant, ↑ ↓ = vitesse, Début = retour au début.
 - **Couleurs** : orange = main droite (M.D.), bleu = main gauche (M.G.) ; la couleur suit la main du doigté (M.D. ou M.G.), indépendamment des clés : une note déclarée M.D. est orange, une note déclarée M.G. est bleue. Teinte plus foncée = touche noire.
   Mains : 2 pistes/parties/portées si le fichier en a deux (la plus aiguë = droite), sinon coupure au Do central.
   Quand les deux mains sont écrites sur la même portée (ex. Hanon n°1 : début en clé de fa pour les deux mains), deux voix de rythme identique sur cette portée sont attribuées à deux mains : la voix haute = M.D., la basse = M.G. Sinon la main reste corrigeable note par note dans la bulle de saisie.
@@ -33,7 +33,6 @@ En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `ind
 ## Barre de commandes (en haut) et raccourcis
 | Fonction | Bouton | Touche |
 |---|---|---|
-| Réglages (fichiers, tempo, doigtés, export, ancien panneau) | ☰ Réglages | H |
 | Rouleau de notes complet (sinon : simple ruban au-dessus du clavier) | rouleau | R |
 | Lecture rythmée (active le rouleau, coupe défilement et pré-écoute) | ▶ Lecture | Espace |
 | **Pas à pas** : il n'imite ni la mélodie ni son rythme. Chaque pas déroule UN geste de durée toujours identique : 1) la hauteur de la prochaine note sonne doucement et s'affiche, 2) le doigt se lève, la main se déplace, le doigt descend, 3) la note sonne (1,2 s). **▶ Pas à pas (ou Espace) = défilement automatique des pas, rouleau masqué, pré-écoute active** ; → = un pas à la main ; ← = pas précédent | ◀ pas, pas ▶, ▶ Pas à pas (plus de bouton « Pas à pas » : cliquer sur un pas ou sur Défilement entre dans ce mode) | Espace ; → ; ← |
