@@ -211,6 +211,14 @@ const View3D = (() => {
         } else { dd = Math.min(dist, TOT * 0.999); xx = (dd * dd + L1 * L1 - L2 * L2) / (2 * dd); hh = Math.sqrt(Math.max(0, L1 * L1 - xx * xx)); }
         const up = Y.clone().sub(dir.clone().multiplyScalar(Y.dot(dir))); if (up.lengthSq() < 1e-4) up.set(0, 0, 1); up.normalize();
         const M = K.clone().add(dir.clone().multiplyScalar(xx)).add(up.multiplyScalar(hh));
+        // le premier segment (côté paume) ne bascule jamais vers l'arrière ni à plus de 65° au-dessus de l'horizontale : un doigt qui se soulève se replie vers l'avant
+        if (!thumb) {
+          const fwd = K.z - M.z, c65 = Math.cos(65 * Math.PI / 180), s65 = Math.sin(65 * Math.PI / 180);
+          if (fwd < L1 * c65) {
+            M.set(K.x, K.y + L1 * s65, K.z - L1 * c65);
+            if (!f.pressed) { const dm = T.clone().sub(M), l = dm.length() || 1e-4; T.copy(M).addScaledVector(dm, L2 / l); }   // pas d'appui : le bout suit, longueurs conservées
+          }
+        }
         const D = M.clone().lerp(T, 0.55); D.y += thumb ? 0 : 0.06 + 0.12 * Math.min(1, hh / 1.4);
         const tm = H.sk.fing[F.f - 1].tipMat; tm.color.setHex(f.pressed ? col : 0xffffff); tm.emissive.setHex(f.pressed ? 0x553300 : 0x444444);   // bout du doigt qui joue : couleur vive
         F.sp.visible = st.fing !== false; F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
