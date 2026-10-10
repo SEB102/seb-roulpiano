@@ -132,6 +132,22 @@
         if (alt) { h.af2 = alt; h.swapT = e.t - 0.15; }
       });
     });
+    // Le changement de doigt ne sert pas qu'aux grands écarts : il sert aussi, plus simplement, à rapprocher le doigt tenu de la position où la main va jouer
+    // (un pouce qui tient une touche pendant que les autres doigts jouent plus haut, un 5 qui laisse sa place, etc.). On le fait quand les notes jouées PENDANT la tenue
+    // sont nettement plus confortables avec un autre doigt libre (même mesure de confort que pour le choix des doigts).
+    notes.forEach(h => {
+      if (h.finger || h.finger2 || h.af2 || !fo(h) || h.t1 - h.t0 < 0.6) return;
+      const Nh = notes.filter(n => n !== h && n.t0 > h.t0 + 0.15 && n.t0 < h.t1 - 0.15 && n.t0 < h.t0 + 3 && fo(n)).sort((a, b) => a.t0 - b.t0); if (!Nh.length) return;
+      const fh = fo(h), sw = Nh[0].t0 - 0.15, base = Nh.reduce((c, n) => c + pairCost(fh, q(h), fo(n), q(n)), 0);
+      const free = c => !notes.some(m => m !== h && fo(m) === c && m.t0 < h.t1 + 0.1 && m.t1 > sw - 0.55);
+      let best = null;
+      for (let c = 1; c <= 5; c++) {
+        if (c === fh || !free(c) || !Nh.every(n => fo(n) !== c && Math.sign(q(n) - q(h)) === Math.sign(fo(n) - c))) continue;
+        const gain = base - Nh.reduce((u, n) => u + pairCost(c, q(h), fo(n), q(n)), 0) - 0.25 * Math.abs(c - fh);
+        if (gain > 0.6 && (!best || gain > best.gain)) best = { c, gain };
+      }
+      if (best) { h.af2 = best.c; h.swapT = sw; }
+    });
   }
 
   // ---------- Plan d'une main ----------
