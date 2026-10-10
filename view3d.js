@@ -200,6 +200,9 @@ const View3D = (() => {
         }
         // doigt à 2 articulations (cinématique inverse dans le plan vertical K→T) : segments de longueur fixe ; il se replie quand la touche est proche
         // (doigt arrondi) et se tend jusqu'à l'extension complète quand la touche est loin (touche noire, doigt tendu vers l'avant)
+        if (thumb) {   // pouce à 2 phalanges, longueur quasi fixe (1,8 à 2,5 touches) : c'est sa base qui glisse vers la touche, il ne s'étire pas
+          const d0 = T.clone().sub(K), l0 = d0.length(), le = Math.max(1.8, Math.min(2.5, l0)); if (l0 > 1e-4 && Math.abs(l0 - le) > 1e-4) K.copy(T).sub(d0.multiplyScalar(le / l0));
+        }
         const dv = T.clone().sub(K), dist = dv.length(), dir = dv.clone().multiplyScalar(1 / (dist || 1e-4));
         if (!thumb && dist > TOT * 0.999) T.copy(K).add(dir.clone().multiplyScalar(TOT * 0.999));
         let dd, xx, hh;
@@ -214,13 +217,13 @@ const View3D = (() => {
         const nextF = st.anticip && !f.pressed && (f.wN || 0) > 0.02;   // prochain doigt : pastille qui clignote (3 fois par seconde), bout du doigt qui s'éclaire
         if (nextF) { const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * performance.now() / 1000); F.sp.material.opacity = 1; F.sp.scale.setScalar(1.05 + 0.5 * bl); tm.color.setHex(col); tm.emissive.setHex(bl > 0.5 ? 0x553300 : 0x221100); }
         else F.sp.scale.setScalar(0.9);
-        tips[h + F.f] = T.clone(); F.pts = [K.clone(), M.clone(), D.clone(), T.clone()];
+        tips[h + F.f] = T.clone(); F.pts = thumb ? [K.clone(), M.clone(), T.clone()] : [K.clone(), M.clone(), D.clone(), T.clone()];   // le pouce n'a que deux phalanges
       });
       // squelette : poignet, paume en polygone (poignet–pouce, poignet–index, poignet–auriculaire, ligne des bases des doigts), 3 traits et 4 points par doigt
       { const sk = H.sk, W = V(px, 1.0, 4.9); sk.wrist.position.copy(W);
         const P = H.fingers.map(F => F.pts);
         [[W, P[0][0]], [W, P[1][0]], [W, P[4][0]], [P[1][0], P[2][0]], [P[2][0], P[3][0]], [P[3][0], P[4][0]]].forEach(([a, b], i) => limb(sk.palmB[i], a, b));
-        H.fingers.forEach((F, i) => { const o = sk.fing[i], q = F.pts; for (let k = 0; k < 3; k++) limb(o.b[k], q[k], q[k + 1]); for (let k = 0; k < 4; k++) o.j[k].position.copy(q[k]); });
+        H.fingers.forEach((F, i) => { const o = sk.fing[i], q = F.pts, n = q.length; for (let k = 0; k < 3; k++) { o.b[k].visible = k < n - 1; if (k < n - 1) limb(o.b[k], q[k], q[k + 1]); } const ji = n === 3 ? [0, 1, 3] : [0, 1, 2, 3]; o.j.forEach((j, k) => { const at = ji.indexOf(k); j.visible = at >= 0; if (at >= 0) j.position.copy(q[at]); }); });
       }
     });
     // repères d'atterrissage du prochain pas (anticipation, sauf « sans trajectoire ») et chemins des doigts (« avec trajectoires »)
