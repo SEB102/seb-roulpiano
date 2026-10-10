@@ -866,14 +866,11 @@ function scene(W, H, dpr) {
     if (showFing && fo && rollVisible) {
       ctx.save(); if (!n.finger) ctx.globalAlpha = 0.62; // doigté proposé (non saisi) : plus discret
       if (!fingIllus) { // doigté simple : « M.D. 1 »
-        const label = handTxt(n) + ' ' + fo;
-        ctx.font = '700 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
-        const pw = Math.ceil(ctx.measureText(label).width) + 8, ph = 14;
-        const px = Math.max(2, Math.min(W - pw - 2, x + w / 2 - pw / 2));
-        const py = y0 >= 18 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3);
-        ctx.fillStyle = 'rgba(8,10,24,.94)'; rrect(px, py, pw, ph, 7); ctx.fill();
-        ctx.lineWidth = 1.2; ctx.strokeStyle = COL[noteHand(n)].note; ctx.stroke();
-        ctx.fillStyle = '#fff'; ctx.fillText(label, px + pw / 2, py + 10.5);
+        // pastille du doigt (même format que sur le clavier et en 3D) : disque de la couleur vive de la main, liseré sombre puis blanc, numéro dedans
+        const R = 9.5, pw = 2 * R + 4, ph = pw, px = Math.max(2, Math.min(W - pw - 2, x + w / 2 - pw / 2)), py = y0 >= ph + 6 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3), cx = px + pw / 2, cy = py + ph / 2;
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fillStyle = noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'; ctx.fill();
+        ctx.lineWidth = 3; ctx.strokeStyle = '#10121f'; ctx.stroke(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
+        ctx.fillStyle = '#10121f'; ctx.font = '800 12px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(fo), cx, cy + 0.5); ctx.textBaseline = 'alphabetic';
         Object.assign(rec, { px, py, pw, ph });
       } else {
       const pw = Math.max(36, Math.min(76, kk.w * 1.9)), ph = (RAKE_BASE + 2) * pw / 122;
