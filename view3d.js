@@ -115,9 +115,25 @@ const View3D = (() => {
     if (!built || !host) return;
     const W = host.clientWidth || 800, Hh = host.clientHeight || 500;
     if (size[0] !== W || size[1] !== Hh) { renderer.setSize(W, Hh, false); size = [W, Hh]; cam.aspect = W / Hh; cam.updateProjectionMatrix(); }
-    const hfov = 2 * Math.atan(Math.tan(cam.fov * Math.PI / 360) * cam.aspect), dist = Math.max(14, (built.w / 2 + 1) / Math.tan(hfov / 2) * 0.92 + 4);
+    place(cam);
+  }
+  // place une caméra selon l'orbite courante (angle, hauteur, zoom) et son rapport largeur/hauteur
+  function place(c) {
+    const hfov = 2 * Math.atan(Math.tan(c.fov * Math.PI / 360) * c.aspect), dist = Math.max(14, (built.w / 2 + 1) / Math.tan(hfov / 2) * 0.92 + 4);
     const d = dist * 1.25 * orbit.zoom, ce = Math.cos(orbit.el), T = V(built.cx, 0, -2);
-    cam.position.set(T.x + d * Math.sin(orbit.az) * ce, d * Math.sin(orbit.el), T.z + d * Math.cos(orbit.az) * ce); cam.lookAt(T);
+    c.position.set(T.x + d * Math.sin(orbit.az) * ce, d * Math.sin(orbit.el), T.z + d * Math.cos(orbit.az) * ce); c.lookAt(T);
+    if (scene.fog) { scene.fog.near = d * 1.05; scene.fog.far = d * 2.2; }   // brume proportionnelle à la distance : même rendu quel que soit le format (écran ou vidéo)
+  }
+  // export vidéo : dessine la scène 3D (avec l'angle et le zoom choisis) au format de la vidéo (W × H, échelle k) dans un contexte 2D
+  let rx, cam2;
+  function renderTo(c2d, W, H, k) {
+    if (!built) return;
+    if (!rx) { rx = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); rx.setPixelRatio(1); rx.setClearColor(0x0e1120); cam2 = new THREE.PerspectiveCamera(38, 1, 0.1, 120); }
+    const pw = Math.round(W * k), ph = Math.round(H * k);
+    if (rx.domElement.width !== pw || rx.domElement.height !== ph) rx.setSize(pw, ph, false);
+    cam2.aspect = W / H; cam2.updateProjectionMatrix(); place(cam2);
+    rx.render(scene, cam2);
+    c2d.setTransform(1, 0, 0, 1, 0, 0); c2d.drawImage(rx.domElement, 0, 0, pw, ph);
   }
 
   function render(st) {
@@ -229,5 +245,5 @@ const View3D = (() => {
   const zoomBy = f => { orbit.zoom = Math.max(0.25, Math.min(3, orbit.zoom * f)); };
   const show = on => { if (renderer) renderer.domElement.style.display = on ? 'block' : 'none'; if (ui) ui.style.display = on ? 'flex' : 'none'; };
   const el = () => renderer && renderer.domElement;
-  return { init, render, el, zoomBy, show };
+  return { init, render, renderTo, el, zoomBy, show };
 })();

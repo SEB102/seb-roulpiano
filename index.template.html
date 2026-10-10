@@ -77,7 +77,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261011d"></script>
+<script src="view3d.js?v=20261011f"></script>
 <script src="core.js?v=20261010d"></script>
 <script src="hands.js?v=20261010d"></script>
 <script src="hands_legacy.js?v=20261010g"></script>
@@ -744,7 +744,7 @@ function draw() {
   fitCanvas();
   renderScene(screenCtx, cssW, cssH, dpr);
   updateInfo(); refreshBar();
-  if (exp.active) { renderScene(exp.ctx, exp.W, exp.H, exp.scale); drawBand(exp.ctx, exp.W, exp.H, exp.scale); }
+  if (exp.active && !view3dOn) { renderScene(exp.ctx, exp.W, exp.H, exp.scale); drawBand(exp.ctx, exp.W, exp.H, exp.scale); }
 }
 // petit bandeau sous l'image de la vidéo (hors zone de jeu)
 const BAND = 24;
@@ -1300,6 +1300,7 @@ async function startExport() {
   if (!song || exp.active) return;
   clearError();
   if (speed <= 0) return showError('Export impossible à la vitesse 0.');
+  if (stepMode) return showError('L\'export enregistre la lecture rythmée : cliquez d\'abord sur « Lecture » (le mode Pas à pas n\'est pas exportable).');
   const mime = pickMime(); if (!mime) return showError('Ce navigateur ne sait pas enregistrer de vidéo (essayez Chrome).');
   if (sampler && !samplerReady) return showError('Attendez la fin du chargement du piano avant d\'exporter.');
   pause(); seek(startPos());
@@ -1396,6 +1397,7 @@ function frame(ts) {
   try { updateZoom(dt); } catch (err) { reportDrawError(err); }
   try { draw(); } catch (err) { reportDrawError(err); }
   try { render3D(); } catch (err) { reportDrawError(err); }
+  if (exp.active && view3dOn) { try { View3D.renderTo(exp.ctx, exp.W, exp.H, exp.scale); drawBand(exp.ctx, exp.W, exp.H, exp.scale); } catch (err) { reportDrawError(err); } }   // export en vue 3D : la vidéo montre la scène 3D (angle et zoom choisis)
   { const d = performance.now() - frameT0; if (d > 250) { slowN++; slowLast = Math.round(d); } }   // images très lentes : comptées et affichées dans la barre // une erreur de dessin ne doit JAMAIS arrêter la boucle (donc le son : les notes sont déclenchées plus haut)
   requestAnimationFrame(frame);
 }
