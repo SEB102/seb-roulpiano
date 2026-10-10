@@ -5,6 +5,7 @@ const View3D = (() => {
   const KEY_L = 6, BLK_L = 3.6, BACK = -3, AHEAD = 3.2, SPEED = 4;       // longueur des touches ; fond du clavier ; secondes de rouleau visibles ; unités par seconde
   const CR = 0xffb347, CL = 0x5fb4ff;                                     // couleurs vives : main droite, main gauche
   const DEF = { az: 0, el: 55 * Math.PI / 180, zoom: 1.1 };
+  const stats = { back: 0, n: 0 };
   let sun, barSp = [], ui, marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
   const V = (x, y, z) => new THREE.Vector3(x, y, z), Y = V(0, 1, 0);
 
@@ -167,6 +168,7 @@ const View3D = (() => {
     }
     for (; bi < bars.length; bi++) bars[bi].visible = false;
     for (let i = 0; i < barSp.length; i++) if (i >= bi || !bars[i].visible) barSp[i].visible = false;
+    stats.n++;
     // mains
     ['L', 'R'].forEach(h => {
       const H = hands[h], pl = st.plan && st.plan[h], show = vis.includes(h) && pl && !pl.empty && st.handsMode !== 'off'; H.g.visible = !!show; if (!show) return;
@@ -186,7 +188,7 @@ const View3D = (() => {
       enforceOrder(kx, pin, sg);
       H.fingers.forEach(F => {
         const f = a.fingers[F.f - 1], fx = xs[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
-        const K = V(thumb ? px + off * 0.95 : kx[F.f - 1], thumb ? 0.8 : 1.1, thumb ? 3.4 : 2.45), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
+        const K = V(thumb ? px + off * 0.95 : kx[F.f - 1], thumb ? 0.8 : 1.1, thumb ? 4.3 : 3.95), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
         const blk = f.blk || 0, zt = 1.7 + (-0.9 - 1.7) * blk, yk = blk ? 0.55 : 0.1;
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
@@ -216,7 +218,6 @@ const View3D = (() => {
           const fwd = K.z - M.z, c65 = Math.cos(65 * Math.PI / 180), s65 = Math.sin(65 * Math.PI / 180);
           if (fwd < L1 * c65) {
             M.set(K.x, K.y + L1 * s65, K.z - L1 * c65);
-            if (!f.pressed) { const dm = T.clone().sub(M), l = dm.length() || 1e-4; T.copy(M).addScaledVector(dm, L2 / l); }   // pas d'appui : le bout suit, longueurs conservées
           }
         }
         const D = M.clone().lerp(T, 0.55); D.y += thumb ? 0 : 0.06 + 0.12 * Math.min(1, hh / 1.4);
@@ -225,10 +226,10 @@ const View3D = (() => {
         const nextF = st.anticip && !f.pressed && (f.wN || 0) > 0.02;   // prochain doigt : pastille qui clignote (3 fois par seconde), bout du doigt qui s'éclaire
         if (nextF) { const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * performance.now() / 1000); F.sp.material.opacity = 1; F.sp.scale.setScalar(1.05 + 0.5 * bl); tm.color.setHex(col); tm.emissive.setHex(bl > 0.5 ? 0x553300 : 0x221100); }
         else F.sp.scale.setScalar(0.9);
-        tips[h + F.f] = T.clone(); F.pts = thumb ? [K.clone(), M.clone(), T.clone()] : [K.clone(), M.clone(), D.clone(), T.clone()];   // le pouce n'a que deux phalanges
+        if (!thumb && (M.z > K.z + 0.05 || D.z > M.z + 0.05 || T.z > D.z + 0.05)) stats.back++; tips[h + F.f] = T.clone(); F.pts = thumb ? [K.clone(), M.clone(), T.clone()] : [K.clone(), M.clone(), D.clone(), T.clone()];   // le pouce n'a que deux phalanges
       });
       // squelette : poignet, paume en polygone (poignet–pouce, poignet–index, poignet–auriculaire, ligne des bases des doigts), 3 traits et 4 points par doigt
-      { const sk = H.sk, W = V(px, 1.0, 4.9); sk.wrist.position.copy(W);
+      { const sk = H.sk, W = V(px, 1.1, 6.3); sk.wrist.position.copy(W);
         const P = H.fingers.map(F => F.pts);
         [[W, P[0][0]], [W, P[1][0]], [W, P[4][0]], [P[1][0], P[2][0]], [P[2][0], P[3][0]], [P[3][0], P[4][0]]].forEach(([a, b], i) => limb(sk.palmB[i], a, b));
         H.fingers.forEach((F, i) => { const o = sk.fing[i], q = F.pts, n = q.length; for (let k = 0; k < 3; k++) { o.b[k].visible = k < n - 1; if (k < n - 1) limb(o.b[k], q[k], q[k + 1]); } const ji = n === 3 ? [0, 1, 3] : [0, 1, 2, 3]; o.j.forEach((j, k) => { const at = ji.indexOf(k); j.visible = at >= 0; if (at >= 0) j.position.copy(q[at]); }); });
@@ -266,5 +267,5 @@ const View3D = (() => {
   const zoomBy = f => { orbit.zoom = Math.max(0.25, Math.min(3, orbit.zoom * f)); };
   const show = on => { if (renderer) renderer.domElement.style.display = on ? 'block' : 'none'; if (ui) ui.style.display = on ? 'flex' : 'none'; };
   const el = () => renderer && renderer.domElement;
-  return { init, render, renderTo, el, zoomBy, show };
+  return { init, render, renderTo, el, zoomBy, show, stats };
 })();
