@@ -77,7 +77,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261011c"></script>
+<script src="view3d.js?v=20261011d"></script>
 <script src="core.js?v=20261010d"></script>
 <script src="hands.js?v=20261010d"></script>
 <script src="hands_legacy.js?v=20261010g"></script>
@@ -1430,6 +1430,7 @@ function toggleStep() {
 const setT = (e, t) => { if (e.textContent !== t) e.textContent = t; };
 function refreshBar() {
   ['bAnt', 'bPre', 'bM0', 'bM1', 'bM2', 'bZoom', 'bHm', 'bHp', 'bRoll'].forEach(id => { const b = $(id); if (b && b.disabled !== view3dOn) b.disabled = view3dOn; });   // grisés en vue 3D
+  { const v = $('vis'); if (v && v.disabled !== view3dOn) v.disabled = view3dOn; }   // le nombre de mesures visibles n'a pas d'effet en 3D
   { const ill = document.querySelector('#fingMode button[data-m="illus"]'); if (ill) ill.style.display = view3dOn ? 'none' : ''; }   // pas de doigtés illustrés en 3D
   const on = (id, v) => $(id).classList.toggle('pressed', !!v);
   on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bAnt', anticip); on('bM0', handsMode === 'off'); on('bM1', handsMode === 'traj'); on('bM2', handsMode === 'plain');
