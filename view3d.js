@@ -235,7 +235,7 @@ const View3D = (() => {
         if (!thumb && dist > TOT * 0.999) T.copy(K).add(dir.clone().multiplyScalar(TOT * 0.999));
         let dd, xx, hh;
         if (thumb) {   // le pouce ne se replie JAMAIS : il reste parfaitement droit, sa longueur apparente suit la distance à la touche
-          dd = Math.max(dist, 0.5); xx = dd * 0.5; hh = 0;
+          dd = Math.max(dist, 0.5); xx = dd * 0.64; hh = 0;   // dernier segment (distal) du pouce raccourci : 36 % de la longueur au lieu de 50 %
         } else { dd = Math.min(dist, TOT * 0.999); xx = (dd * dd + L1 * L1 - L2 * L2) / (2 * dd); hh = Math.sqrt(Math.max(0, L1 * L1 - xx * xx)); }
         const up = Y.clone().sub(dir.clone().multiplyScalar(Y.dot(dir))); if (up.lengthSq() < 1e-4) up.set(0, 0, 1); up.normalize();
         const M = K.clone().add(dir.clone().multiplyScalar(xx)).add(up.multiplyScalar(hh));

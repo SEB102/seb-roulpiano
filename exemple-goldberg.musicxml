@@ -154,7 +154,7 @@
         <staff>2</staff>
         <notations>
           <technical>
-            <fingering default-x="-1.42" default-y="15">3</fingering>
+            <fingering default-x="-1.42" default-y="15">MD3</fingering>
             </technical>
           </notations>
         </note>
