@@ -63,7 +63,7 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     near(th(1.5), tgt); assert.ok(p.finger(1, 1.5).pressed);
     let prev = p.palm(0), maxJ = 0; for (let x = 0; x < 3; x += 1 / 60) { const q = p.palm(x); maxJ = Math.max(maxJ, Math.abs(q - prev)); prev = q; }
     assert.ok(maxJ < 0.35, 'saut de paume ' + maxJ);
-    assert.ok(p.palm(2.5) > p.palm(0) + 1, 'la main s\'est déplacée après le passage');
+    assert.ok(p.palm0(2.5) > p.palm0(0) + 1, 'la main s\'est déplacée après le passage');
   });
   await t('Changement de doigt sur la même touche : deux doigts se partagent la touche, avec un instant de recouvrement', () => {
     const ns = [{ midi: 64, t0: 0, t1: 2, finger: 3, finger2: 1 }]; const p = H.buildPlan(ns, 'R');
@@ -79,8 +79,15 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
   await t('Mains croisées : les deux plans sont indépendants (la main gauche peut être à droite de la main droite) et la plus active passe devant', () => {
     const R = mk([60, 62], 1, 0.9), L = mk([72, 74], 1, 0.9, 2.5); R.forEach(x => { x.finger = 3; }); L.forEach(x => { x.finger = 3; });
     const pr = H.buildPlan(R, 'R'), pl = H.buildPlan(L, 'L');
-    assert.ok(pl.palm(3) > pr.palm(3) + 5, 'main gauche à droite de la droite');
+    assert.ok(pl.palm0(3) > pr.palm0(3) + 5, 'main gauche à droite de la droite');
     assert.ok(pl.near(3) < pr.near(3), 'la gauche joue, la droite se repose');
+  });
+  await t('Une main qui ne joue pas revient à sa position normale : la droite à droite de la gauche, la gauche à gauche de la droite', () => {
+    const R = mk([60, 62], 0.5, 0.4), L = mk([72, 74], 4, 0.4); R.forEach(x => { x.finger = 3; }); L.forEach(x => { x.finger = 3; });
+    const pr = H.buildPlan(R, 'R'), pl = H.buildPlan(L, 'L'); pr.link(pl); pl.link(pr);
+    assert.ok(pr.palm(4.2) > pl.palm(4.2) + 5, 'la droite au repos doit être à droite de la gauche qui joue : ' + pr.palm(4.2) + ' / ' + pl.palm(4.2));
+    assert.ok(pl.palm(1.5) < pr.palm(1.5) - 5, 'la gauche au repos doit être à gauche de la droite');
+    near(pr.palm(0.55), pr.palm0(0.55));
   });
   await t('Goldberg (exemple) : toutes les notes ont un doigt, aucun doigt ne saute de plus de 3 touches par image à 60 i/s', async () => {
     const s = await C.loadSong('g.musicxml', fs.readFileSync(__dirname + '/exemple-goldberg.musicxml'));
