@@ -77,7 +77,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261011a"></script>
+<script src="view3d.js?v=20261011b"></script>
 <script src="core.js?v=20261010d"></script>
 <script src="hands.js?v=20261010d"></script>
 <script src="hands_legacy.js?v=20261010g"></script>
@@ -679,6 +679,7 @@ addEventListener('keydown', e => {
   const k = e.metaKey || e.ctrlKey || e.altKey ? '' : e.key.toLowerCase();
   if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') cycleHandsMode(); 
   else if (k === 'v') toggle3D(); else if (k === 'a') anticip = !anticip; else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'l') startLoop();
+  else if (view3dOn && (k === '+' || k === '=')) View3D.zoomBy(1 / 1.15); else if (view3dOn && k === '-') View3D.zoomBy(1.15);
   else if (k === '+' || k === '=') handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); else if (k === '-') handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100);
   else if (e.code === 'Space') { e.preventDefault(); unlockAudio(); if (stepMode) toggleStepAuto(); else if (playing) pause(); else { enterRoll(); play(); } }
   else if (e.code === 'Home') { e.preventDefault(); rewind(); }
@@ -1407,7 +1408,7 @@ let view3dOn = false;
 function toggle3D() {
   if (typeof THREE === 'undefined' || typeof View3D === 'undefined') { showError('Vue 3D indisponible : la bibliothèque Three.js n\'a pas pu être chargée (connexion ?).'); return; }
   if (!View3D.el()) View3D.init($('cv').parentElement);
-  view3dOn = !view3dOn; View3D.el().style.display = view3dOn ? 'block' : 'none'; $('b3d').classList.toggle('pressed', view3dOn);
+  view3dOn = !view3dOn; View3D.show(view3dOn); $('b3d').classList.toggle('pressed', view3dOn);
 }
 function render3D() {
   if (!view3dOn || !song) return;
