@@ -68,6 +68,7 @@
           if (isBlack(n.midi)) c += f === 1 ? 1.0 : f === 5 ? 0.25 : 0; // pouce sur touche noire : court et en retrait, nettement moins confortable
           if (!n.finger) c += f === 4 ? 0.2 : f === 5 ? 0.15 : 0;
           if (i && S[i - 1]) c += pairCost(S[i - 1], q(e.ns[i - 1]), f, q(n));
+          for (let j = 0; j < i; j++) { const fj = S[j]; if (!fj || !f) continue; const df = Math.abs(f - fj), span = Math.abs(q(n) - q(e.ns[j])), mx = [0, 5, 7, 9, 12][Math.min(4, df)] + 0.5; if (span > mx) c += 2.5 * (span - mx); }   // écart maximal confortable entre deux doigts qui jouent ensemble (demi-tons) : une octave se joue 1-5, jamais 3-5
         });
         return c;
       });
