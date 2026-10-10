@@ -82,6 +82,13 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     assert.ok(pl.palm0(3) > pr.palm0(3) + 5, 'main gauche à droite de la droite');
     assert.ok(pl.near(3) < pr.near(3), 'la gauche joue, la droite se repose');
   });
+  await t('Arpège de 4 notes : main droite 1-2-3-5 (grave → aigu), main gauche 5-3-2-1, dans les deux sens', () => {
+    const asc = () => [{ midi: 47, t0: 0, t1: 0.2 }, { midi: 50, t0: 0.25, t1: 0.45 }, { midi: 55, t0: 0.5, t1: 0.7 }, { midi: 59, t0: 0.75, t1: 0.95 }];
+    const run = (ns, h) => { H.assignFingerings(ns, h); return ns.map(x => x.af).join(''); };
+    assert.strictEqual(run(asc(), 'R'), '1235'); assert.strictEqual(run(asc().reverse().map((x, i) => ({ ...x, t0: i * 0.25, t1: i * 0.25 + 0.2 })), 'R'), '5321');
+    assert.strictEqual(run(asc(), 'L'), '5321'); assert.strictEqual(run(asc().reverse().map((x, i) => ({ ...x, t0: i * 0.25, t1: i * 0.25 + 0.2 })), 'L'), '1235');
+    const g = asc(); g[1].finger = 4; assert.notStrictEqual(run(g, 'R'), '1235', 'un doigté imposé désactive la règle');
+  });
   await t('Une main qui ne joue pas revient à sa position normale : la droite à droite de la gauche, la gauche à gauche de la droite', () => {
     const R = mk([60, 62], 0.5, 0.4), L = mk([72, 74], 4, 0.4); R.forEach(x => { x.finger = 3; }); L.forEach(x => { x.finger = 3; });
     const pr = H.buildPlan(R, 'R'), pl = H.buildPlan(L, 'L'); pr.link(pl); pl.link(pr);
