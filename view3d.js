@@ -5,7 +5,7 @@ const View3D = (() => {
   const KEY_L = 6, BLK_L = 3.6, BACK = -3, AHEAD = 3.2, SPEED = 4;       // longueur des touches ; fond du clavier ; secondes de rouleau visibles ; unités par seconde
   const CR = 0xffb347, CL = 0x5fb4ff;                                     // couleurs vives : main droite, main gauche
   const DEF = { az: 0, el: 55 * Math.PI / 180, zoom: 1.1 };
-  let barSp = [], ui, marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
+  let handStyle = 'traits', sun, barSp = [], ui, marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
   const V = (x, y, z) => new THREE.Vector3(x, y, z), Y = V(0, 1, 0);
 
   function digit(n, col) {
@@ -24,6 +24,29 @@ const View3D = (() => {
       if (pin[i] && !pin[i + 1]) xs[i + 1] += sg * need; else if (!pin[i] && pin[i + 1]) xs[i] -= sg * need; else if (!pin[i] && !pin[i + 1]) { xs[i] -= sg * need / 2; xs[i + 1] += sg * need / 2; }
     }
   }
+  // ---------- matériaux réalistes (procéduraux) ----------
+  function makeEnv() {
+    const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene();
+    es.add(new THREE.Mesh(new THREE.SphereGeometry(60, 32, 16), new THREE.ShaderMaterial({ side: THREE.BackSide, uniforms: {}, vertexShader: 'varying vec3 p; void main(){ p = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+      fragmentShader: 'varying vec3 p; void main(){ float h = normalize(p).y * 0.5 + 0.5; vec3 c = mix(vec3(0.10, 0.11, 0.20), vec3(0.95, 0.93, 0.90), smoothstep(0.35, 1.0, h)); gl_FragColor = vec4(c, 1.0); }' })));
+    [[-25, 40, 20, 30, 6], [30, 38, 10, 22, 6], [0, 45, -30, 40, 8]].forEach(([x, y, z, w, d]) => { const m = new THREE.Mesh(new THREE.BoxGeometry(w, 1, d), new THREE.MeshBasicMaterial({ color: 0xffffff })); m.position.set(x, y, z); m.material.color.setScalar(4); es.add(m); });
+    const t = pm.fromScene(es, 0.03).texture; pm.dispose(); return t;
+  }
+  function noiseCanvas(w, h, base, spots, creases, seed) {
+    const c = document.createElement('canvas'); c.width = w; c.height = h; const g = c.getContext('2d'); let r = seed || 1; const rnd = () => (r = (r * 16807) % 2147483647) / 2147483647;
+    g.fillStyle = base; g.fillRect(0, 0, w, h);
+    for (let i = 0; i < 70; i++) { const x = rnd() * w, y = rnd() * h, R = 14 + rnd() * 34, a = 0.05 + rnd() * 0.07, gr = g.createRadialGradient(x, y, 0, x, y, R); const col = rnd() < 0.5 ? '200,90,70' : '235,190,130'; gr.addColorStop(0, 'rgba(' + col + ',' + a + ')'); gr.addColorStop(1, 'rgba(' + col + ',0)'); g.fillStyle = gr; g.fillRect(x - R, y - R, 2 * R, 2 * R); }   // marbrures (rougeurs, teintes chaudes)
+    for (let i = 0; i < spots; i++) { g.fillStyle = 'rgba(90,50,40,' + (0.04 + rnd() * 0.08) + ')'; g.fillRect(rnd() * w, rnd() * h, 1 + rnd() * 1.4, 1 + rnd() * 1.4); }   // pores
+    if (creases) [0.07, 0.11, 0.89, 0.93].forEach((v, i) => { g.strokeStyle = 'rgba(120,70,55,' + (i % 2 ? 0.34 : 0.22) + ')'; g.lineWidth = 1.6; g.beginPath(); for (let x = 0; x <= w; x += 8) { const y = v * h + Math.sin(x * 0.2 + i) * 1.5; x ? g.lineTo(x, y) : g.moveTo(x, y); } g.stroke(); });   // plis aux articulations
+    return c;
+  }
+  function skinMat(h, creases) {
+    const base = h === 'R' ? '#e8b999' : '#dfb79f', c = noiseCanvas(256, 256, base, 900, creases, h === 'R' ? 7 : 13), tex = new THREE.CanvasTexture(c);
+    tex.wrapS = THREE.RepeatWrapping; tex.anisotropy = 4;
+    const bump = new THREE.CanvasTexture(noiseCanvas(256, 256, '#808080', 900, creases, 99)); bump.wrapS = THREE.RepeatWrapping;
+    return new THREE.MeshPhysicalMaterial({ map: tex, bumpMap: bump, bumpScale: 0.05, roughness: 0.52, metalness: 0, clearcoat: 0.12, clearcoatRoughness: 0.45, emissive: 0x2a0e06, emissiveIntensity: 0.18, envMapIntensity: 0.55 });   // diffusion sous la peau simulée par une légère émission chaude
+  }
+  const nailMat = () => new THREE.MeshPhysicalMaterial({ color: 0xf2d4cb, roughness: 0.22, metalness: 0, clearcoat: 0.9, clearcoatRoughness: 0.12, envMapIntensity: 0.9 });
   function limb(mesh, a, b) {
     const d = b.clone().sub(a), L = d.length() || 1e-4; mesh.position.copy(a).add(b).multiplyScalar(0.5); mesh.scale.set(1, L, 1);
     mesh.quaternion.setFromUnitVectors(Y, d.multiplyScalar(1 / L));
@@ -31,6 +54,7 @@ const View3D = (() => {
   function init(container) {
     host = container;
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false }); renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+    renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.setClearColor(0x0e1120); renderer.domElement.id = 'cv3d'; renderer.domElement.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;display:none';
     container.appendChild(renderer.domElement);
     // rotation à la souris (glisser), zoom (molette), retour à la vue de départ (double-clic)
@@ -50,66 +74,77 @@ const View3D = (() => {
     c.addEventListener('dblclick', () => { orbit = { ...DEF }; });
     // boutons de zoom dans un coin de la vue 3D : + / − / retour à la vue de départ
     ui = document.createElement('div'); ui.id = 'zoom3d'; ui.style.cssText = 'position:absolute;right:12px;top:12px;display:none;flex-direction:column;gap:6px;z-index:5';
-    [['+', 'Zoom avant (+ ou molette)', () => zoomBy(1 / 1.2)], ['−', 'Zoom arrière (− ou molette)', () => zoomBy(1.2)], ['⟲', 'Revenir à la vue de départ (double-clic)', () => { orbit = { ...DEF }; }]].forEach(([t, title, fn]) => {
+    [['+', 'Zoom avant (+ ou molette)', () => zoomBy(1 / 1.2)], ['−', 'Zoom arrière (− ou molette)', () => zoomBy(1.2)], ['✋', 'Style des mains : traits épais (comme MediaPipe) ou volume', () => { handStyle = handStyle === 'traits' ? 'volume' : 'traits'; }], ['⟲', 'Revenir à la vue de départ (double-clic)', () => { orbit = { ...DEF }; }]].forEach(([t, title, fn]) => {
       const b = document.createElement('button'); b.textContent = t; b.title = title; b.style.cssText = 'width:38px;height:38px;border-radius:10px;border:1px solid #2a3050;background:rgba(37,43,74,.92);color:#e8ebf7;font:600 20px/1 -apple-system,sans-serif;cursor:pointer';
       b.addEventListener('click', e => { e.stopPropagation(); fn(); }); b.addEventListener('pointerdown', e => e.stopPropagation()); ui.appendChild(b);
     });
     container.appendChild(ui);
     scene = new THREE.Scene(); scene.fog = new THREE.Fog(0x0e1120, 22, 46);
     cam = new THREE.PerspectiveCamera(38, 1, 0.1, 120);
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x2a3050, 0.85));
-    const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(-6, 16, 12); scene.add(sun);
+    scene.add(new THREE.HemisphereLight(0xfff6ee, 0x2a3050, 0.55));
+    sun = new THREE.DirectionalLight(0xfff0e0, 1.05); sun.position.set(-7, 18, 11); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sun.shadow.bias = -0.0004; sun.shadow.radius = 4;
+    scene.add(sun); scene.add(sun.target);
+    { const rim = new THREE.DirectionalLight(0xa8c0ff, 0.4); rim.position.set(9, 7, -11); scene.add(rim); }   // contre-jour froid : contours des doigts
+    /* scene.environment = makeEnv(); */   // reflets doux (panneaux lumineux) : brillance de la peau, des ongles et des touches
     return renderer.domElement;
   }
 
   // construit clavier, rouleau et mains pour la plage de notes du morceau
   function build(song, ux, isBlack) {
     keys = {}; bars = []; hands = {}; marks = []; pastilles = [];
-    while (scene.children.length > 2) scene.remove(scene.children[scene.children.length - 1]);
+    while (scene.children.length > 4) scene.remove(scene.children[scene.children.length - 1]);
     let lo = 127, hi = 0; song.notes.forEach(n => { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); });
     const m0 = Math.max(21, lo - 10), m1 = Math.min(108, hi + 10);
     const x0 = ux(m0) - 0.5, x1 = ux(m1) + 0.5, cx = (x0 + x1) / 2, w = x1 - x0;
-    const wood = new THREE.MeshLambertMaterial({ color: 0x3a2a24 });
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 0.5, KEY_L + 0.8), wood); bed.position.set(cx, -0.55, 0); scene.add(bed);
+    const wood = new THREE.MeshStandardMaterial({ color: 0x3a2a24, roughness: 0.55, metalness: 0, envMapIntensity: 0.4 });
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 0.5, KEY_L + 0.8), wood); bed.position.set(cx, -0.55, 0); bed.receiveShadow = true; scene.add(bed);
     const front = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 1, 0.6), wood); front.position.set(cx, -0.3, KEY_L / 2 + 0.5); scene.add(front);
     const back = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 1.1, 0.5), wood); back.position.set(cx, 0.2, BACK - 0.3); scene.add(back);
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.MeshLambertMaterial({ color: 0x141830 })); floor.rotation.x = -Math.PI / 2; floor.position.set(cx, -0.85, 0); scene.add(floor);
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.MeshLambertMaterial({ color: 0x141830 })); floor.rotation.x = -Math.PI / 2; floor.position.set(cx, -0.85, 0); floor.receiveShadow = true; scene.add(floor);
     for (let m = m0; m <= m1; m++) {
       const blk = isBlack(m), g = blk ? new THREE.BoxGeometry(0.58, 0.7, BLK_L) : new THREE.BoxGeometry(0.94, 0.5, KEY_L);
-      const mat = new THREE.MeshLambertMaterial({ color: blk ? 0x14151e : 0xf4f4f8 }), k = new THREE.Mesh(g, mat);
+      const mat = new THREE.MeshStandardMaterial({ color: blk ? 0x14151e : 0xf4f4f8, roughness: blk ? 0.22 : 0.36, metalness: 0, envMapIntensity: 0.5 }), k = new THREE.Mesh(g, mat);
       k.position.set(ux(m), blk ? 0.1 : -0.25, blk ? BACK + BLK_L / 2 : 0); k.userData = { blk, y0: k.position.y, col: blk ? 0x14151e : 0xf4f4f8 };
-      scene.add(k); keys[m] = k;
+      k.castShadow = k.receiveShadow = true; scene.add(k); keys[m] = k;
     }
     // barres du rouleau (réserve)
     const bg = new THREE.BoxGeometry(1, 0.3, 1);
-    barSp = []; for (let i = 0; i < 260; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true })); q.scale.set(0.8, 0.8, 1); q.renderOrder = 9; q.visible = false; scene.add(q); barSp.push(q); }
-    for (let i = 0; i < 260; i++) { const b = new THREE.Mesh(bg, new THREE.MeshLambertMaterial({ color: 0xffffff })); b.visible = false; scene.add(b); bars.push(b); }
+    barSp = []; for (let i = 0; i < 260; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); q.scale.set(0.8, 0.8, 1); q.renderOrder = 9; q.visible = false; scene.add(q); barSp.push(q); }
+    for (let i = 0; i < 260; i++) { const b = new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0, envMapIntensity: 0.4 })); b.visible = false; scene.add(b); bars.push(b); }
     // mains
     ['L', 'R'].forEach(h => {
-      const g = new THREE.Group(), skin = new THREE.MeshLambertMaterial({ color: h === 'R' ? 0xe9b996 : 0xdcbca8 }), H = { g, fingers: [] };
-      H.palm = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), skin); H.palm.scale.set(1.6, 0.27, 1.5); g.add(H.palm);
-      H.thenar = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), skin); H.thenar.scale.set(0.5, 0.28, 0.8); g.add(H.thenar);   // base du pouce
-      H.arm = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.9, 1, 16), skin); g.add(H.arm);
+      const g = new THREE.Group(), skin = skinMat(h, true), palmSkin = skinMat(h, false), H = { g, fingers: [] };
+      H.palm = new THREE.Mesh(new THREE.SphereGeometry(1, 40, 24), palmSkin); H.palm.scale.set(1.6, 0.27, 1.5); g.add(H.palm);
+      H.thenar = new THREE.Mesh(new THREE.SphereGeometry(1, 24, 16), palmSkin); H.thenar.scale.set(0.5, 0.28, 0.8); g.add(H.thenar);   // base du pouce
+      H.arm = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.9, 1, 28), palmSkin); g.add(H.arm);
       for (let f = 1; f <= 5; f++) {
         const r = f === 1 ? 0.36 : 0.3, F = { f };
-        F.p = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 10), skin); F.m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.94, r, 1, 10), skin); F.d = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.86, r * 0.94, 1, 10), skin);
-        F.j3 = new THREE.Mesh(new THREE.SphereGeometry(r * 0.9, 10, 8), skin);
-        F.j1 = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), skin); F.j2 = new THREE.Mesh(new THREE.SphereGeometry(r * 0.95, 10, 8), skin);
-        F.tip = new THREE.Mesh(new THREE.SphereGeometry(r * 0.88, 10, 8), new THREE.MeshLambertMaterial({ color: h === 'R' ? 0xe9b996 : 0xdcbca8 }));
-        F.sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: digit(f, h === 'R' ? '#ffc23a' : '#7fd0ff'), depthTest: false, transparent: true })); F.sp.scale.set(0.9, 0.9, 1); F.sp.renderOrder = 10;
-        [F.p, F.m, F.d, F.j1, F.j2, F.j3, F.tip, F.sp].forEach(o => g.add(o)); H.fingers.push(F);
+        F.p = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.94, r, 1, 20, 1), skin); F.m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.86, r * 0.94, 1, 20, 1), skin); F.d = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.78, r * 0.86, 1, 20, 1), skin);
+        F.j3 = new THREE.Mesh(new THREE.SphereGeometry(r * 0.88, 18, 12), skin);
+        F.j1 = new THREE.Mesh(new THREE.SphereGeometry(r * 1.04, 18, 12), skin); F.j2 = new THREE.Mesh(new THREE.SphereGeometry(r * 0.94, 18, 12), skin);
+        F.tip = new THREE.Mesh(new THREE.SphereGeometry(r * 0.78, 18, 12), skinMat(h, false)); F.nail = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), nailMat()); F.nail.scale.set(r * 0.6, r * 0.78, r * 0.13);
+        F.sp = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, map: digit(f, h === 'R' ? '#ffc23a' : '#7fd0ff'), depthTest: false, transparent: true })); F.sp.scale.set(0.9, 0.9, 1); F.sp.renderOrder = 10;
+        [F.p, F.m, F.d, F.j1, F.j2, F.j3, F.tip, F.nail, F.sp].forEach(o => g.add(o)); [F.p, F.m, F.d, F.j1, F.j2, F.j3, F.tip, F.nail].forEach(o => { o.castShadow = true; o.receiveShadow = true; }); H.fingers.push(F);
       }
-      scene.add(g); hands[h] = H;
+      // style « traits » (à la MediaPipe) : points d'articulation et traits épais, couleur de la main
+      { const cmat = new THREE.MeshStandardMaterial({ color: h === 'R' ? CR : CL, roughness: 0.45, metalness: 0, emissive: h === 'R' ? 0x663300 : 0x103a66, emissiveIntensity: 0.5 }), jmat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35, metalness: 0, emissive: 0x444444, emissiveIntensity: 0.4 });
+        const cyl = r => { const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 1, 14), cmat); m.castShadow = true; return m; }, sph = r => { const m = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), jmat); m.castShadow = true; return m; };
+        H.sk = { g: new THREE.Group(), palmB: [0, 1, 2, 3, 4, 5].map(() => cyl(0.18)), wrist: sph(0.3), fing: [] };
+        H.sk.g.add(H.sk.wrist); H.sk.palmB.forEach(b => H.sk.g.add(b));
+        for (let f = 0; f < 5; f++) { const o = { b: [cyl(0.17), cyl(0.17), cyl(0.17)], j: [sph(0.25), sph(0.23), sph(0.21), sph(0.19)] }; o.b.forEach(b => H.sk.g.add(b)); o.j.forEach(j => H.sk.g.add(j)); H.sk.fing.push(o); }
+        H.sk.g.visible = false; g.add(H.sk.g); }
+      H.palm.castShadow = H.thenar.castShadow = H.arm.castShadow = true; H.palm.receiveShadow = H.thenar.receiveShadow = H.arm.receiveShadow = true; scene.add(g); hands[h] = H;
     });
     // anticipation : repères d'atterrissage (anneau + disque + numéro) et chaînes de perles des trajectoires ; pastilles des touches jouées (mode « aucune »)
     for (let i = 0; i < 10; i++) {
-      const m = { ring: new THREE.Mesh(new THREE.RingGeometry(0.44, 0.58, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true })), disc: new THREE.Mesh(new THREE.CircleGeometry(0.43, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true })), sp: new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true })), beads: [] };
+      const m = { ring: new THREE.Mesh(new THREE.RingGeometry(0.44, 0.58, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true })), disc: new THREE.Mesh(new THREE.CircleGeometry(0.43, 24), new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, transparent: true })), sp: new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })), beads: [] };
       m.ring.rotation.x = m.disc.rotation.x = -Math.PI / 2; m.sp.scale.set(0.9, 0.9, 1); m.sp.renderOrder = 11; scene.add(m.ring); scene.add(m.disc); scene.add(m.sp);
       for (let k = 0; k < 8; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true })); b.visible = false; scene.add(b); m.beads.push(b); }
       m.ring.visible = m.disc.visible = m.sp.visible = false; marks.push(m);
     }
-    for (let i = 0; i < 12; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ depthTest: false, transparent: true })); sp.scale.set(0.95, 0.95, 1); sp.renderOrder = 12; sp.visible = false; scene.add(sp); pastilles.push(sp); }
+    for (let i = 0; i < 12; i++) { const sp = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); sp.scale.set(0.95, 0.95, 1); sp.renderOrder = 12; sp.visible = false; scene.add(sp); pastilles.push(sp); }
     built = { song, cx, w, ux, isBlack };
+    { const sc = sun.shadow.camera, hw = w / 2 + 3; sc.left = -hw; sc.right = hw; sc.top = 14; sc.bottom = -14; sc.near = 1; sc.far = 60; sc.updateProjectionMatrix(); sun.position.set(cx - 7, 18, 11); sun.target.position.set(cx, 0, 1); sun.target.updateMatrixWorld(); }
     layout();
   }
   function layout() {
@@ -129,7 +164,7 @@ const View3D = (() => {
   let rx, cam2;
   function renderTo(c2d, W, H, k) {
     if (!built) return;
-    if (!rx) { rx = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); rx.setPixelRatio(1); rx.setClearColor(0x0e1120); cam2 = new THREE.PerspectiveCamera(38, 1, 0.1, 120); }
+    if (!rx) { rx = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); rx.shadowMap.enabled = true; rx.shadowMap.type = THREE.PCFSoftShadowMap; rx.setPixelRatio(1); rx.setClearColor(0x0e1120); cam2 = new THREE.PerspectiveCamera(38, 1, 0.1, 120); }
     const pw = Math.round(W * k), ph = Math.round(H * k);
     if (rx.domElement.width !== pw || rx.domElement.height !== ph) rx.setSize(pw, ph, false);
     cam2.aspect = W / H; cam2.updateProjectionMatrix(); place(cam2);
@@ -211,14 +246,29 @@ const View3D = (() => {
         const up = Y.clone().sub(dir.clone().multiplyScalar(Y.dot(dir))); if (up.lengthSq() < 1e-4) up.set(0, 0, 1); up.normalize();
         const M = K.clone().add(dir.clone().multiplyScalar(xx)).add(up.multiplyScalar(hh));
         const D = M.clone().lerp(T, 0.55); D.y += thumb ? 0 : 0.06 + 0.12 * Math.min(1, hh / 1.4);
-        limb(F.p, K, M); limb(F.m, M, D); limb(F.d, D, T); F.j1.position.copy(K); F.j2.position.copy(M); F.j3.position.copy(D); F.tip.position.copy(T);
+        limb(F.p, K, M); limb(F.m, M, D); limb(F.d, D, T);
+        { const dd2 = T.clone().sub(D).normalize(), dors = Y.clone().sub(dd2.clone().multiplyScalar(Y.dot(dd2))); if (dors.lengthSq() < 1e-4) dors.set(0, 0, 1); dors.normalize();
+          const side = new THREE.Vector3().crossVectors(dors, dd2).normalize(), rr = thumb ? 0.36 : 0.3;
+          F.nail.position.copy(T).addScaledVector(dors, rr * 0.72).addScaledVector(dd2, -rr * 0.34); F.nail.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(side, dd2, dors)); } F.j1.position.copy(K); F.j2.position.copy(M); F.j3.position.copy(D); F.tip.position.copy(T);
         F.tip.material.color.setHex(f.pressed ? col : (h === 'R' ? 0xe9b996 : 0xdcbca8)); F.tip.material.emissive && F.tip.material.emissive.setHex(f.pressed ? 0x553300 : 0x000000);
         F.sp.visible = st.fing !== false; F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
         const nextF = st.anticip && !f.pressed && (f.wN || 0) > 0.02;   // prochain doigt : pastille qui clignote (3 fois par seconde), bout du doigt qui s'éclaire
         if (nextF) { const bl = 0.5 + 0.5 * Math.sin(2 * Math.PI * 3 * performance.now() / 1000); F.sp.material.opacity = 1; F.sp.scale.setScalar(1.05 + 0.5 * bl); F.tip.material.color.setHex(col); F.tip.material.emissive && F.tip.material.emissive.setHex(bl > 0.5 ? 0x553300 : 0x221100); }
         else F.sp.scale.setScalar(0.9);
-        tips[h + F.f] = T.clone();
+        tips[h + F.f] = T.clone(); F.pts = [K.clone(), M.clone(), D.clone(), T.clone()];
       });
+      // bascule volume / traits : en mode traits seul le squelette est dessiné (poignet, 4 articulations par doigt, paume en polygone)
+      { const sk = H.sk, traits = handStyle === 'traits';
+        H.palm.visible = H.thenar.visible = H.arm.visible = !traits;
+        H.fingers.forEach(F => [F.p, F.m, F.d, F.j1, F.j2, F.j3, F.tip, F.nail].forEach(o => { o.visible = !traits; }));
+        sk.g.visible = traits;
+        if (traits) {
+          const W = V(px, 1.0, 4.9); sk.wrist.position.copy(W);
+          const P = H.fingers.map(F => F.pts);
+          [[W, P[0][0]], [W, P[1][0]], [W, P[4][0]], [P[1][0], P[2][0]], [P[2][0], P[3][0]], [P[3][0], P[4][0]]].forEach(([a, b], i) => limb(sk.palmB[i], a, b));
+          H.fingers.forEach((F, i) => { const o = sk.fing[i], q = F.pts; for (let k = 0; k < 3; k++) limb(o.b[k], q[k], q[k + 1]); for (let k = 0; k < 4; k++) o.j[k].position.copy(q[k]); });
+        }
+      }
     });
     // repères d'atterrissage du prochain pas (anticipation, sauf « sans trajectoire ») et chemins des doigts (« avec trajectoires »)
     marks.forEach(m => { m.ring.visible = m.disc.visible = m.sp.visible = false; m.beads.forEach(b => { b.visible = false; }); });
