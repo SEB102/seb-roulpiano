@@ -45,7 +45,7 @@ const View3D = (() => {
         const [a, b] = [...ptrs.values()], dd = Math.hypot(a.x - b.x, a.y - b.y); if (pinch) zoomBy(pinch / dd); pinch = dd; drag = null; return;
       }
       if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY };
-      orbit.az = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, orbit.az - dx * 0.006)); orbit.el = Math.max(0.09, Math.min(1.5, orbit.el + dy * 0.005));
+      orbit.az = ((orbit.az - dx * 0.006) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI); /* tour complet à 360° */ orbit.el = Math.max(0.09, Math.min(1.5, orbit.el + dy * 0.005));
     });
     const end = e => { ptrs.delete(e.pointerId); pinch = 0; drag = null; c.style.cursor = 'grab'; }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
     c.addEventListener('wheel', e => { e.preventDefault(); zoomBy(Math.exp(e.deltaY * 0.001)); }, { passive: false });
