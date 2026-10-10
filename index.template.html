@@ -77,7 +77,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261013b"></script>
+<script src="view3d.js?v=20261013d"></script>
 <script src="core.js?v=20261010d"></script>
 <script src="hands.js?v=20261010d"></script>
 <script src="hands_legacy.js?v=20261010g"></script>
@@ -112,7 +112,7 @@
       <button id="bZoom" title="Le clavier suit les mains (Z)">zoom auto</button>
       <button id="bHm" title="Mains plus petites (−)">mains −</button><button id="bHp" title="Mains plus grandes (+)">mains +</button>
       <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button>
-      <button id="b3d" title="Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en volume ; glisser pour tourner, molette pour zoomer, double-clic pour revenir (V)">vue 3D</button></div>
+      <button id="b3d" title="Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en traits épais ; glisser pour tourner, molette pour zoomer, double-clic pour revenir (V)">vue 3D</button></div>
     <span id="bInfo"></span><span id="status"></span>
   </div>
   <div class="row">
@@ -1404,7 +1404,7 @@ addEventListener('click', e => { const b = e.target.closest && e.target.closest(
 // Mains virtuelles, trois états : aucune / avec trajectoires (doigts repliés, repères, chemins) / sans trajectoires (doigts tendus, ni repères ni chemins)
 function setHandsMode(m) { handsMode = m; showHands = m !== 'off'; showTraj = curlFingers = m === 'traj'; markPlan(); }
 function cycleHandsMode() { setHandsMode(handsMode === 'traj' ? 'plain' : handsMode === 'plain' ? 'off' : 'traj'); }
-// ---------- Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en volume (glisser pour tourner, molette pour zoomer, double-clic pour revenir) ----------
+// ---------- Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en traits épais (glisser pour tourner, molette pour zoomer, double-clic pour revenir) ----------
 function toggle3D() {
   if (typeof THREE === 'undefined' || typeof View3D === 'undefined') { showError('Vue 3D indisponible : la bibliothèque Three.js n\'a pas pu être chargée (connexion ?).'); return; }
   if (!View3D.el()) View3D.init($('cv').parentElement);
