@@ -201,7 +201,7 @@
       if (j < L.length) { wN = ease((t - (L[j].a - LEAD_SEC)) / LEAD_SEC); depth = Math.max(depth, ease((t - (L[j].a - 0.06)) / 0.06)); if (wN > 0) blk = isBlack(L[j].midi) ? 1 : 0; }
       const uP = i >= 0 ? L[i].u : r, uN = j < L.length ? L[j].u : r;
       const x = r + (uP - r) * wP * (1 - wN) + (uN - r) * wN;
-      return { x, depth, blk, pressed: false, midi: 0, lift: (1 - depth) * (0.35 + 0.65 * 4 * wN * (1 - wN)) };
+      return { x, depth, wN, wP, blk, pressed: false, midi: 0, lift: (1 - depth) * (0.35 + 0.65 * 4 * wN * (1 - wN)) };
     }
     // temps qui sépare t de la touche frappée ou tenue la plus proche (0 = la main joue en ce moment)
     function near(t) {
