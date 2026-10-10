@@ -191,8 +191,11 @@ const View3D = (() => {
     // mains
     ['L', 'R'].forEach(h => {
       const H = hands[h], pl = st.plan && st.plan[h], show = vis.includes(h) && pl && !pl.empty && st.handsMode !== 'off'; H.g.visible = !!show; if (!show) return;
-      const a = pl.at(sp), sg = h === 'L' ? -1 : 1, px = a.palm, col = h === 'R' ? CR : CL;
+      const a = pl.at(sp), sg = h === 'L' ? -1 : 1, col = h === 'R' ? CR : CL;
       const xs = a.fingers.map(f => f.x), pin = a.fingers.map(f => !!f.pressed || (f.depth || 0) > 0.6 || (f.wN || 0) > 0.85);
+      // le pouce doit toucher sa touche : s'il est trop loin pour sa portée, c'est toute la main qui se décale (jusqu'à 1,8 touche), pas le pouce qui s'étire
+      const tw = Math.max(a.fingers[0].pressed ? 1 : 0, a.fingers[0].depth || 0, a.fingers[0].wN || 0), eT = xs[0] - (a.palm - sg * 2 * 1.3), REACH = 2.9;
+      const px = a.palm + (Math.abs(eT) > REACH ? Math.sign(eT) * Math.min(1.8, Math.abs(eT) - REACH) * Math.min(1, tw * 1.5) : 0);
       enforceOrder(xs, pin, sg);
       // Règle d'enchaînement : un doigt voisin qui vient de jouer (ou de quitter sa touche) doit se replier AVANT que l'autre ne s'étende (ex. le 2 se replie avant que le 3 s'étende),
       // sinon les deux doigts se croisent ; le doigt qui arrive reste à demi replié tant que son voisin n'est pas replié.
@@ -206,15 +209,15 @@ const View3D = (() => {
       const kx = a.fingers.map((f, i) => px + sg * (i - 2) * 0.84);   // bases des doigts : fixes sur la paume
       // Poignet : légère rotation dans les trois dimensions (≈ ±10° ; jusqu'à ≈ 20° en lacet quand le pouce vise une touche éloignée) de la main entière autour du poignet W :
       //  lacet vers le côté où les doigts vont jouer, tangage (main un peu relevée au repos, abaissée à l'appui), roulis vers le côté du doigt qui appuie.
-      const W0 = V(px, 1.1, 6.3), mf = kws.slice(1), mk = mf.reduce((u, v) => u + v, 0) / 4, wsum = kws.reduce((u, v) => u + v, 0) || 1;
+      const W0 = V(px, 1.1, 6.1), mf = kws.slice(1), mk = mf.reduce((u, v) => u + v, 0) / 4, wsum = kws.reduce((u, v) => u + v, 0) || 1;
       const dxm = a.fingers.reduce((u, f, i) => u + kws[i] * (xs[i] - kx[i]), 0) / wsum, side = a.fingers.reduce((u, f, i) => u + kws[i] * sg * (i - 2), 0) / wsum;
       const wrot = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.max(-0.1, Math.min(0.1, 0.14 * (0.5 - mk))), -Math.max(-0.35, Math.min(0.35, dxm * 0.07 + (xs[0] - kx[0]) * kws[0] / 4.5)), -Math.max(-0.1, Math.min(0.1, 0.05 * side)), 'YXZ'));
       const rotW = p => p.sub(W0).applyMatrix4(wrot).add(W0);
       { const e = new THREE.Euler().setFromRotationMatrix(wrot, 'YXZ'); stats.rot = stats.rot || [0, 0, 0]; stats.rot[0] = Math.max(stats.rot[0], Math.abs(e.y)); stats.rot[1] = Math.max(stats.rot[1], Math.abs(e.x)); stats.rot[2] = Math.max(stats.rot[2], Math.abs(e.z)); }
       H.fingers.forEach(F => {
         const f = a.fingers[F.f - 1], fx = xs[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
-        const K = rotW(V(thumb ? px + off * 0.95 : kx[F.f - 1], thumb ? 0.8 : 1.1, thumb ? 4.3 : 3.95)), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
-        const blk = f.blk || 0, zt = 1.7 + (-0.9 - 1.7) * blk, yk = blk ? 0.55 : 0.1;
+        const K = rotW(V(thumb ? px + off * 1.3 : kx[F.f - 1], thumb ? 0.8 : 1.1, thumb ? 3.5 : 3.3)), TOT = [3.0, 3.9, 4.2, 4.1, 3.0][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
+        const blk = f.blk || 0, zt = 1.7 + ((thumb ? 0.5 : -0.2) - 1.7) * blk, yk = blk ? 0.55 : 0.1;
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
         const T = V(fx, tipY, f.pressed ? zt : zt + (1 - f.depth) * (0.5 + 0.8 * (1 - blk)) - 0.45 * prep);
@@ -228,10 +231,11 @@ const View3D = (() => {
         // doigt à 2 articulations (cinématique inverse dans le plan vertical K→T) : segments de longueur fixe ; il se replie quand la touche est proche
         // (doigt arrondi) et se tend jusqu'à l'extension complète quand la touche est loin (touche noire, doigt tendu vers l'avant)
         if (!thumb) { const lim = Math.abs(K.z - T.z) * Math.tan(28 * Math.PI / 180) + 0.25; T.x = K.x + Math.max(-lim, Math.min(lim, T.x - K.x)); }   // rotation latérale uniquement à la première articulation (base du doigt), limitée à ±28°
-        if (thumb) {   // pouce : sa base (près du poignet) reste fixe ; il pivote autour d'elle avec une longueur bornée à 2,5 touches (il ne s'étire plus) ; si la touche est plus loin, le bout s'arrête avant
-          const d0 = T.clone().sub(K), l0 = d0.length(); if (l0 > 2.5) T.copy(K).add(d0.multiplyScalar(2.5 / l0));
+        if (thumb) {   // pouce : sa base (près du poignet) reste fixe ; il pivote autour d'elle avec une longueur bornée à 3,8 touches (il ne s'étire plus) ; si la touche est plus loin, le bout s'arrête avant
+          const d0 = T.clone().sub(K), l0 = d0.length(); if (f.pressed && l0 > 3.85) { stats.miss = (stats.miss || 0) + 1; } if (l0 > 3.8) T.copy(K).add(d0.multiplyScalar(3.8 / l0));
         }
         const dv = T.clone().sub(K), dist = dv.length(), dir = dv.clone().multiplyScalar(1 / (dist || 1e-4));
+        if (f.pressed) { stats.press = (stats.press || 0) + 1; if (!thumb && dist > TOT * 0.999 + 0.05) { stats.miss = (stats.miss || 0) + 1; stats.byF = stats.byF || {}; const k = F.f + (blk ? 'n' : 'b'); stats.byF[k] = stats.byF[k] || [0, 0]; stats.byF[k][0]++; stats.byF[k][1] = Math.max(stats.byF[k][1], dist - TOT); } }   // contrôle : touche non atteinte
         if (!thumb && dist > TOT * 0.999) T.copy(K).add(dir.clone().multiplyScalar(TOT * 0.999));
         let dd, xx, hh;
         if (thumb) {   // le pouce ne se replie JAMAIS : il reste parfaitement droit, sa longueur apparente suit la distance à la touche
