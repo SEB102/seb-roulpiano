@@ -162,11 +162,32 @@
       }
       prev = e;
     });
-    const palmAt = t => {
+    const palmAt0 = t => {
       if (!kt.length) return 0;
       if (t <= kt[0]) return kp[0]; if (t >= kt[kt.length - 1]) return kp[kp.length - 1];
       let lo = 0, hi = kt.length - 1; while (hi - lo > 1) { const m = (lo + hi) >> 1; if (kt[m] <= t) lo = m; else hi = m; }
       return kp[lo] + (kp[lo + 1] - kp[lo]) * ease((t - kt[lo]) / (kt[lo + 1] - kt[lo]));
+    };
+    // Une main qui ne joue pas pendant un bon moment revient à sa position « normale » : la droite à droite de la gauche (au moins HOME_GAP touches blanches),
+    // la gauche à gauche de la droite. Elle y part juste après sa dernière note et en repart en avance pour être en place à la note suivante.
+    const HOME_U = hand === 'R' ? ux(64) : ux(52), HOME_GAP = 6, IDLE_MIN = 0.8;
+    let other = null;
+    const gaps = []; let busyEnd = null;
+    presses.forEach(p => {
+      if (busyEnd === null) { if (p.a > IDLE_MIN) gaps.push({ g0: -Infinity, g1: p.a }); }
+      else if (p.a - busyEnd > IDLE_MIN) gaps.push({ g0: busyEnd, g1: p.a });
+      busyEnd = busyEnd === null ? p.b : Math.max(busyEnd, p.b);
+    });
+    if (busyEnd !== null) gaps.push({ g0: busyEnd, g1: Infinity });
+    const homeAt = t => !other ? HOME_U : hand === 'R' ? Math.max(HOME_U, other.palm0(t) + HOME_GAP) : Math.min(HOME_U, other.palm0(t) - HOME_GAP);
+    const palmAt = t => {
+      for (const g of gaps) if (t > g.g0 && t < g.g1) {
+        const h = homeAt(t), f0 = isFinite(g.g0), f1 = isFinite(g.g1), A = f0 ? palmAt0(g.g0) : h, B = f1 ? palmAt0(g.g1) : h;
+        const len = g.g1 - g.g0, d1 = Math.min(0.5, 0.4 * len), d2 = Math.min(0.8, 0.4 * len);   // durées d'aller et de retour, raccourcies pour les silences courts
+        const s1 = f0 ? ease((t - g.g0 - 0.05) / d1) : 1, s2 = f1 ? ease((t - (g.g1 - d2)) / d2) : 0, p = A + (h - A) * s1;
+        return p + (B - p) * s2;
+      }
+      return palmAt0(t);
     };
     const firstIdx = (L, t) => { let lo = 0, hi = L.length; while (lo < hi) { const m = (lo + hi) >> 1; if (L[m].a > t) hi = m; else lo = m + 1; } return lo; };
 
@@ -190,7 +211,7 @@
       return Math.min(i >= 0 ? t - prefB[i] : Infinity, i + 1 < presses.length ? presses[i + 1].a - t : Infinity);
     }
     return {
-      hand, sg, presses, empty: !presses.length, palm: palmAt, finger, near,
+      hand, sg, presses, empty: !presses.length, palm: palmAt, palm0: palmAt0, link(o) { other = o; }, finger, near,
       at(t) { return { palm: palmAt(t), fingers: [1, 2, 3, 4, 5].map(f => finger(f, t)), near: near(t) }; },
     };
   }

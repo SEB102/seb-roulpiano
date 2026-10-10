@@ -76,9 +76,9 @@
   body.dragging #drop { display:flex; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="core.js?v=20261009d"></script>
-<script src="hands.js?v=20261009d"></script>
-<script src="hands_legacy.js?v=20261009d"></script>
+<script src="core.js?v=20261010b"></script>
+<script src="hands.js?v=20261010b"></script>
+<script src="hands_legacy.js?v=20261010b"></script>
 </head>
 <body>
 <header>
@@ -1032,6 +1032,7 @@ function ensurePlan() {
       pl.nextEvent = t => { let lo = 0, hi = ev.length; while (lo < hi) { const m = (lo + hi) >> 1; if (ev[m].t > t + 1e-3) hi = m; else lo = m + 1; } return ev[lo] || null; };
     }
   });
+  if (plan.L && plan.R) { plan.L.link && plan.L.link(plan.R); plan.R.link && plan.R.link(plan.L); }   // chacune connaît la position de l'autre (position « normale » d'une main qui ne joue pas)
   song.plan = plan;
 }
 const SKIN = { R: ['#f3d2b3', '#9c5f33'], L: ['#e6d3c2', '#4a6fae'] }; // [peau, contour] : main droite contour brun-orangé, main gauche contour bleuté
