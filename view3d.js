@@ -182,17 +182,16 @@ const View3D = (() => {
         const f = a.fingers[i]; if (pin[i] || (f.wN || 0) <= (f.wP || 0)) continue;
         [i - 1, i + 1].forEach(j => { if (j < 1 || j > 4) return; const g = a.fingers[j]; if (pin[j] || (g.wP || 0) <= (g.wN || 0)) return; kws[i] = Math.min(kws[i], Math.max(0.3, 1 - 0.9 * kws[j])); });
       }
-      // Mouvement simplifié : chaque doigt (2 à 5) ne fait que fléchir / s'étendre dans son plan vertical, sans rotation latérale. Pour atteindre sa touche, c'est
-      // l'articulation de base (le doigt tout entier) qui glisse de côté, d'autant plus que le doigt s'engage (kws) ; le bout reste à la verticale de la base.
-      const kx = a.fingers.map((f, i) => { const k0 = px + sg * (i - 2) * 0.84; return i === 0 ? k0 : k0 + (xs[i] - k0) * Math.min(1, kws[i]); });
-      enforceOrder(kx, pin, sg);
+      // Mouvements : la première articulation (base du doigt, côté paume) est la seule à pivoter latéralement ; les deux suivantes ne font que fléchir / s'étendre
+      // dans le plan vertical du doigt (cinématique inverse ci-dessous).
+      const kx = a.fingers.map((f, i) => px + sg * (i - 2) * 0.84);   // bases des doigts : fixes sur la paume
       H.fingers.forEach(F => {
         const f = a.fingers[F.f - 1], fx = xs[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
         const K = V(thumb ? px + off * 0.95 : kx[F.f - 1], thumb ? 0.8 : 1.1, thumb ? 4.3 : 3.95), TOT = [3.0, 3.4, 3.9, 3.5, 2.7][F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
         const blk = f.blk || 0, zt = 1.7 + (-0.9 - 1.7) * blk, yk = blk ? 0.55 : 0.1;
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? yk + 0.2 : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
-        const T = V(thumb ? fx : K.x, tipY, f.pressed ? zt : zt + (1 - f.depth) * (0.5 + 0.8 * (1 - blk)) - 0.45 * prep);
+        const T = V(fx, tipY, f.pressed ? zt : zt + (1 - f.depth) * (0.5 + 0.8 * (1 - blk)) - 0.45 * prep);
         // doigt qui ne joue pas : il se soulève et se replie À MOITIÉ (flexion partielle, bout du doigt en l'air devant la phalange) ; il se déplie vers sa touche
         // à mesure qu'elle approche (wN), reste déplié un instant après la frappe (wP) puis se relâche
         if (!thumb) {
@@ -202,6 +201,7 @@ const View3D = (() => {
         }
         // doigt à 2 articulations (cinématique inverse dans le plan vertical K→T) : segments de longueur fixe ; il se replie quand la touche est proche
         // (doigt arrondi) et se tend jusqu'à l'extension complète quand la touche est loin (touche noire, doigt tendu vers l'avant)
+        if (!thumb) { const lim = Math.abs(K.z - T.z) * Math.tan(28 * Math.PI / 180) + 0.25; T.x = K.x + Math.max(-lim, Math.min(lim, T.x - K.x)); }   // rotation latérale uniquement à la première articulation (base du doigt), limitée à ±28°
         if (thumb) {   // pouce à 2 phalanges, longueur quasi fixe (1,8 à 2,5 touches) : c'est sa base qui glisse vers la touche, il ne s'étire pas
           const d0 = T.clone().sub(K), l0 = d0.length(), le = Math.max(1.8, Math.min(2.5, l0)); if (l0 > 1e-4 && Math.abs(l0 - le) > 1e-4) K.copy(T).sub(d0.multiplyScalar(le / l0));
         }
