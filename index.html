@@ -873,6 +873,8 @@ function scene(W, H, dpr) {
   
   }
 
+  for (let m = FIRST; m <= LAST; m++) { if (m % 12 !== 0) continue; const kr = keyRect(m, W); ctx.fillStyle = '#e53935'; ctx.fillRect(Math.round(kr.x) - 1, 0, 3, rollH); }   // barre verticale des Do (bord gauche de la touche) : rouge, plus épaisse
+
   const active = new Map(); // midi -> note en cours
   if (!song) {
     ctx.fillStyle = '#8d94b3'; ctx.font = '600 18px -apple-system, sans-serif'; ctx.textAlign = 'center';
