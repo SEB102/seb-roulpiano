@@ -8,7 +8,7 @@ const View3D = (() => {
   const DEF = { az: 0, el: 55 * Math.PI / 180, zoom: 1.1 };
   const stats = { back: 0, n: 0 };
   let onScroll = null;   // défilement du rouleau, en secondes (> 0 = le temps avance)
-  let gridL = [], gridS = [], stemM = [], holeM = [], boxG = null, cylG = null, lblTex = {}, sun, barSp = [], ui, marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
+  let gridL = [], gridS = [], boxG = null, lblTex = {}, sun, barSp = [], ui, marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
   const V = (x, y, z) => new THREE.Vector3(x, y, z), Y = V(0, 1, 0);
 
   function digit(n, col) {
@@ -123,7 +123,7 @@ const View3D = (() => {
 
   // construit clavier, rouleau et mains pour la plage de notes du morceau
   function build(song, ux, isBlack) {
-    keys = {}; bars = []; holeM = []; hands = {}; marks = []; pastilles = [];
+    keys = {}; bars = []; hands = {}; marks = []; pastilles = [];
     while (scene.children.length > 4) scene.remove(scene.children[scene.children.length - 1]);
     let lo = 127, hi = 0; song.notes.forEach(n => { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); });
     const m0 = Math.max(21, lo - 10), m1 = Math.min(108, hi + 10);
@@ -144,12 +144,11 @@ const View3D = (() => {
       for (let m = m0; m <= m1; m++) { const blk = isBlack(m); if (blk) continue; const c = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.03, zl), new THREE.MeshBasicMaterial({ color: 0xd9cdb1 })); c.position.set(ux(m), 0.0, zc); scene.add(c); }
       for (let m = m0; m <= m1; m++) { const blk = isBlack(m); if (!blk) continue; const c = new THREE.Mesh(new THREE.BoxGeometry(0.58, 0.03, zl), new THREE.MeshBasicMaterial({ color: 0x70747f })); c.position.set(ux(m), 0.025, zc); scene.add(c); } }
     // barres du rouleau (réserve)
-    boxG = new THREE.BoxGeometry(1, 0.3, 1); const bg = new THREE.CylinderGeometry(0.5, 0.5, 0.3, 32), hg = new THREE.CylinderGeometry(0.33, 0.33, 0.34, 28);   // notes : disques de même diamètre (têtes de note) ; les blanches et rondes sont évidées
+    boxG = new THREE.BoxGeometry(1, 0.3, 1);
     barSp = []; for (let i = 0; i < 260; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); q.scale.set(1.25, 1.25, 1); q.renderOrder = 9; q.visible = false; scene.add(q); barSp.push(q); }
-    cylG = bg; for (let i = 0; i < 260; i++) { const b = new THREE.Mesh(bg, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0, envMapIntensity: 0.4 })); b.visible = false; scene.add(b); bars.push(b); const hmesh = new THREE.Mesh(hg, new THREE.MeshStandardMaterial({ color: 0x151a33, roughness: 0.6 })); hmesh.visible = false; scene.add(hmesh); holeM.push(hmesh); }
+    for (let i = 0; i < 260; i++) { const b = new THREE.Mesh(boxG, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4, metalness: 0, envMapIntensity: 0.4 })); b.visible = false; scene.add(b); bars.push(b); }
     // repères temporels : barres de mesure (épaisses, avec numéro) et temps (fins) posés sur le plan du rouleau ; ils tournent avec la scène
-    gridL = []; gridS = []; stemM = [];
-    { const wm = new THREE.MeshBasicMaterial({ color: 0x15172a }); for (let i = 0; i < 260; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), wm); m.visible = false; m.renderOrder = 6; scene.add(m); stemM.push(m); } }   // hampes et ligatures (boîtes blanches posées sur le rouleau)
+    gridL = []; gridS = [];
     for (let i = 0; i < 140; i++) { const l = new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial({ color: 0x1f2547, transparent: true, opacity: 0.3, depthWrite: false })); l.visible = false; l.renderOrder = 1; scene.add(l); gridL.push(l); }
     for (let i = 0; i < 90; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); q.scale.set(2.4, 1.2, 1); q.renderOrder = 8; q.visible = false; scene.add(q); gridS.push(q); }
     // mains
@@ -221,30 +220,16 @@ const View3D = (() => {
       const k = keys[m], h = on[m]; k.material.color.setHex(h ? (h === 'R' ? CR : CL) : k.userData.col); k.position.y = k.userData.y0 - (h ? 0.14 : 0);
     }
     // rouleau
-    let bi = 0; const RY = !!st.rhythm;
+    let bi = 0;
     for (let i = st.lowerBoundSec(sp - 10); i < S.length && S[i].t0 <= sp + AHEAD && bi < bars.length; i++) {
       const n = S[i]; if (!vis.includes(st.noteHand(n))) continue;
-      if (RY) {   // rythme activé : têtes de note rondes (disques), la tête part avec le début de la note
-        if (n.t0 < sp - 0.001) continue;
-        const z0 = BACK - (n.t0 - sp) * SPEED, blk = built.isBlack(n.midi), bar = bars[bi++], zc = z0 - 0.47, hole = holeM[bi - 1];
-        { const q = barSp[bi - 1], f = st.fof && st.fing !== false ? st.fof(n) : 0;
-          if (f) { const tex = digit(f, st.noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.visible = true; q.position.set(built.ux(n.midi), 0.85, zc); } else q.visible = false; }
-        if (bar.geometry !== cylG) bar.geometry = cylG;
-        bar.visible = true; bar.position.set(built.ux(n.midi), 0.3, zc); bar.scale.set(0.94, 1, 0.94);
-        bar.material.color.setHex(st.noteHand(n) === 'R' ? CR : CL);
-        if (st.hollow && st.hollow(n)) { hole.visible = true; hole.position.set(built.ux(n.midi), 0.3, zc); } else hole.visible = false;
-      } else {    // rythme désactivé : barres rectangulaires, la longueur donne la durée
         if (n.t1 < sp) continue;
         const a = Math.max(0, n.t0 - sp), b = Math.min(AHEAD, n.t1 - sp), z0 = BACK - a * SPEED, z1 = BACK - b * SPEED, blk = built.isBlack(n.midi), bar = bars[bi++];
         { const q = barSp[bi - 1], f = st.fof && st.fing !== false ? st.fof(n) : 0;
           if (f) { const tex = digit(f, st.noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.visible = true; q.position.set(built.ux(n.midi), 0.85, z1 - 0.62); } else q.visible = false; }   // pastille détachée du rectangle : juste au-delà de sa fin (comme en 2D), pour ne pas cacher les notes courtes
-        if (bar.geometry !== boxG) bar.geometry = boxG;
         bar.visible = true; bar.position.set(built.ux(n.midi), 0.3, (z0 + z1) / 2); bar.scale.set(blk ? 0.5 : 0.84, 1, Math.max(0.12, z0 - z1 - 0.06));
         bar.material.color.setHex(st.noteHand(n) === 'R' ? CR : CL);
-        holeM[bi - 1].visible = false;
-      }
     }
-    for (let h = bi; h < holeM.length; h++) holeM[h].visible = false;
     for (; bi < bars.length; bi++) bars[bi].visible = false;
     for (let i = 0; i < barSp.length; i++) if (i >= bi || !bars[i].visible) barSp[i].visible = false;
     // barres de mesure et temps
@@ -256,18 +241,6 @@ const View3D = (() => {
         if (e.bar && e.label !== undefined) { put(e.label, x0 + 1.4, true); put(e.label, x1 - 1.4, true); }   // numéro de mesure aux deux bouts
         if (e.beatLabel) { const off = 3.3; put(e.beatLabel, x0 + off, false); put(e.beatLabel, x1 - off, false); }   // X.1, X.2, X.3… aux deux bouts, sur chaque temps
       });
-      // hampes et ligatures : x en largeurs de touche, p = −secondes (z = BACK + (p + sp) × SPEED)
-      { let mj = 0; const zf = p => BACK + (p + sp) * SPEED, zMin = BACK - AHEAD * SPEED - 0.5;
-        (st.stems || []).forEach(q => {
-          if (q.k === 'txt') { const z = zf(q.p); if (z > BACK + 0.3 || z < zMin) return; const sq = gridS[si++]; if (!sq) return; const tx = measureTex(q.s); if (sq.material.map !== tx) { sq.material.map = tx; sq.material.needsUpdate = true; } sq.scale.set(1.1, 0.55, 1); sq.visible = true; sq.position.set(q.x, 0.8, z); return; }
-          const m = stemM[mj]; if (!m) return;
-          if (q.k === 'h') { const z = zf(q.p); if (z > BACK + 0.3 || z < zMin) return; m.position.set((q.a + q.b) / 2, 0.39, z); m.scale.set(Math.abs(q.b - q.a), 0.08, q.w); }
-          else if (q.k === 'v') { const z0 = zf(q.a), z1 = zf(q.b), zc = (z0 + z1) / 2; if (Math.max(z0, z1) > BACK + 0.3 || Math.min(z0, z1) < zMin) return; m.position.set(q.x, 0.39, zc); m.scale.set(q.w, 0.08, Math.abs(z0 - z1) + 0.17); }
-          else if (q.k === 's') { const z = zf(q.p); if (z > BACK + 0.3 || z < zMin) return; m.position.set(q.x, 0.39, z); m.scale.set(q.w, 0.08, q.w); }
-          else { const z = zf(q.p); if (z > BACK + 0.3 || z < zMin) return; m.position.set(q.x, 0.39, z); m.scale.set(0.36, 0.08, 0.36); }
-          m.visible = true; mj++;
-        });
-        for (; mj < stemM.length; mj++) stemM[mj].visible = false; }
       for (; li < gridL.length; li++) gridL[li].visible = false; for (; si < gridS.length; si++) gridS[si].visible = false; }
     stats.n++;
     // pas de temps pour le lissage (le mouvement est filtré sur ≈ 70 ms ; un saut dans le morceau recale tout d'un coup)

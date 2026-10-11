@@ -266,8 +266,6 @@
               const sub = kids(tech, 'fingering').find(x => x.attrs.substitution === 'yes'), sf = sub ? parseInt(sub.text.trim(), 10) : 0;
               if (sf >= 1 && sf <= 5 && n.finger && sf !== n.finger) { n.finger2 = sf; n.swapFrac = 0.55; }
             }
-            { const tp = txt(e, 'type'), TK = { whole: 0, half: 1, quarter: 2, eighth: 3, '16th': 4, '32nd': 5, '64th': 6 }[tp];   // valeur écrite dans la partition (pour l'affichage du rythme : point, triolet), indépendante de la durée jouée
-              if (TK !== undefined) { n.ntype = TK; n.ndot = kids(e, 'dot').length; n.ntrip = kid(e, 'time-modification') ? 1 : 0; } }
             notes.push(n);
             if (tieTypes.includes('start')) open.set(key, { n, mi });
           }
