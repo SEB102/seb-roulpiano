@@ -41,7 +41,11 @@
   #progress { flex:1; min-width:160px; }
   #mbubble { position:absolute; top:calc(100% + 3px); transform:translateX(-50%); background:var(--accent); color:#fff; font-size:12px; font-weight:700; padding:2px 9px; border-radius:8px; white-space:nowrap; pointer-events:none; z-index:7; box-shadow:0 2px 8px rgba(0,0,0,.4); }
   #mbubble[hidden] { display:none; }
-  header { position:relative; z-index:6; }
+  header { position:fixed; top:0; left:0; right:0; z-index:8; transform:translateY(-101%); transition:transform .22s ease; max-height:100vh; overflow:auto; box-shadow:0 8px 24px rgba(0,0,0,.45); }   /* bandeau masqué : il se déroule quand la souris ou le doigt arrive en haut de l'écran */
+  header.open { transform:none; }
+  #hot { position:fixed; top:0; left:0; right:0; height:14px; z-index:7; }
+  #hot::after { content:''; position:absolute; top:3px; left:50%; width:46px; height:4px; margin-left:-23px; border-radius:2px; background:rgba(141,148,179,.55); }   /* petite poignée toujours visible */
+  header.open + #hot, body.hdr-open #hot { display:none; }
   #info { color:var(--muted); font-variant-numeric:tabular-nums; min-width:21ch; text-align:right; }
   .tip { position:relative; }
   .tiptext { display:none; position:absolute; top:calc(100% + 8px); left:0; width:max-content; max-width:min(520px, 90vw); z-index:20;
@@ -88,6 +92,7 @@
 <script src="hands_legacy.js?v=20261010g"></script>
 </head>
 <body>
+<div id="hot"></div>
 <header>
   <div id="bar">
     <div class="grp">
@@ -1501,6 +1506,20 @@ function render3D() {
   ensurePlan();
   const sp = pos - vlag * speed;
   View3D.render({ song, sp, plan: song.plan, vis: visibleHands(), noteHand, lowerBoundSec, ux: PianoHands.ux, isBlack: PianoHands.isBlack, anticip: false, handsMode: 'plain', next: null, fof, fing: showFing, grid: grid3d(pos - vlag * speed, 3.6) });
+}
+// ---------- Bandeau supérieur à masquage automatique ----------
+{ const hd = document.querySelector('header'), hot = $('hot'); let tClose = null;
+  const open = () => { clearTimeout(tClose); hd.classList.add('open'); document.body.classList.add('hdr-open'); };
+  const busy = () => panelOpen || hd.contains(document.activeElement) && /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName) && document.activeElement.type !== 'range';
+  const closeSoon = ms => { clearTimeout(tClose); tClose = setTimeout(() => { if (busy() || hd.matches(':hover')) { closeSoon(900); return; } hd.classList.remove('open'); document.body.classList.remove('hdr-open'); }, ms); };
+  addEventListener('mousemove', e => { if (e.clientY <= 10) open(); else if (hd.classList.contains('open') && !hd.contains(e.target)) closeSoon(700); });
+  hd.addEventListener('mouseenter', open); hd.addEventListener('mouseleave', () => closeSoon(700));
+  hot.addEventListener('touchstart', () => open(), { passive: true }); hot.addEventListener('click', open);
+  let ty0 = null;
+  addEventListener('touchstart', e => { const t = e.touches[0]; if (hd.contains(e.target)) { open(); return; } ty0 = t.clientY <= 40 ? t.clientY : null; if (hd.classList.contains('open')) closeSoon(150); }, { passive: true });
+  addEventListener('touchmove', e => { if (ty0 !== null && e.touches[0].clientY - ty0 > 16) { open(); ty0 = null; } }, { passive: true });
+  hd.addEventListener('touchend', () => { clearTimeout(tClose); closeSoon(4000); }, { passive: true });
+  hd.addEventListener('focusin', open);
 }
 function togglePanel() { panelOpen = !panelOpen; $('panel').hidden = !panelOpen; }
 function toggleRoll() { rollVisible = !rollVisible; }
