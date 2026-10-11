@@ -674,7 +674,7 @@ cv.addEventListener('click', e => {
   hideFpop();
 });
 $('fingExp').onclick = () => {
-  const xml = PianoCore.injectFingerings(song, n => ({ f: fof(n), f2: n.finger2 || 0, hand: (n.fh || n.fileHand) ? noteHand(n) : '' }));   // le fichier d'origine, avec les doigtés affichés (saisis, du fichier ou proposés)
+  const xml = PianoCore.injectFingerings(song, n => ({ f: fof(n), f2: n.finger2 || 0, }));   // le fichier d'origine, avec les doigtés affichés (saisis, du fichier ou proposés)
   if (!xml) { alert("L'export de la partition est disponible pour les fichiers MusicXML (.musicxml, .xml, .mxl)."); return; }
   const blob = new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (song.title || 'morceau').replace(/[\\/:*?"<>|]+/g, '_') + '-doigtes.musicxml';

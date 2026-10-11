@@ -180,9 +180,13 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
     const s = C.parseMusicXml(`<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>x</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><staves>2</staves></attributes>${nt('A', 3, 2, 'MD3')}${nt('B', 3, 2, '2')}${nt('C', 4, 1, 'MG1')}${nt('D', 4, 1, 'm. d. 2')}</measure></part></score-partwise>`);
     const by = {}; s.notes.forEach(x => { by[x.midi] = x; });
     assert.strictEqual(by[57].hand, 'R'); assert.strictEqual(by[57].finger, 3);   // portée basse mais « MD3 » : main droite, doigt 3
-    assert.strictEqual(by[59].hand, 'L'); assert.strictEqual(by[59].finger, 2);   // « 2 » seul : la portée décide (basse = gauche)
+    assert.strictEqual(by[59].hand, 'R'); assert.strictEqual(by[59].finger, 2);   // « 2 » seul, à la suite de « MD3 » (même portée, voix, mesure, mêmes hampes) : la série se prolonge, main droite
     assert.strictEqual(by[60].hand, 'L'); assert.strictEqual(by[60].finger, 1);   // portée haute mais « MG1 » : main gauche
-    assert.strictEqual(by[62].hand, 'R');                                         // texte non reconnu : portée haute = droite
+    assert.strictEqual(by[62].hand, 'R');                                         // « m. d. 2 » = main droite, doigt 2 : nouvelle indication, elle remplace la série « MG1 »
+    // le sens des hampes change : la série s'arrête, on revient à la main de la portée
+    const ns = (step, stem, fing) => `<note><pitch><step>${step}</step><octave>3</octave></pitch><duration>4</duration><staff>2</staff><stem>${stem}</stem><notations><technical><fingering>${fing}</fingering></technical></notations></note>`;
+    const s2 = C.parseMusicXml(`<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>x</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><staves>2</staves></attributes>${ns('A', 'up', 'MD3')}${ns('B', 'up', '2')}${ns('C', 'down', '5')}</measure></part></score-partwise>`);
+    assert.deepStrictEqual(s2.notes.map(x => x.hand), ['R', 'R', 'L'], 'hampes inversées : retour à la main de la portée');
   });
 
   console.log(`\n${n} tests passés`);

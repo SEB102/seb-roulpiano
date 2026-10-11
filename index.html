@@ -87,10 +87,10 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261011zw"></script>
-<script src="core.js?v=20261010d"></script>
-<script src="hands.js?v=20261011zv"></script>
-<script src="hands_legacy.js?v=20261010g"></script>
+<script src="view3d.js?v=eca86a61"></script>
+<script src="core.js?v=ea917d63"></script>
+<script src="hands.js?v=3fff1949"></script>
+<script src="hands_legacy.js?v=f03dbe32"></script>
 </head>
 <body>
 <div id="hot"></div>
@@ -674,7 +674,7 @@ cv.addEventListener('click', e => {
   hideFpop();
 });
 $('fingExp').onclick = () => {
-  const xml = PianoCore.injectFingerings(song, n => ({ f: fof(n), f2: n.finger2 || 0, hand: (n.fh || n.fileHand) ? noteHand(n) : '' }));   // le fichier d'origine, avec les doigtés affichés (saisis, du fichier ou proposés)
+  const xml = PianoCore.injectFingerings(song, n => ({ f: fof(n), f2: n.finger2 || 0, }));   // le fichier d'origine, avec les doigtés affichés (saisis, du fichier ou proposés)
   if (!xml) { alert("L'export de la partition est disponible pour les fichiers MusicXML (.musicxml, .xml, .mxl)."); return; }
   const blob = new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (song.title || 'morceau').replace(/[\\/:*?"<>|]+/g, '_') + '-doigtes.musicxml';

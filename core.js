@@ -195,7 +195,9 @@
 
   // ---------- MusicXML ----------
   const STEP = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+  const SERIES_MARK = 'seb-roulpiano:mains-par-serie';   // repère écrit par l'export : dans un fichier qui le porte, une main écrite (MD / MG) vaut pour les notes suivantes de la même portée, quelle que soit la voix ou la mesure, tant que les hampes gardent le sens
   function parseMusicXml(src) {
+    const seriesMode = src.includes(SERIES_MARK);
     const doc = parseXml(src);
     let score = kid(doc, 'score-partwise');
     const tw = !score && kid(doc, 'score-timewise');
@@ -215,8 +217,9 @@
 
     // Passe 1 : par partie, par mesure, notes relatives au début de mesure
     let noteOrd = 0;   // rang de chaque élément <note> dans le fichier (pour y réinscrire les doigtés à l'export)
-    const P = parts.map(part => {
+    const P = parts.map((part, pIdx) => {
       let divisions = 1, staves = 1, num = 4, den = 4;
+      const serie = new Map();   // main écrite (« MD3 », « MG2 ») : elle vaut pour la note et pour celles qui la suivent dans la MÊME portée, voix et mesure (fichier d'une autre origine) ou dans la même portée seulement (fichier écrit par l'export), tant que le sens des hampes ne change pas ; on revient alors à la main de la portée
       const measures = [];
       const open = new Map(); // ligature
       kids(part, 'measure').forEach((m, mi) => {
@@ -244,6 +247,7 @@
             if (!isChord) { lastStart = cursor; cursor += dur; }
             maxCur = Math.max(maxCur, cursor);
             const pitch = kid(e, 'pitch');
+            if (seriesMode && kid(e, 'rest')) serie.delete(pIdx + '|' + (txt(e, 'staff') || '1'));   // fichier exporté par l'application : un silence interrompt la série (la main indiquée doit être redite à la reprise)
             if (!pitch || kid(e, 'rest')) return;
             const midi = (parseInt(txt(pitch, 'octave'), 10) + 1) * 12 + STEP[txt(pitch, 'step')] + (parseFloat(txt(pitch, 'alter') || '0') | 0);
             const staff = parseInt(txt(e, 'staff') || '1', 10);
@@ -262,7 +266,10 @@
             const fgT = txt(kid(kid(e, 'notations') || { children: [] }, 'technical') || { children: [] }, 'fingering'), fgM = /^\s*(?:M\.?\s*)?([DG])\.?\s*([1-5])\s*$/i.exec(fgT || '');   // « 3 » ou « MD3 » / « MG2 » : doigt, avec la main (D = droite, G = gauche) quand elle ne se déduit pas de la portée
             const fg = fgM ? parseInt(fgM[2], 10) : parseInt(fgT, 10);
             if (fg >= 1 && fg <= 5) n.finger = fg; // doigté inscrit dans la partition
-            if (fgM) n.fileHand = fgM[1].toUpperCase() === 'G' ? 'L' : 'R';
+            n.stem = txt(e, 'stem') || ''; n.srcM = mi;
+            { const hk = pIdx + '|' + staff + (seriesMode ? '' : '|' + n.voice), c = serie.get(hk);
+              if (fgM) { n.fileHand = fgM[1].toUpperCase() === 'G' ? 'L' : 'R'; serie.set(hk, { hand: n.fileHand, stem: n.stem, mi }); }
+              else if (c && c.stem === n.stem && (seriesMode || c.mi === mi)) n.fileHand = c.hand; else serie.delete(hk); }
             const tech = kid(kid(e, 'notations') || { children: [] }, 'technical');
             if (tech) { // « 3-1 » : doigté de substitution (on change de doigt sur la touche tenue)
               const sub = kids(tech, 'fingering').find(x => x.attrs.substitution === 'yes'), sf = sub ? parseInt(sub.text.trim(), 10) : 0;
@@ -296,6 +303,7 @@
           n.tick += tick; n.track = pi;
           if (hasTwoStaves) n.hand = (parallel && parallel[n.staff + '/' + n.voice]) || (n.staff >= 2 ? 'L' : 'R');
           else if (twoParts) n.hand = pi === 0 ? 'R' : 'L';
+          n.autoHand = n.hand;   // main déduite de la partition seule (portée, parties)
           if (n.fileHand) n.hand = n.fileHand;   // main indiquée dans le doigté (« MD3 », « MG2 ») : prioritaire sur la portée
           notes.push(n);
         });
@@ -310,6 +318,7 @@
       if (isFinite(off)) { measures[0].label = '0'; for (let i = 1; i < measures.length; i++) { const v = parseInt(measures[i].label, 10); if (isFinite(v) && String(v) === measures[i].label) measures[i].label = String(v - off); } }
     }
     if (notes.some(n => !n.hand)) notes.forEach(n => { if (!n.hand) n.hand = n.midi >= 60 ? 'R' : 'L'; });
+    notes.forEach(n => { if (!n.autoHand) n.autoHand = n.midi >= 60 ? 'R' : 'L'; });
     const handMode = hasTwoStaves ? 'portées' : twoParts ? 'parties' : 'do-central';
     return finish({ format: 'musicxml', title, ppq: PPQ_XML, tempos, notes, handMode, measures, endTick: tick, sourceXml: tw ? null : src });
   }
@@ -380,6 +389,16 @@
   function injectFingerings(song, fing) {
     const src = song && song.sourceXml; if (!src) return null;
     const byIdx = new Map(); song.notes.forEach(n => { if (n.srcIdx !== undefined) byIdx.set(n.srcIdx, n); });
+    // Main : écrite (« MD » / « MG ») seulement sur la PREMIÈRE note d'une série, quand elle diffère de ce que la lecture du fichier supposerait : la main de la portée, ou celle déjà écrite plus haut dans la même portée (quelle que soit la voix ou la mesure) tant que les hampes gardent le même sens et qu'aucun silence ne l'interrompt ; le fichier exporté porte un repère qui l'indique à la relecture
+    const handLab = new Map(), ser = new Map(), parts = []; { const rp = /<part(?=[\s>])/g; let pm; while ((pm = rp.exec(src))) parts.push(pm.index); }
+    { const rn = /<note(?=[\s>])[\s\S]*?<\/note>/g; let nm, ord = 0;   // tous les éléments <note>, dans l'ordre du fichier : un silence interrompt la série
+      while ((nm = rn.exec(src))) {
+        const n = byIdx.get(ord++);
+        if (!n) { if (/<rest\b/.test(nm[0])) { let pi = -1; parts.forEach((p, i) => { if (p <= nm.index) pi = i; }); ser.delete(pi + '|' + ((/<staff>(\d+)/.exec(nm[0]) || [0, '1'])[1])); } continue; }
+        const g = fing(n) || {}, key = (n.track || 0) + '|' + n.staff, eff = n.fh || n.hand, def = n.autoHand || eff, c = ser.get(key), same = c && c.stem === n.stem, assumed = same ? c.hand : def;
+        if (eff && eff !== assumed) { if (g.f) { handLab.set(n, eff); ser.set(key, { hand: eff, stem: n.stem }); } }
+        else if (!same && c) ser.delete(key);
+      } }
     const FING = /<fingering\b[^>]*>[^<]*<\/fingering>|<fingering\b[^>]*\/>/g;
     const clean = seg => seg.replace(FING, '').replace(/<technical>\s*<\/technical>/g, '');
     const re = /<note(?=[\s>])[\s\S]*?<\/note>/g; let k = 0, out = '', last = 0, m;
@@ -389,7 +408,7 @@
         if (/<tie(d)?\b[^>]*type="stop"/.test(seg) && /<fingering\b/.test(seg)) { out += src.slice(last, m.index) + clean(seg); last = m.index + m[0].length; }
         continue;
       }
-      const g = fing(n) || {}, label = g.f ? (g.hand ? (g.hand === 'L' ? 'MG' : 'MD') : '') + g.f : '';
+      const g = fing(n) || {}, hl = handLab.get(n), label = g.f ? (hl ? (hl === 'L' ? 'MG' : 'MD') : '') + g.f : '';
       const want = label ? [label].concat(g.f2 ? ['~' + g.f2] : []) : [];
       const have = [...seg.matchAll(/<fingering\b([^>]*)>([^<]*)<\/fingering>/g)].map(x => (/substitution="yes"/.test(x[1]) ? '~' : '') + x[2].trim());
       if (have.join('|') === want.join('|')) continue;   // déjà exactement ce qu'il faut : on n'y touche pas
@@ -403,7 +422,9 @@
       out += src.slice(last, m.index) + seg; last = m.index + m[0].length;
     }
     // Sauts de ligne / de page forcés du fichier d'origine : retirés, MuseScore répartit lui-même les mesures (sinon une ligne trop pleine laisse une mesure seule sur la suivante)
-    return (out + src.slice(last)).replace(/(<print\b[^>]*?)\s+new-(?:system|page)="yes"/g, '$1').replace(/(<print\b[^>]*?)\s+new-(?:system|page)="yes"/g, '$1');
+    let res = out + src.slice(last);
+    if (!res.includes(SERIES_MARK)) res = res.replace(/(<score-partwise\b[^>]*>)/, '$1<!--' + SERIES_MARK + '-->');   // repère : relu, ce fichier suit la règle « une indication de main vaut pour la série »
+    return res.replace(/(<print\b[^>]*?)\s+new-(?:system|page)="yes"/g, '$1').replace(/(<print\b[^>]*?)\s+new-(?:system|page)="yes"/g, '$1');
   }
 
   const API = { injectFingerings, keyboardRange, retime, parseMidi, parseMusicXml, parseMxl, parseXml, loadSong, makeTimeline, unzip };
