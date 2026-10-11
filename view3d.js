@@ -258,6 +258,7 @@ const View3D = (() => {
           const m = stemM[mj]; if (!m) return;
           if (q.k === 'h') { const z = zf(q.p); if (z > BACK + 0.3 || z < zMin) return; m.position.set((q.a + q.b) / 2, 0.39, z); m.scale.set(Math.abs(q.b - q.a), 0.08, q.w); }
           else if (q.k === 'v') { const z0 = zf(q.a), z1 = zf(q.b), zc = (z0 + z1) / 2; if (Math.max(z0, z1) > BACK + 0.3 || Math.min(z0, z1) < zMin) return; m.position.set(q.x, 0.39, zc); m.scale.set(q.w, 0.08, Math.abs(z0 - z1) + 0.17); }
+          else if (q.k === 's') { const z = zf(q.p); if (z > BACK + 0.3 || z < zMin) return; m.position.set(q.x, 0.39, z); m.scale.set(q.w, 0.08, q.w); }
           else { const z = zf(q.p); if (z > BACK + 0.3 || z < zMin) return; m.position.set(q.x, 0.39, z); m.scale.set(0.36, 0.08, 0.36); }
           m.visible = true; mj++;
         });

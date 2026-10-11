@@ -245,6 +245,7 @@ const NOMS = ['Do', 'Do♯', 'Ré', 'Ré♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol�
 // croche pointée + double croche : ligature simple et crochet partiel sur la double croche. Touche B pour afficher / masquer.
 let showStems = false, STEMS = null, keyLanes = true;   // showStems : bouton « Rythme » (désactivé au départ)   // keyLanes : colonnes du rouleau en blanc / noir, comme un second clavier (touche K)
 function noteClass(n) {
+  if (n.ntype !== undefined) return { k: n.ntype, dot: n.ndot ? 1 : 0, trip: n.ntrip || 0, beams: Math.max(0, n.ntype - 2) };   // valeur écrite dans le fichier MusicXML : prioritaire
   const v = n.dur / (song.ppq * 4); if (!(v > 0)) return null; let best = null;
   for (let k = 0; k <= 6; k++) { const b = Math.pow(2, -k); [[1, 0, 0], [1.5, 1, 0], [2 / 3, 0, 1]].forEach(([f, dot, trip]) => { const e = Math.abs(Math.log(v / (b * f))); if (!best || e < best.e) best = { e, k, dot, trip }; }); }
   return best.e > 0.2 ? null : { k: best.k, dot: best.dot, trip: best.trip, beams: Math.max(0, best.k - 2) };   // k : 0 ronde, 1 blanche, 2 noire, 3 croche, 4 double croche…
@@ -275,6 +276,7 @@ function layoutStems(posTick, topTick, vh, geo, at, U) {
   const endOf = (h, mi) => { const key = h + '|' + mi; if (key in ends) return ends[key]; const us = STEMS.byMeasure[key] || [], gs = us.map(geo); return (ends[key] = h === 'L' ? Math.min(...gs.map(q => q.x0)) - U.ext : Math.max(...gs.map(q => q.x1)) + U.ext); };
   const dot = (u, gx, sd, p) => { if (u.cls.dot) P.push({ k: 'dot', x: sd > 0 ? gx.x1 + U.dx : gx.x0 - U.dx, p: p - U.dt }); };
   STEMS.groups.forEach(g => {
+    if (g.units.length < 2) return;   // une croche seule n'a pas de ligature : elle est dessinée plus bas avec son crochet
     g.units.forEach(u => grouped.add(u));
     const a = g.units[0], z = g.units[g.units.length - 1]; if (!vh.includes(g.h) || !(a.tick < topTick && z.end + song.ppq > posTick)) return;
     const sd = g.h === 'L' ? -1 : 1, gs = g.units.map(geo), bx = endOf(g.h, measureIndexAt(a.tick)), ps = g.units.map(u => at(u.tick) - U.t0 + sd * (U.R - U.hw));   // hampe tangente au haut de la pastille (main gauche) ou à son bas (main droite)
@@ -298,7 +300,10 @@ function layoutStems(posTick, topTick, vh, geo, at, U) {
       if (grouped.has(u) || !u.cls || u.cls.k < 1 || !inWin(u)) return;
       const gx = geo(u), p = at(u.tick) - U.t0 + sd * (U.R - U.hw), bx = endOf(L.h, u.mi);
       P.push({ k: 'h', a: sd > 0 ? gx.c0 : gx.c1, b: bx, p, w: U.sw }); dot(u, gx, sd, p);
-      for (let j = 1; j <= u.cls.beams; j++) P.push({ k: 'v', x: bx - sd * U.lvl * (j - 1), a: p, b: p - U.stub, w: U.bw });   // crochet(s) d'une note isolée
+      for (let j = 1; j <= u.cls.beams; j++) {   // crochet(s) d'une note isolée : courbe arrondie qui part du bout de la hampe puis redescend le long d'elle
+        const x0 = bx - sd * U.lvl * (j - 1), L = U.flagL, T = U.flagT;
+        for (let i = 0; i <= 8; i++) { const t = i / 8, a = (1 - t) * (1 - t), b = 2 * t * (1 - t), c = t * t; P.push({ k: 's', x: x0 - sd * (b * 0.1 * L + c * L), p: p - (b * 0.95 * T + c * 1.25 * T), w: U.sw * 0.9 }); }
+      }
     });
   });
   return P;
@@ -313,7 +318,7 @@ function noteSpan(m, W) {   // largeur utile d'une colonne pour une note rectang
 function headR(W) { return Math.max(6, Math.min(20, W / VIEW.n * 0.46)); }   // rayon commun des têtes de note (≈ une touche blanche)
 function drawStems(ctx, y, W, posTick, topTick, vh) {
   const R = headR(W), geo = u => { const cs = u.notes.map(n => { const r = keyRect(n.midi, W); return r.x + r.w / 2; }); return { x0: Math.min(...cs) - R, x1: Math.max(...cs) + R, c0: Math.min(...cs), c1: Math.max(...cs) }; };
-  const P = layoutStems(posTick, topTick, vh, geo, y, { ext: 84, lvl: 17, stub: 17, dx: 12, dt: 14, t0: R + 1.5, R, hw: 5, sw: 10, bw: 14, txt: 12 });
+  const P = layoutStems(posTick, topTick, vh, geo, y, { ext: 84, lvl: 17, stub: 17, dx: 12, dt: 14, flagL: 44, flagT: 24, t0: R + 1.5, R, hw: 5, sw: 10, bw: 14, txt: 12 });
   ctx.save(); ctx.lineCap = 'round';
   [false].forEach(outline => {   // hampes sombres, lisibles sur les colonnes beiges et grises
     ctx.strokeStyle = '#15172a'; ctx.fillStyle = '#15172a'; const e = 0;
@@ -321,6 +326,7 @@ function drawStems(ctx, y, W, posTick, topTick, vh) {
       if (q.k === 'h') { ctx.lineWidth = q.w + e; ctx.beginPath(); ctx.moveTo(q.a, q.p); ctx.lineTo(q.b, q.p); ctx.stroke(); }
       else if (q.k === 'v') { ctx.lineWidth = q.w + e; ctx.beginPath(); ctx.moveTo(q.x, q.a); ctx.lineTo(q.x, q.b); ctx.stroke(); }
       else if (q.k === 'dot') { ctx.beginPath(); ctx.arc(q.x, q.p, 6.2 + e / 2, 0, 6.2832); ctx.fill(); }
+      else if (q.k === 's') { ctx.beginPath(); ctx.arc(q.x, q.p, q.w / 2, 0, 6.2832); ctx.fill(); }
       else if (!outline) { ctx.font = '800 20px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#15172a'; ctx.fillText(q.s, q.x, q.p + 7); }
     });
   });
@@ -330,7 +336,7 @@ function stems3d(sp, ahead) {   // hampes du rouleau 3D : x en largeurs de touch
   if (!showStems || !song) return [];
   const T = song.timeline, pT = T.secToTick(Math.max(0, sp)), tT = T.secToTick(sp + ahead);
   const geo = u => { const cs = u.notes.map(n => PianoHands.ux(n.midi)); return { x0: Math.min(...cs) - 0.47, x1: Math.max(...cs) + 0.47, c0: Math.min(...cs), c1: Math.max(...cs) }; };
-  return layoutStems(pT, tT, visibleHands(), geo, tick => -T.tickToSec(tick), { ext: 4.6, lvl: 0.8, stub: 0.17, dx: 0.6, dt: 0.07, t0: 0.12, R: 0.118, hw: 0.0375, sw: 0.3, bw: 0.45, txt: 0.8 });   // axe du temps = −secondes (plus grand = plus tôt, comme les y du 2D) ; la vue le convertit en profondeur
+  return layoutStems(pT, tT, visibleHands(), geo, tick => -T.tickToSec(tick), { ext: 4.6, lvl: 0.8, stub: 0.17, dx: 0.6, dt: 0.07, flagL: 1.1, flagT: 0.55, t0: 0.12, R: 0.118, hw: 0.0375, sw: 0.3, bw: 0.45, txt: 0.8 });   // axe du temps = −secondes (plus grand = plus tôt, comme les y du 2D) ; la vue le convertit en profondeur
 }
 
 
