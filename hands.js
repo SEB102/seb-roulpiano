@@ -89,7 +89,7 @@
             const blocs = p.ns.length > 1 && e.ns.length > 1 && fa === fb;   // accord → accord avec le même doigt : toute la main se déplace d'un bloc, ce n'est pas un saut de doigt isolé
             c += scale * (blocs ? 0.15 * Math.abs(q(n) - q(p.ns[near])) : pairCost(fa, q(p.ns[near]), fb, q(n)));
             if (fb === 1 && fa !== 1 && isBlack(n.midi)) c += scale * ((fa - fb) * (q(n) - q(p.ns[near])) < 0 ? 1.5 : 0.5); // le pouce qui ARRIVE sur une touche noire (surtout en passant sous la main, en montant) est difficile
-            if (fa === fb && q(p.ns[near]) !== q(n) && gap < 0.15 && !blocs) c += 3 + 0.5 * Math.abs(q(n) - q(p.ns[near])); // même doigt, saut, sans le temps de s'y rendre
+            if (fa === fb && q(p.ns[near]) !== q(n) && !blocs) { const dd = Math.abs(q(n) - q(p.ns[near])); c += gap < 0.15 ? 3 + 0.5 * dd : gap < 1.5 ? 2 + 0.3 * dd : 0; } // même doigt sur une autre touche : saut sans le temps de s'y rendre ; la pénalité reste sensible après une courte pause (jusqu'à 1,5 s) au lieu de s'effacer dès 0,15 s
           });
           if (c < best) { best = c; arg = ai; }
         });
@@ -320,6 +320,22 @@
     for (let i = 1; i < 4; i++) if (!pin[i + 1] && sg * (xs[i + 1] - xs[i]) < gap) xs[i + 1] = xs[i] + sg * gap;
     for (let i = 3; i >= 1; i--) if (!pin[i] && sg * (xs[i + 1] - xs[i]) < gap) xs[i] = xs[i + 1] - sg * gap;
   }
+
+  // Copie de doigtés d'un passage à un autre, sans contrainte : les notes du passage copié (src, dans l'ordre : début puis hauteur) reçoivent leurs doigts, un à un, sur les notes de la destination.
+  // start : soit UNE note (la destination commence là et suit les notes de sa main, dans l'ordre), soit une LISTE de notes choisies. La main et le rythme de la destination peuvent différer de la source.
+  // opts.hand(n) -> 'R' | 'L', opts.shown(n) -> doigt affiché. Renvoie { pairs: [{ n, f }], copied, total, stop, fromHand, toHand }.
+  function pasteFingerings(all, src, start, opts) {
+    const ordered = l => l.slice().sort((a, b) => a.tick - b.tick || a.midi - b.midi), group = Array.isArray(start);
+    if (group && !start.length) return { pairs: [], copied: 0, total: 0, stop: 'aucune note de destination', fromHand: null, toHand: null };
+    const first = group ? ordered(start)[0] : start, toHand = opts.hand(first);
+    let S = ordered(src), fromHand = toHand;
+    if (!S.some(n => opts.hand(n) === toHand)) { const c = { R: 0, L: 0 }; S.forEach(n => { c[opts.hand(n)]++; }); fromHand = c.R >= c.L ? 'R' : 'L'; }   // la destination est l'autre main : on prend la main la mieux représentée dans la sélection
+    S = S.filter(n => opts.hand(n) === fromHand);
+    const T = group ? ordered(start) : ordered(all.filter(n => opts.hand(n) === toHand && (n.tick > start.tick || (n.tick === start.tick && n.midi >= start.midi))));
+    const k = Math.min(S.length, T.length), pairs = [];
+    for (let i = 0; i < k; i++) { const f = opts.shown(S[i]); if (f) pairs.push({ n: T[i], f }); }
+    return { pairs, copied: k, total: S.length, stop: T.length < S.length ? 'plus assez de notes à la destination' : null, fromHand, toHand };
+  }
   const FINGER_GAP = 0.62;   // écart minimal entre deux doigts voisins, en largeurs de touche
-  return { ux, isBlack, pairCost, assignFingerings, buildPlan, intervalName, enforceFingerOrder, FINGER_GAP };
+  return { pasteFingerings, ux, isBlack, pairCost, assignFingerings, buildPlan, intervalName, enforceFingerOrder, FINGER_GAP };
 });

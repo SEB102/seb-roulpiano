@@ -15,6 +15,56 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     assert.strictEqual(at(2, 50), 5, 'ré3 au 5'); assert.strictEqual(at(2, 62), 1, 'ré4 au pouce'); assert.ok(at(2, 54) >= 2 && at(2, 54) <= 4);
     assert.strictEqual(at(1, 45), 5); assert.strictEqual(at(1, 55), 1);
   });
+  await t('Export de la partition : le fichier MusicXML d\'origine revient identique, aux doigtés près ; relu, chaque note porte le doigt affiché', async () => {
+    const strip = x => x.replace(/<fingering\b[^>]*>[^<]*<\/fingering>/g, '').replace(/<technical>\s*<\/technical>/g, '').replace(/<notations>\s*<\/notations>/g, '');
+    for (const fn of ['exemple.musicxml', 'exemple-tabac.musicxml', 'exemple-goldberg.musicxml']) {
+      const src = fs.readFileSync(__dirname + '/' + fn), s = await C.loadSong(fn, src);
+      ['L', 'R'].forEach(h => H.assignFingerings(s.notes.filter(n => (n.hand || 'R') === h), h));
+      const shown = n => n.finger || n.af || 0;
+      const xml = C.injectFingerings(s, n => ({ f: shown(n), f2: n.finger2 || 0, hand: '' }));
+      assert.strictEqual(strip(xml), strip(src.toString()), fn + ' : autre chose que les doigtés a changé');
+      const s2 = await C.loadSong(fn, Buffer.from(xml)); assert.strictEqual(s2.notes.length, s.notes.length, fn + ' : nombre de notes');
+      const key = n => n.tick + ':' + n.midi + ':' + n.staff + ':' + n.voice, m2 = new Map(s2.notes.map(n => [key(n), n]));
+      s.notes.forEach(n => { const o = m2.get(key(n)); assert.ok(o, fn + ' : note perdue ' + key(n)); assert.strictEqual(o.dur, n.dur, fn + ' : durée'); if (shown(n)) assert.strictEqual(o.finger, shown(n), fn + ' : doigt relu ' + key(n)); });
+    }
+    const mini = '<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"/></part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions></attributes>' +
+      '<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>' +
+      '<note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><notations><articulations><staccato/></articulations></notations></note>' +
+      '<note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><notations><technical><fingering>3</fingering></technical></notations><lyric><text>la</text></lyric></note>' +
+      '<note><pitch><step>F</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><lyric><text>fa</text></lyric></note></measure></part></score-partwise>';
+    const ms = await C.loadSong('m.musicxml', Buffer.from(mini));
+    const fx = C.injectFingerings(ms, n => ({ f: [1, 2, 4, 5][n.srcIdx], f2: n.srcIdx === 3 ? 1 : 0, hand: n.srcIdx === 0 ? 'L' : '' }));
+    const m2 = await C.loadSong('m.musicxml', Buffer.from(fx)); assert.deepStrictEqual(m2.notes.map(n => n.finger), [1, 2, 4, 5]); assert.strictEqual(m2.notes[0].hand, 'L', 'main écrite « MG1 » relue');
+    assert.ok(/<notations><technical><fingering>5<\/fingering><fingering substitution="yes">1<\/fingering><\/technical><\/notations><lyric>/.test(fx), 'notations placées avant les paroles');
+    assert.ok(!/<fingering>3<\/fingering>/.test(fx), 'l\'ancien doigt est remplacé');
+    // seule la version courante est exportée : un doigté du fichier que l'on a effacé disparaît, une suite de note liée perd son doigté d'origine
+    const tied = mini.replace('<step>E</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><notations><technical><fingering>3', '<step>E</step><octave>4</octave></pitch><duration>1</duration><tie type="start"/><type>quarter</type><notations><technical><fingering>3').replace('</measure>', '<note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration><tie type="stop"/><type>quarter</type><notations><tied type="stop"/><technical><fingering>2</fingering></technical></notations></note></measure>');
+    const ts = await C.loadSong('t.musicxml', Buffer.from(tied)); assert.strictEqual(ts.notes.length, 4, 'la note liée est bien fusionnée');
+    const f0 = C.injectFingerings(ts, n => ({ f: n.srcIdx === 0 ? 4 : 0, f2: 0, hand: '' }));   // 3 effacé, tout le reste sans doigté
+    assert.ok(!/<fingering>3<\/fingering>/.test(f0) && !/<fingering>2<\/fingering>/.test(f0), 'doigté effacé et doigté de la note liée retirés');
+    assert.strictEqual((f0.match(/<fingering/g) || []).length, 1, 'un seul doigté exporté : ' + (f0.match(/<fingering[^>]*>[^<]*/g) || []).join(' '));
+  });
+  await t('Numérotation des mesures : une anacrouse porte le numéro 0 et le comptage commence à la première mesure complète (Goldberg : 0, 1, 2…, 17) ; sans anacrouse, 1, 2, 3…', async () => {
+    const lab = async fn => (await C.loadSong(fn, fs.readFileSync(__dirname + '/' + fn))).measures.map(m => m.label);
+    const g = await lab('exemple-goldberg.musicxml'); assert.strictEqual(g[0], '0'); assert.strictEqual(g[1], '1'); assert.strictEqual(g[g.length - 1], String(g.length - 1));
+    const e = await lab('exemple.musicxml'); assert.strictEqual(e[0], '0'); assert.strictEqual(e[1], '1');
+    const tb = await lab('exemple-tabac.musicxml'); assert.strictEqual(tb[0], '0'); assert.strictEqual(tb[1], '1');
+    if (fs.existsSync(__dirname + '/partition.musicxml')) { const p = await lab('partition.musicxml'); assert.strictEqual(p[0], '1'); }
+  });
+  await t('Copie de doigtés sans contrainte : mêmes doigts note après note, sur une autre hauteur, une autre main, un autre rythme ou des accords', () => {
+    const mk2 = (midis, t0, hand = 'R', step = 480) => midis.map((m, i) => ({ midi: m, tick: t0 + i * step, hand }));
+    const a = mk2([60, 64, 67, 72], 0), b = mk2([65, 69, 72, 77], 4000), g = mk2([48, 52, 55, 60], 8000, 'L', 240), d = mk2([60, 64, 62, 72], 12000), e = mk2([60, 64, 67], 16000);
+    [1, 2, 3, 5].forEach((f, i) => { a[i].finger = f; });
+    const all = a.concat(b, g, d, e), opt = { hand: n => n.hand, shown: n => n.finger || 0 }, run = (start, src = a) => H.pasteFingerings(all, src, start, opt);
+    let r = run(b[0]); assert.deepStrictEqual(r.pairs.map(p => [p.n, p.f]), b.map((n, i) => [n, [1, 2, 3, 5][i]]), 'autre hauteur');
+    r = run(g[0]); assert.deepStrictEqual(r.pairs.map(p => [p.n, p.f]), g.map((n, i) => [n, [1, 2, 3, 5][i]]), 'autre main, autre rythme'); assert.strictEqual(r.fromHand, 'R'); assert.strictEqual(r.toHand, 'L'); assert.strictEqual(r.stop, null);
+    r = run(d[0]); assert.deepStrictEqual(r.pairs.map(p => p.f), [1, 2, 3, 5], 'un mouvement différent ne bloque pas');
+    r = run(e[0]); assert.deepStrictEqual(r.pairs.map(p => p.f), [1, 2, 3]); assert.ok(/assez de notes/.test(r.stop), 'fin des notes de la main');
+    const ch = [{ midi: 48, tick: 0, hand: 'L', finger: 5 }, { midi: 55, tick: 0, hand: 'L', finger: 1 }, { midi: 50, tick: 960, hand: 'L' }, { midi: 57, tick: 960, hand: 'L' }, { midi: 52, tick: 1920, hand: 'L' }, { midi: 59, tick: 1920, hand: 'L' }];
+    r = H.pasteFingerings(ch, ch.slice(0, 2), ch[2], opt); assert.deepStrictEqual(r.pairs.map(p => [p.n.midi, p.f]), [[50, 5], [57, 1]], 'accord sur accord');
+    r = H.pasteFingerings(ch, ch.slice(0, 2), [b[0], b[1]], opt); assert.deepStrictEqual(r.pairs.map(p => p.f), [5, 1], 'destination choisie à la main : deux notes seules, mêmes doigts dans l\'ordre');
+    assert.strictEqual(H.pasteFingerings(ch, a, [], opt).pairs.length, 0);
+  });
   await t('Gamme de do montante à la main droite : le pouce passe sous la main (après 3 ou 4), jamais plus de 5 doigts distincts', () => {
     const ns = mk([60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84]); H.assignFingerings(ns, 'R');
     const f = ns.map(x => x.af); assert.ok(f.every(x => x >= 1 && x <= 5), f.join(''));

@@ -214,6 +214,7 @@
     if (!parts.length) throw new Error('Aucune partie trouvée dans la partition.');
 
     // Passe 1 : par partie, par mesure, notes relatives au début de mesure
+    let noteOrd = 0;   // rang de chaque élément <note> dans le fichier (pour y réinscrire les doigtés à l'export)
     const P = parts.map(part => {
       let divisions = 1, staves = 1, num = 4, den = 4;
       const measures = [];
@@ -235,6 +236,7 @@
           } else if (e.name === 'backup') { cursor -= parseFloat(txt(e, 'duration')) || 0; }
           else if (e.name === 'forward') { cursor += parseFloat(txt(e, 'duration')) || 0; maxCur = Math.max(maxCur, cursor); }
           else if (e.name === 'note') {
+            const ord = noteOrd++;
             if (kid(e, 'grace')) return;
             const dur = parseFloat(txt(e, 'duration')) || 0;
             const isChord = !!kid(e, 'chord');
@@ -256,7 +258,7 @@
               if (!tieTypes.includes('start')) open.delete(key);
               return;
             }
-            const n = { midi, tick: tickAbs, dur: Math.max(1, durT), vel: 80, staff, voice: parseInt(txt(e, 'voice') || '1', 10) };
+            const n = { midi, tick: tickAbs, dur: Math.max(1, durT), vel: 80, staff, voice: parseInt(txt(e, 'voice') || '1', 10), srcIdx: ord };
             const fgT = txt(kid(kid(e, 'notations') || { children: [] }, 'technical') || { children: [] }, 'fingering'), fgM = /^\s*(?:M\.?\s*)?([DG])\.?\s*([1-5])\s*$/i.exec(fgT || '');   // « 3 » ou « MD3 » / « MG2 » : doigt, avec la main (D = droite, G = gauche) quand elle ne se déduit pas de la portée
             const fg = fgM ? parseInt(fgM[2], 10) : parseInt(fgT, 10);
             if (fg >= 1 && fg <= 5) n.finger = fg; // doigté inscrit dans la partition
@@ -302,9 +304,14 @@
       P.forEach(p => { const m = p.measures[i]; if (m) m.tempos.forEach(t => { const tk = tick + t.tickInMeasure; if (!seen.has(tk)) { seen.add(tk); tempos.push({ tick: tk, uspq: t.uspq }); } }); });
       tick += len;
     }
+    // Anacrouse : si la première mesure est incomplète, elle porte le numéro 0 et le comptage commence à la première mesure complète (certains fichiers numérotent l'anacrouse « 1 »)
+    if (measures.length > 1 && measures[0].lenTick < PPQ_XML * 4 * measures[0].num / measures[0].den * 0.999 && measures[0].label !== '0') {
+      const off = parseInt(measures[1].label, 10) - 1;
+      if (isFinite(off)) { measures[0].label = '0'; for (let i = 1; i < measures.length; i++) { const v = parseInt(measures[i].label, 10); if (isFinite(v) && String(v) === measures[i].label) measures[i].label = String(v - off); } }
+    }
     if (notes.some(n => !n.hand)) notes.forEach(n => { if (!n.hand) n.hand = n.midi >= 60 ? 'R' : 'L'; });
     const handMode = hasTwoStaves ? 'portées' : twoParts ? 'parties' : 'do-central';
-    return finish({ format: 'musicxml', title, ppq: PPQ_XML, tempos, notes, handMode, measures, endTick: tick });
+    return finish({ format: 'musicxml', title, ppq: PPQ_XML, tempos, notes, handMode, measures, endTick: tick, sourceXml: tw ? null : src });
   }
 
   // ---------- ZIP (.mxl) ----------
@@ -368,6 +375,36 @@
     return { first: Math.max(21, c0 * 12), last: Math.min(108, c1 * 12 + 11) };
   }
 
-  const API = { keyboardRange, retime, parseMidi, parseMusicXml, parseMxl, parseXml, loadSong, makeTimeline, unzip };
+    // ---------- Export : le fichier MusicXML d'origine, tel quel, avec les doigtés d'aujourd'hui ----------
+  // fing(n) -> { f, f2, hand } : doigt affiché, doigt de substitution éventuel, main à écrire (« MD » / « MG ») ou rien. Renvoie null si la partition d'origine n'est pas un MusicXML « partwise ».
+  function injectFingerings(song, fing) {
+    const src = song && song.sourceXml; if (!src) return null;
+    const byIdx = new Map(); song.notes.forEach(n => { if (n.srcIdx !== undefined) byIdx.set(n.srcIdx, n); });
+    const FING = /<fingering\b[^>]*>[^<]*<\/fingering>|<fingering\b[^>]*\/>/g;
+    const clean = seg => seg.replace(FING, '').replace(/<technical>\s*<\/technical>/g, '');
+    const re = /<note(?=[\s>])[\s\S]*?<\/note>/g; let k = 0, out = '', last = 0, m;
+    while ((m = re.exec(src))) {
+      const n = byIdx.get(k++); let seg = m[0];
+      if (!n) {   // note de liaison (suite d'une note tenue) : l'application en a fait un changement de doigt de la première note ; on retire son doigté d'origine, il serait en double
+        if (/<tie(d)?\b[^>]*type="stop"/.test(seg) && /<fingering\b/.test(seg)) { out += src.slice(last, m.index) + clean(seg); last = m.index + m[0].length; }
+        continue;
+      }
+      const g = fing(n) || {}, label = g.f ? (g.hand ? (g.hand === 'L' ? 'MG' : 'MD') : '') + g.f : '';
+      const want = label ? [label].concat(g.f2 ? ['~' + g.f2] : []) : [];
+      const have = [...seg.matchAll(/<fingering\b([^>]*)>([^<]*)<\/fingering>/g)].map(x => (/substitution="yes"/.test(x[1]) ? '~' : '') + x[2].trim());
+      if (have.join('|') === want.join('|')) continue;   // déjà exactement ce qu'il faut : on n'y touche pas
+      seg = clean(seg);   // seule la version courante est écrite : ni le doigté d'origine, ni la proposition automatique qui a été modifiée
+      if (label) {
+        const tech = '<fingering>' + label + '</fingering>' + (g.f2 ? '<fingering substitution="yes">' + g.f2 + '</fingering>' : '');
+        if (seg.includes('</technical>')) seg = seg.replace('</technical>', tech + '</technical>');
+        else if (seg.includes('</notations>')) seg = seg.replace('</notations>', '<technical>' + tech + '</technical></notations>');
+        else { const ins = '<notations><technical>' + tech + '</technical></notations>'; const li = seg.indexOf('<lyric'); seg = li >= 0 ? seg.slice(0, li) + ins + seg.slice(li) : seg.replace(/<\/note>$/, ins + '</note>'); }
+      }
+      out += src.slice(last, m.index) + seg; last = m.index + m[0].length;
+    }
+    return out + src.slice(last);
+  }
+
+  const API = { injectFingerings, keyboardRange, retime, parseMidi, parseMusicXml, parseMxl, parseXml, loadSong, makeTimeline, unzip };
   if (typeof module !== 'undefined' && module.exports) module.exports = API; else root.PianoCore = API;
 })(typeof self !== 'undefined' ? self : this);
