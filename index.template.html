@@ -82,7 +82,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261011zf"></script>
+<script src="view3d.js?v=20261011zi"></script>
 <script src="core.js?v=20261010d"></script>
 <script src="hands.js?v=20261017e"></script>
 <script src="hands_legacy.js?v=20261010g"></script>
@@ -823,20 +823,28 @@ function scene(W, H, dpr) {
   for (let i = mi; i < song.measures.length && song.measures[i].startTick < topTick; i++) {
     const m = song.measures[i], yTop = y(m.startTick + m.lenTick), yBot = y(m.startTick);
     if (i % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.fillRect(0, yTop, W, yBot - yTop); }
-    const beat = song.ppq * 4 / m.den;
-    // barres de subdivision (1 par temps, hors début de mesure) : pointillés bien visibles, plus fines que les barres de mesure
-    ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.lineWidth = 1; ctx.setLineDash([7, 5]);
-    for (let t = m.startTick + beat; t < m.startTick + m.lenTick - 1; t += beat) { const yy = Math.round(y(t)) + .5; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
+    const g = meterGrid(m), endT = m.startTick + m.lenTick - 1;
+    // barres de temps (pointillés bien visibles) et de subdivision (demi-temps ou tiers de temps : pointillés pâles), plus fines que les barres de mesure
+    ctx.save(); ctx.lineWidth = 1;
+    for (let k = 0; k < g.n; k++) {
+      const tb = m.startTick + k * g.B;
+      if (k > 0) { const yy = Math.round(y(tb)) + .5; ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.setLineDash([7, 5]); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
+      for (let q = g.sub; q < g.B - 1; q += g.sub) { if (tb + q >= endT) break; const yy = Math.round(y(tb + q)) + .5; ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.setLineDash([3, 6]); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
+    }
     ctx.restore();
     if (m.startTick >= posTick) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(0, Math.round(yBot), W, 2); }
-    // numéro (collé en bas si la mesure est en cours)
+    // numéros (collés en bas si la mesure est en cours) : numéro de mesure et X.1 aux deux bouts, X.2, X.3… sur chaque temps
     if (!rollVisible) continue; // (ruban : ni numéros ni étiquettes)
+    const cur = { l: 6, r: W - 6 };
+    const pill = (txt, yy, left, big, hot) => {   // pastille collée au bord gauche ou droit ; les suivantes s'empilent vers l'intérieur
+      ctx.font = (big ? '700 15px' : '700 11px') + ' -apple-system, sans-serif'; const w = ctx.measureText(txt).width + (big ? 14 : 10), h = big ? 21 : 16, x = left ? cur.l : cur.r - w;
+      ctx.fillStyle = hot ? 'rgba(91,124,255,.95)' : big ? 'rgba(40,48,86,.95)' : 'rgba(40,48,86,.8)'; rrect(x, yy - h + 6, w, h, 6); ctx.fill();
+      ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(txt, x + (big ? 7 : 5), yy - (big ? 0 : 1)); if (left) cur.l = x + w + 4; else cur.r = x - 4; };
     const ly = Math.min(yBot, rollH - 4) - 6;
-    ctx.font = '700 15px -apple-system, sans-serif'; ctx.textAlign = 'left';
-    const label = m.label, tw = ctx.measureText(label).width;
-    ctx.fillStyle = i === mi ? 'rgba(91,124,255,.95)' : 'rgba(40,48,86,.95)';
-    rrect(6, ly - 15, tw + 14, 21, 6); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.fillText(label, 13, ly);
+    const first = posTick < m.startTick + g.B || m.startTick > posTick;   // X.1 reste tant qu'on n'est pas arrivé au temps 2 de la mesure
+    ctx.font = '700 15px -apple-system, sans-serif'; const inset = ctx.measureText(m.label).width + 14 + 4;   // décalage de X.1 par rapport à X : X.2, X.3… s'alignent dessus
+    pill(m.label, ly, true, true, i === mi); if (first) pill(m.label + '.1', ly, true, false, false); pill(m.label, ly, false, true, i === mi); if (first) pill(m.label + '.1', ly, false, false, false);
+    for (let k = 1; k < g.n; k++) { const yy = Math.round(y(m.startTick + k * g.B)); if (yy < 6 || yy > rollH) continue; const txt = m.label + '.' + (k + 1); cur.l = 6 + inset; cur.r = W - 6 - inset; pill(txt, yy + 6, true, false, false); pill(txt, yy + 6, false, false, false); }
   }
 
   // notes visibles
@@ -1425,12 +1433,21 @@ function toggle3D() {
   else if (fingBefore3d) { setFingMode(fingBefore3d); fingBefore3d = null; } $('b3d').classList.toggle('pressed', view3dOn);
 }
 // repères temporels du rouleau 3D : barres de mesure (avec numéro) et temps, entre sp et sp + secondes
+// grille d'une mesure : mesure ternaire (6/8 seulement) = temps de 3 croches subdivisés en tiers ; sinon temps de l'unité de la signature subdivisés en demis
+function meterGrid(m) {
+  const base = song.ppq * 4 / m.den, ter = m.den === 8 && m.num === 6, B = ter ? base * 3 : base;
+  return { B, n: Math.max(1, Math.round(m.lenTick / B)), sub: ter ? B / 3 : B / 2 };
+}
 function grid3d(sp, ahead) {
   const out = [], T = song.timeline, mi = measureIndexAt(T.secToTick(Math.max(0, sp)));
   for (let i = Math.max(0, mi - 0); i < song.measures.length; i++) {
     const m = song.measures[i], t0 = T.tickToSec(m.startTick); if (t0 > sp + ahead) break;
-    const beat = song.ppq * 4 / m.den; if (t0 >= sp) out.push({ t: t0, bar: true, label: m.label });
-    for (let t = m.startTick + beat; t < m.startTick + m.lenTick - 1; t += beat) { const ts = T.tickToSec(t); if (ts >= sp && ts <= sp + ahead) out.push({ t: ts }); }
+    const g = meterGrid(m), end = m.startTick + m.lenTick - 1; if (t0 >= sp) out.push({ t: t0, bar: true, label: m.label, beatLabel: m.label + '.1' });
+    for (let k = 0; k < g.n; k++) {
+      const tb = m.startTick + k * g.B;
+      if (k > 0) { const ts = T.tickToSec(tb); if (ts >= sp && ts <= sp + ahead) out.push({ t: ts, beatLabel: m.label + '.' + (k + 1) }); }
+      for (let q = g.sub; q < g.B - 1; q += g.sub) { if (tb + q >= end) break; const tsh = T.tickToSec(tb + q); if (tsh >= sp && tsh <= sp + ahead) out.push({ t: tsh, sub: true }); }   // subdivision (demi-temps ou tiers de temps) : ligne plus pâle
+    }
   }
   return out;
 }

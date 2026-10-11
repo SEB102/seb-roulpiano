@@ -30,7 +30,7 @@ const View3D = (() => {
     if (lblTex[label]) return lblTex[label];
     const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const g = cv.getContext('2d');
     g.fillStyle = 'rgba(40,48,86,.95)'; g.beginPath(); g.moveTo(12, 6); g.lineTo(116, 6); g.quadraticCurveTo(124, 6, 124, 14); g.lineTo(124, 50); g.quadraticCurveTo(124, 58, 116, 58); g.lineTo(12, 58); g.quadraticCurveTo(4, 58, 4, 50); g.lineTo(4, 14); g.quadraticCurveTo(4, 6, 12, 6); g.fill();
-    g.fillStyle = '#fff'; g.font = '700 38px -apple-system, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(label), 64, 34);
+    g.fillStyle = '#fff'; g.font = '700 ' + (String(label).length <= 3 ? 38 : String(label).length === 4 ? 30 : 24) + 'px -apple-system, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(label), 64, 34);
     return (lblTex[label] = new THREE.CanvasTexture(cv));
   }
   // erreur minimale entre le bout visé (tu horizontal, ty vertical depuis la base du doigt) et l'ensemble des poses anatomiquement possibles d'un doigt de longueur totale TOT
@@ -141,7 +141,7 @@ const View3D = (() => {
     // repères temporels : barres de mesure (épaisses, avec numéro) et temps (fins) posés sur le plan du rouleau ; ils tournent avec la scène
     gridL = []; gridS = [];
     for (let i = 0; i < 60; i++) { const l = new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false })); l.visible = false; l.renderOrder = 1; scene.add(l); gridL.push(l); }
-    for (let i = 0; i < 12; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); q.scale.set(2.4, 1.2, 1); q.renderOrder = 8; q.visible = false; scene.add(q); gridS.push(q); }
+    for (let i = 0; i < 90; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); q.scale.set(2.4, 1.2, 1); q.renderOrder = 8; q.visible = false; scene.add(q); gridS.push(q); }
     // mains
     ['L', 'R'].forEach(h => {
       const g = new THREE.Group(), H = { g, fingers: [] };
@@ -226,8 +226,10 @@ const View3D = (() => {
     { const G = st.grid || [], x0 = built.cx - built.w / 2; let li = 0, si = 0;
       G.forEach(e => {
         const z = BACK - (e.t - sp) * SPEED, l = gridL[li++]; if (!l) return;
-        l.visible = true; l.position.set(built.cx, e.bar ? 0.17 : 0.15, z); l.scale.set(built.w, 1, e.bar ? 0.14 : 0.06); l.material.opacity = e.bar ? 0.75 : 0.38;
-        if (e.bar && e.label !== undefined) { const q = gridS[si++]; if (q) { const tex = measureTex(e.label); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.visible = true; q.position.set(x0 + 1.4, 0.7, z); } }
+        l.visible = true; l.position.set(built.cx, e.bar ? 0.17 : 0.15, z); l.scale.set(built.w, 1, e.bar ? 0.14 : e.sub ? 0.035 : 0.06); l.material.opacity = e.bar ? 0.75 : e.sub ? 0.16 : 0.38;
+        const x1 = x0 + built.w, put = (txt, x, big) => { const q = gridS[si++]; if (!q) return; const tex = measureTex(txt); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.scale.set(big ? 2.4 : 1.7, big ? 1.2 : 0.85, 1); q.visible = true; q.position.set(x, 0.7, z); };
+        if (e.bar && e.label !== undefined) { put(e.label, x0 + 1.4, true); put(e.label, x1 - 1.4, true); }   // numéro de mesure aux deux bouts
+        if (e.beatLabel) { const off = 3.3; put(e.beatLabel, x0 + off, false); put(e.beatLabel, x1 - off, false); }   // X.1, X.2, X.3… aux deux bouts, sur chaque temps
       });
       for (; li < gridL.length; li++) gridL[li].visible = false; for (; si < gridS.length; si++) gridS[si].visible = false; }
     stats.n++;
