@@ -402,7 +402,8 @@
       }
       out += src.slice(last, m.index) + seg; last = m.index + m[0].length;
     }
-    return out + src.slice(last);
+    // Sauts de ligne / de page forcés du fichier d'origine : retirés, MuseScore répartit lui-même les mesures (sinon une ligne trop pleine laisse une mesure seule sur la suivante)
+    return (out + src.slice(last)).replace(/(<print\b[^>]*?)\s+new-(?:system|page)="yes"/g, '$1').replace(/(<print\b[^>]*?)\s+new-(?:system|page)="yes"/g, '$1');
   }
 
   const API = { injectFingerings, keyboardRange, retime, parseMidi, parseMusicXml, parseMxl, parseXml, loadSong, makeTimeline, unzip };

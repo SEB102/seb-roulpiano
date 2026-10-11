@@ -16,7 +16,7 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     assert.strictEqual(at(1, 45), 5); assert.strictEqual(at(1, 55), 1);
   });
   await t('Export de la partition : le fichier MusicXML d\'origine revient identique, aux doigtés près ; relu, chaque note porte le doigt affiché', async () => {
-    const strip = x => x.replace(/<fingering\b[^>]*>[^<]*<\/fingering>/g, '').replace(/<technical>\s*<\/technical>/g, '').replace(/<notations>\s*<\/notations>/g, '');
+    const strip = x => x.replace(/(<print\b[^>]*?)\s+new-(?:system|page)="yes"/g, '$1').replace(/<fingering\b[^>]*>[^<]*<\/fingering>/g, '').replace(/<technical>\s*<\/technical>/g, '').replace(/<notations>\s*<\/notations>/g, '');
     for (const fn of ['exemple.musicxml', 'exemple-tabac.musicxml', 'exemple-goldberg.musicxml']) {
       const src = fs.readFileSync(__dirname + '/' + fn), s = await C.loadSong(fn, src);
       ['L', 'R'].forEach(h => H.assignFingerings(s.notes.filter(n => (n.hand || 'R') === h), h));
@@ -27,6 +27,7 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
       const key = n => n.tick + ':' + n.midi + ':' + n.staff + ':' + n.voice, m2 = new Map(s2.notes.map(n => [key(n), n]));
       s.notes.forEach(n => { const o = m2.get(key(n)); assert.ok(o, fn + ' : note perdue ' + key(n)); assert.strictEqual(o.dur, n.dur, fn + ' : durée'); if (shown(n)) assert.strictEqual(o.finger, shown(n), fn + ' : doigt relu ' + key(n)); });
     }
+    assert.ok(!/new-(system|page)="yes"/.test(C.injectFingerings(await C.loadSong('b.musicxml', Buffer.from('<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"/></part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions></attributes><note><pitch><step>C</step><octave>4</octave></pitch><duration>4</duration><type>whole</type></note></measure><measure number="2"><print new-system="yes"><system-layout/></print><note><pitch><step>D</step><octave>4</octave></pitch><duration>4</duration><type>whole</type></note></measure></part></score-partwise>')), n => ({ f: 2 }))), 'sauts de ligne forcés retirés');
     const mini = '<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"/></part-list><part id="P1"><measure number="1"><attributes><divisions>1</divisions></attributes>' +
       '<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type></note>' +
       '<note><pitch><step>D</step><octave>4</octave></pitch><duration>1</duration><type>quarter</type><notations><articulations><staccato/></articulations></notations></note>' +
