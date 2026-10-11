@@ -85,8 +85,9 @@
           border:3px dashed var(--accent); font-size:22px; z-index:5; pointer-events:none; }
   body.dragging #drop { display:flex; }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
-<script src="three.min.js"></script>   <!-- Three.js r128 (licence MIT), copié dans le dossier : la vue 3D fonctionne sans Internet -->
+<script src="Tone.js?v=0"></script>   <!-- Tone.js 14.8.49 (licence MIT), copié dans le dossier : le son fonctionne sans Internet -->
+<script src="three.min.js?v=0"></script>   <!-- Three.js r128 (licence MIT), copié dans le dossier : la vue 3D fonctionne sans Internet -->
+<script src="piano-samples.js?v=0"></script>   <!-- échantillons du piano (Salamander, CC BY 3.0) intégrés : aucun téléchargement -->
 <script src="view3d.js?v=20261011zw"></script>
 <script src="core.js?v=20261010d"></script>
 <script src="hands.js?v=20261011zv"></script>
@@ -288,8 +289,9 @@ const stats = { played: 0 };
 function setSoundStatus(t) { $('status').dataset.snd = t; refreshStatus(); }
 function initSampler() {
   if (typeof Tone === 'undefined') { setSoundStatus('Piano : synthé de secours (Tone.js indisponible)'); return; }
-  const urls = { A0: 'A0.mp3', C8: 'C8.mp3' }; // échantillons Salamander : un tous les 3 demi-tons
-  for (let o = 1; o <= 7; o++) ['C', 'D#', 'F#', 'A'].forEach(n => { urls[n + o] = n.replace('#', 's') + o + '.mp3'; });
+  const embedded = window.SALAMANDER_SAMPLES;   // échantillons intégrés (piano-samples.js) : en ligne comme en local, rien n'est téléchargé ; à défaut, ils viennent du serveur de Tone.js
+  const urls = embedded || { A0: 'A0.mp3', C8: 'C8.mp3' }; // échantillons Salamander : un tous les 3 demi-tons
+  if (!embedded) for (let o = 1; o <= 7; o++) ['C', 'D#', 'F#', 'A'].forEach(n => { urls[n + o] = n.replace('#', 's') + o + '.mp3'; });
   // Contre les craquements : grands tampons audio (latencyHint « playback »), petite marge d'ordonnancement (50 ms au lieu de 100,
   // compensée par la synchro image) et limiteur en sortie pour que les accords et les notes qui se chevauchent ne saturent pas.
   // (après setContext, Tone.context et Tone.Destination restent ceux du contexte d'origine : toujours utiliser getContext() / getDestination())
@@ -297,7 +299,7 @@ function initSampler() {
   const limiter = new Tone.Limiter(-3).toDestination();
   setSoundStatus('Piano : chargement des échantillons…');
   sampler = new Tone.Sampler({
-    urls, release: 1, baseUrl: 'https://tonejs.github.io/audio/salamander/',
+    urls, release: 1, baseUrl: embedded ? '' : 'https://tonejs.github.io/audio/salamander/',
     onload: () => { samplerReady = true; setSoundStatus(''); },
     onerror: () => { sampler = null; setSoundStatus('Piano : synthé de secours (échantillons indisponibles)'); },
   }).connect(limiter); sampler.volume.value = -4;
