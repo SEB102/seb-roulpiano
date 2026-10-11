@@ -126,11 +126,12 @@ const View3D = (() => {
     keys = {}; bars = []; hands = {}; marks = []; pastilles = [];
     while (scene.children.length > 4) scene.remove(scene.children[scene.children.length - 1]);
     let lo = 127, hi = 0; song.notes.forEach(n => { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); });
-    const m0 = Math.max(21, lo - 10), m1 = Math.min(108, hi + 10);
+    let m0 = Math.max(21, lo - 10), m1 = Math.min(108, hi + 10);
+    if (typeof PianoCore !== 'undefined' && PianoCore.keyboardRange) { const r = PianoCore.keyboardRange(lo, hi); m0 = r.first; m1 = r.last; }   // même étendue que le clavier 2D : octaves entières (Do → Si) couvrant le morceau, au moins 3
     const x0 = ux(m0) - 0.5, x1 = ux(m1) + 0.5, cx = (x0 + x1) / 2, w = x1 - x0;
     const wood = new THREE.MeshStandardMaterial({ color: 0x3a2a24, roughness: 0.55, metalness: 0, envMapIntensity: 0.4 });
-    const bed = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 0.5, KEY_L + 0.8), wood); bed.position.set(cx, -0.55, 0); bed.receiveShadow = true; scene.add(bed);
-    const front = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 1, 0.6), wood); front.position.set(cx, -0.3, KEY_L / 2 + 0.5); scene.add(front);
+    const bed = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 0.5, KEY_L + 0.8), wood); bed.position.set(cx, -0.55, 0); bed.receiveShadow = true; scene.add(bed);   // cadre : les côtés (baguettes) arrivent à y = −0,3 ; les touches, plus hautes (dessus à 0), restent À L'INTÉRIEUR du cadre
+    const front = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 0.5, 0.6), wood); front.position.set(cx, -0.55, KEY_L / 2 + 0.5); scene.add(front);   // bord côté joueur : même hauteur que les baguettes des côtés (dessus à y = −0,3), derrière lui les touches se terminent à z = 3
     const back = new THREE.Mesh(new THREE.BoxGeometry(w + 2, 1.1, 0.5), wood); back.position.set(cx, 0.2, BACK - 0.3); scene.add(back);
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.MeshLambertMaterial({ color: 0x141830 })); floor.rotation.x = -Math.PI / 2; floor.position.set(cx, -0.85, 0); floor.receiveShadow = true; scene.add(floor);
     for (let m = m0; m <= m1; m++) {
