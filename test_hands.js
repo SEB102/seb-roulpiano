@@ -7,6 +7,14 @@ const mk = (midis, step = 0.25, dur = 0.22, t0 = 0) => midis.map((m, i) => ({ mi
 const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b);
 
 (async () => {
+  await t('Accords de la main gauche : un accord qui couvre une octave (ré3 – fa♯3 – ré4) se joue 5 … 1, jamais 3-2-1 ni 4-3-1 (les accords voisins ne doivent pas fausser le choix)', () => {
+    const ch = (t0, ms) => ms.map(m => ({ midi: m, t0, t1: t0 + 0.9 }));
+    const ns = [].concat(ch(0, [47, 52, 56]), ch(1, [45, 49, 52, 55]), ch(2, [50, 54, 62]), ch(3.7, [45, 49, 52, 55]));
+    H.assignFingerings(ns, 'L');
+    const at = (t0, m) => ns.find(n => n.t0 === t0 && n.midi === m).af;
+    assert.strictEqual(at(2, 50), 5, 'ré3 au 5'); assert.strictEqual(at(2, 62), 1, 'ré4 au pouce'); assert.ok(at(2, 54) >= 2 && at(2, 54) <= 4);
+    assert.strictEqual(at(1, 45), 5); assert.strictEqual(at(1, 55), 1);
+  });
   await t('Gamme de do montante à la main droite : le pouce passe sous la main (après 3 ou 4), jamais plus de 5 doigts distincts', () => {
     const ns = mk([60, 62, 64, 65, 67, 69, 71, 72, 74, 76, 77, 79, 81, 83, 84]); H.assignFingerings(ns, 'R');
     const f = ns.map(x => x.af); assert.ok(f.every(x => x >= 1 && x <= 5), f.join(''));

@@ -68,7 +68,7 @@
           if (isBlack(n.midi)) c += f === 1 ? 1.0 : f === 5 ? 0.25 : 0; // pouce sur touche noire : court et en retrait, nettement moins confortable
           if (!n.finger) c += f === 4 ? 0.2 : f === 5 ? 0.15 : 0;
           if (i && S[i - 1]) c += pairCost(S[i - 1], q(e.ns[i - 1]), f, q(n));
-          for (let j = 0; j < i; j++) { const fj = S[j]; if (!fj || !f) continue; const df = Math.abs(f - fj), span = Math.abs(q(n) - q(e.ns[j])), mx = [0, 5, 7, 9, 12][Math.min(4, df)] + 0.5; if (span > mx) c += 2.5 * (span - mx); }   // écart maximal confortable entre deux doigts qui jouent ensemble (demi-tons) : une octave se joue 1-5, jamais 3-5
+          for (let j = 0; j < i; j++) { const fj = S[j]; if (!fj || !f) continue; const df = Math.abs(f - fj), span = Math.abs(q(n) - q(e.ns[j])), mx = [0, 5, 7, 9, 12][Math.min(4, df)] + 0.5; if (span > mx) c += 8 * (span - mx); }   // écart maximal confortable entre deux doigts qui jouent ensemble (demi-tons) : une octave se joue 1-5, jamais 3-5
         });
         return c;
       });
@@ -84,10 +84,12 @@
           e.ns.forEach((n, j) => {
             const fb = SB[j]; if (!fb) return;
             let near = 0, nd = Infinity; p.ns.forEach((m, x) => { const d = Math.abs(q(m) - q(n)); if (d < nd) { nd = d; near = x; } });
+            if (p.ns.length > 1 || e.ns.length > 1) { const same = SA.findIndex(f => f === fb); if (same >= 0) near = same; else { c += scale * 0.1 * nd; return; } }   // accord : on compare avec la note que CE doigt vient de jouer (la main se déplace d'un bloc) ; un doigt qui n'a pas joué ne « croise » rien : seul le déplacement de la main compte
             const fa = SA[near]; if (!fa) return;
-            c += scale * pairCost(fa, q(p.ns[near]), fb, q(n));
+            const blocs = p.ns.length > 1 && e.ns.length > 1 && fa === fb;   // accord → accord avec le même doigt : toute la main se déplace d'un bloc, ce n'est pas un saut de doigt isolé
+            c += scale * (blocs ? 0.15 * Math.abs(q(n) - q(p.ns[near])) : pairCost(fa, q(p.ns[near]), fb, q(n)));
             if (fb === 1 && fa !== 1 && isBlack(n.midi)) c += scale * ((fa - fb) * (q(n) - q(p.ns[near])) < 0 ? 1.5 : 0.5); // le pouce qui ARRIVE sur une touche noire (surtout en passant sous la main, en montant) est difficile
-            if (fa === fb && q(p.ns[near]) !== q(n) && gap < 0.15) c += 3 + 0.5 * Math.abs(q(n) - q(p.ns[near])); // même doigt, saut, sans le temps de s'y rendre
+            if (fa === fb && q(p.ns[near]) !== q(n) && gap < 0.15 && !blocs) c += 3 + 0.5 * Math.abs(q(n) - q(p.ns[near])); // même doigt, saut, sans le temps de s'y rendre
           });
           if (c < best) { best = c; arg = ai; }
         });
