@@ -35,23 +35,27 @@ const View3D = (() => {
     return (lblTex[label] = new THREE.CanvasTexture(cv));
   }
   // erreur minimale entre le bout visé (tu horizontal, ty vertical depuis la base du doigt) et l'ensemble des poses anatomiquement possibles d'un doigt de longueur totale TOT
-  function chainErr(TOT, tu, ty, th) {
+  // lv : niveau de hauteur de la ligne des bases (0 bas, 1 moyen, 2 haut) ; flexion préférée : bas → doigts presque à plat (5° / 10°), haut → flexion naturelle (25° / 45°)
+  const FLEXP = [[5, 10], [12, 28], [25, 45]], lvOf = h => h < 0.9 ? 0 : h < 1.5 ? 1 : 2;
+  function chainErr(TOT, tu, ty, th, lv) {
     const La = TOT * 0.37, Lb = TOT * 0.32, Lc = TOT * 0.31, R = Math.PI / 180; let m = Infinity;
     for (let dz = 0; dz <= 0; dz += 1) for (let d1 = -5; d1 <= 70; d1 += 5) for (let f2 = 0; f2 <= 90; f2 += 10) {   // d1 : flexion de la 1re articulation par rapport à la paume (0 = plat dans son prolongement)
       const a1 = (th - d1) * R, a2 = a1 - f2 * R, a3 = a2 - 0.45 * f2 * R;
-      if (a2 < -100 * R || a3 < -115 * R) continue;   // RÈGLE : le dernier segment ne pointe jamais vers l'arrière (angle absolu ≥ −115° : au plus 25° au-delà de la verticale) et le segment moyen ne dépasse pas −100°
+      if (a2 < -90 * R || a3 < -90 * R) continue;   // RÈGLE : aucun segment ne pointe vers l'arrière (angle absolu ≥ −90° : jamais au-delà de la verticale) ; tolérance au repliement arrière : 0
       const u = La * Math.cos(a1) + Lb * Math.cos(a2) + Lc * Math.cos(a3), y = La * Math.sin(a1) + Lb * Math.sin(a2) + Lc * Math.sin(a3);
-      const err = Math.hypot(u + dz - tu, y - ty) + 0.004 * Math.abs(d1 - 25) + 0.0015 * Math.abs(f2 - 45) + 0.03 * Math.abs(dz); if (err < m) m = err;
+      const err = Math.hypot(u + dz - tu, y - ty) + 0.005 * Math.abs(d1 - FLEXP[lv][0]) + 0.003 * Math.abs(f2 - FLEXP[lv][1]) + 0.03 * Math.abs(dz); if (err < m) m = err;
     }
     return m;
   }
   // TEST MODELE 3D : constantes de la main solide
   const LACET = [null, [-20, 20], [-20, 20], [-20, 20], [-5, 45]];   // lacet permis à la base x.0 (degrés ; + = vers le côté du 5) : 2, 3, 4 : ±20° ; 5 : 5° vers le pouce, 45° vers l'extérieur
+  let blackXs = [];   // positions (x) des touches noires du clavier construit : sert à interdire que les os des doigts passent dans les touches
+  const YMIN = 0.6, YCAP = 1.3;   // hauteur minimale du poignet, de la paume et des bases des doigts (au-dessus des touches noires, dessus à 0,45) ; plafond de la ligne des bases quand un doigt joue
   const D2R = Math.PI / 180, SP = 1.07, PALM = 4.0, ZW = KEY_L / 2, ZB = BACK + BLK_L, YMAX = 3 * SP, RF = [4.2, 3.2, 3.6, 3.1, 2.4];
   const LOC = [[-(SP + 0.55) * 2 / 3, (PALM - 1.2) * 2 / 3, -0.1],   // 1.0 : distance P–1.0 réduite d'un tiers (≈ 2,15 touches)
      [-SP, PALM, 0], [0, PALM, 0], [SP, PALM, 0], [2 * SP, PALM, 0]];   // [latéral vers le 5, avant, haut] depuis P : 1.0, 2.0, 3.0, 4.0, 5.0
   // POUCE : 1.0 (base) : inclinaison +45° (haut) à −10° (bas), roulis 0, lacet 90° vers l'extérieur (côté opposé au 5) à 45° vers l'intérieur ; 1.1 : roulis 0, lacet 0, inclinaison 0 à 90° vers le bas ; longueurs fixes
-  const TL1 = 1.6, TL2 = 1.2, TPSI = [-45, 90], TINC = [-10, 45], TFLX = [0, 90];   // psi > 0 = vers l'extérieur ; repère local (l vers le 5, f vers l'avant, n normale de la paume)
+  const TL1 = 1.6, TL2 = 1.2, TPSI = [-45, 90], TINC = [-10, 45], TFLX = [0, 25];   // psi > 0 = vers l'extérieur ; repère local (l vers le 5, f vers l'avant, n normale de la paume)
   const thumbOff = (psi, inc, flx) => { const bt = psi * D2R, al = inc * D2R, fx = flx * D2R;
     // repère du pouce tourné de 90° par rapport à celui des doigts : son « lacet » (psi, de −45° à +90°) l'abaisse vers les touches (+) ou le relève (−) ; son « inclinaison » (inc, de −10° à +45°) l'écarte
     // de l'index dans le plan de la paume (+) ou le rapproche (−) ; 1.1 fléchit de flx° dans le plan de la paume, vers l'index (son « bas » est latéral), sans lacet ni roulis
@@ -62,16 +66,16 @@ const View3D = (() => {
   const THN = 41, THS = 0.25, THR = 5;
   function thumbField() {
     if (THF) return THF; const pts = [];
-    for (let psi = TPSI[0]; psi <= TPSI[1]; psi += 15) for (let inc = TINC[0]; inc <= TINC[1]; inc += 5) for (let flx = TFLX[0]; flx <= TFLX[1]; flx += 10) pts.push(thumbOff(psi, inc, flx).t);
+    for (let psi = TPSI[0]; psi <= TPSI[1]; psi += 15) for (let inc = TINC[0]; inc <= TINC[1]; inc += 5) for (let flx = TFLX[0]; flx <= TFLX[1]; flx += 10) { const o = thumbOff(psi, inc, flx); if (o.m[1] < 0 || o.t[1] - o.m[1] < 0) continue; pts.push(o.t); }   // RÈGLE : aucun segment du pouce ne pointe vers l'arrière (vers le poignet) : pas de pouce replié sous la main
     THF = new Float32Array(THN * THN * THN);
     for (let a = 0; a < THN; a++) for (let b = 0; b < THN; b++) for (let c = 0; c < THN; c++) { const x = -THR + a * THS, y = -THR + b * THS, z = -THR + c * THS; let m = 1e9; for (const q of pts) { const d = (q[0] - x) ** 2 + (q[1] - y) ** 2 + (q[2] - z) ** 2; if (d < m) m = d; } THF[(a * THN + b) * THN + c] = Math.sqrt(m); }
     return THF;
   }
   function thumbErr(l, f, n) { const F = thumbField(), q = v => Math.max(0, Math.min(THN - 1, Math.round((v + THR) / THS))), o = Math.max(0, Math.hypot(Math.max(0, Math.abs(l) - THR), Math.max(0, Math.abs(f) - THR), Math.max(0, Math.abs(n) - THR))); return F[(q(l) * THN + q(f)) * THN + q(n)] + o; }
   const CT = {};   // table précalculée de chainErr (doigt, flexion) → erreur minimale selon (tu, ty)
-  function chainTab(i, tu, ty, th) {
-    const ti = Math.max(0, Math.min(12, Math.round((th + 40) / 5))), key = i * 20 + ti; let t = CT[key];
-    if (!t) { t = CT[key] = new Float32Array(45 * 45); for (let a = 0; a < 45; a++) for (let b = 0; b < 45; b++) t[a * 45 + b] = chainErr(RF[i], a * 0.1, -3.2 + b * 0.1, -40 + ti * 5); }
+  function chainTab(i, tu, ty, th, lv) {
+    const ti = Math.max(0, Math.min(12, Math.round((th + 40) / 5))), key = (i * 20 + ti) * 3 + lv; let t = CT[key];
+    if (!t) { t = CT[key] = new Float32Array(45 * 45); for (let a = 0; a < 45; a++) for (let b = 0; b < 45; b++) t[a * 45 + b] = chainErr(RF[i], a * 0.1, -3.2 + b * 0.1, -40 + ti * 5, lv); }
     const a = Math.min(44, Math.max(0, Math.round(tu / 0.1))), b = Math.min(44, Math.max(0, Math.round((ty + 3.2) / 0.1)));
     return t[a * 45 + b] + Math.max(0, tu - 4.4) + Math.max(0, -3.2 - ty) + Math.max(0, ty - 1.2);
   }
@@ -123,7 +127,7 @@ const View3D = (() => {
 
   // construit clavier, rouleau et mains pour la plage de notes du morceau
   function build(song, ux, isBlack) {
-    keys = {}; bars = []; hands = {}; marks = []; pastilles = [];
+    keys = {}; bars = []; hands = {}; marks = []; pastilles = []; blackXs = [];
     while (scene.children.length > 4) scene.remove(scene.children[scene.children.length - 1]);
     let lo = 127, hi = 0; song.notes.forEach(n => { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); });
     let m0 = Math.max(21, lo - 10), m1 = Math.min(108, hi + 10);
@@ -138,6 +142,7 @@ const View3D = (() => {
       const blk = isBlack(m), g = blk ? new THREE.BoxGeometry(0.58, 0.7, BLK_L) : new THREE.BoxGeometry(0.94, 0.5, KEY_L);
       const mat = new THREE.MeshStandardMaterial({ color: blk ? 0x14151e : 0xf4f4f8, roughness: blk ? 0.22 : 0.36, metalness: 0, envMapIntensity: 0.5 }), k = new THREE.Mesh(g, mat);
       k.position.set(ux(m), blk ? 0.1 : -0.25, blk ? BACK + BLK_L / 2 : 0); k.userData = { blk, y0: k.position.y, col: blk ? 0x14151e : 0xf4f4f8 };
+      if (blk) blackXs.push(ux(m));
       k.castShadow = k.receiveShadow = true; scene.add(k); keys[m] = k;
     }
     // colonnes du rouleau : un second clavier posé sur le plan du rouleau (touches blanches en beige, noires en gris)
@@ -263,6 +268,10 @@ const View3D = (() => {
       const REACHF = [4.2, 3.2, 3.6, 3.1, 2.4];   // longueurs des doigts (fixes)
       H.fingers.forEach((F, i) => { const bt = a.fingers[i].blk || 0; F.blkS = (F.blkS === undefined || SNAP) ? bt : F.blkS + (bt - F.blkS) * AL; });
       const eng = a.fingers.map((f, i) => ({ f, i, e: Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0) })).filter(o => o.e >= 0.5);
+      // Passage du pouce sous la paume : permis seulement dans le sens du mouvement naturel (main droite : vers le grave ; main gauche : vers l'aigu), jamais dans l'autre sens
+      const thumbOn = eng.some(o => o.i === 0), others = eng.filter(o => o.i > 0);
+      const tuckOK = thumbOn && H.lastX !== undefined && sg * (xs[0] - H.lastX) < 0;
+      if (!thumbOn && others.length) H.lastX = others.reduce((q, o) => q + xs[o.i], 0) / others.length;
       // ===== TEST MODELE 3D : la main est un SOLIDE (paume rigide, longueurs fixes, bases 2.0–3.0–4.0–5.0 toujours alignées) =====
       // Mouvements de P (poignet) : horizontal sans limite ; hauteur de P au-dessus du clavier : de 0 à la distance 2.0–5.0 ;
       // distance au clavier : les bases 2.0…5.0 restent entre le bord des touches blanches (z = 3) et le bord des touches noires (z = 0,6), jamais sous la surface des touches ;
@@ -273,36 +282,39 @@ const View3D = (() => {
       const fr = (bx, bz, py, th, rho, psi) => {
         const r = rho * D2R, t = th * D2R, b = sg * psi * D2R, cr = Math.cos(r), sr = Math.sin(r), ct = Math.cos(t), st2 = Math.sin(t);
         const L = rotY([sg * cr, -sr, 0], b), F = rotY([-st2 * sg * sr, -st2 * cr, -ct], b), N = rotY([ct * sg * sr, ct * cr, -st2], b);
-        const P = [bx - PALM * F[0], py, bz - PALM * F[2]];
+        const P = [bx - PALM * F[0], py - PALM * F[1], bz - PALM * F[2]];   // py = hauteur de la ligne des bases 2.0–5.0 (P en est déduit : l'inclinaison change l'angle d'attaque sans déplacer la ligne)
         return { P, F, L, N, w: l => [P[0] + L[0] * l[0] + F[0] * l[1] + N[0] * l[2], P[1] + L[1] * l[0] + F[1] * l[1] + N[1] * l[2], P[2] + L[2] * l[0] + F[2] * l[1] + N[2] * l[2]] };
       };
       const dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
       const evalPose = (bx, bz, py, th, rho, psi) => {
+        if (eng.length && py > YCAP) return Infinity;   // un doigt joue ou s'apprête à jouer : la ligne des bases reste près du clavier
         const F = fr(bx, bz, py, th, rho, psi);
-        for (let i = 1; i < 5; i++) { const K = F.w(LOC[i]); if (K[2] < ZB - 1e-6 || K[2] > ZW + 1e-6 || K[1] < 0) return Infinity; }
-        let worst = 0, tot = 0; const tw = -th * D2R, c = Math.cos(tw), s = Math.sin(tw);
+        if (F.P[1] < YMIN) return Infinity;   // le poignet ne descend pas dans les touches
+        for (let i = 0; i < 5; i++) { const K = F.w(LOC[i]); if (K[1] < YMIN) return Infinity; if (i > 0 && (K[2] < ZB - 1e-6 || K[2] > ZW + 1e-6)) return Infinity; }   // ni la paume, ni les bases des doigts ni celle du pouce : jamais sous le dessus des touches noires (0,45) plus le rayon des os
+        let worst = 0, tot = 0, latPen = 0; const lvl = lvOf(py), tw = -th * D2R, c = Math.cos(tw), s = Math.sin(tw);
         for (const { i, f: fe } of eng) {
           const K = F.w(LOC[i]), T = tgt(i), v = [T[0] - K[0], T[1] - K[1], T[2] - K[2]];
           let er;
-          if (i === 0) er = thumbErr(dot(v, F.L), dot(v, F.F), dot(v, F.N));
+          if (i === 0) { er = thumbErr(dot(v, F.L), dot(v, F.F), dot(v, F.N)); latPen = (tuckOK ? 0.5 : 4) * Math.max(0, dot(v, F.L)) + 0.25 * Math.hypot(dot(v, F.L), dot(v, F.F) - 1.0); }   // + le poignet se place pour que la touche du pouce soit proche de sa base : le pouce n'a que de petits angles   // pouce : sa touche ne doit pas être du côté des autres doigts par rapport à sa base (pouce replié sous la main) : la main se décale plutôt
           else { const fv = dot(v, F.F), lv = dot(v, F.L), nv = dot(v, F.N), a = Math.max(LACET[i][0] * D2R, Math.min(LACET[i][1] * D2R, Math.atan2(lv, Math.max(1e-3, fv)))), u = fv * Math.cos(a) + lv * Math.sin(a), off = Math.abs(-fv * Math.sin(a) + lv * Math.cos(a));
-            er = (fv <= 0 ? 1 : 0) + off + chainTab(i, u * c - nv * s, u * s + nv * c, -th); }
+            er = (fv <= 0 ? 1 : 0) + off + chainTab(i, u * c - nv * s, u * s + nv * c, -th, lvl); }
           // un doigt qui tient une touche (pouce compris) ne la quitte jamais au profit des suivants (poids plein) ; un doigt qui s'apprête à jouer pèse moins, le pouce encore moins
           const hold = !!fe.pressed, w = hold ? 1 : i === 0 ? 0.25 : 0.6; if (hold || i !== 0) worst = Math.max(worst, hold ? er : 0.7 * er); tot += w * er * er;
         }
-        return worst + 0.5 * tot / Math.max(1, eng.length);
+        return worst + 0.5 * tot / Math.max(1, eng.length) + latPen;
       };
       // hauteur préférée du poignet : bas quand un doigt tient une touche (les doigts reposent sur le clavier), moyenne quand un doigt s'apprête à jouer, haute au repos (la main flotte au-dessus du clavier)
       // hauteur des articulations 2.0–5.0 (les « jointures ») au-dessus des touches : la main en arche (≈ 2 touches de haut) quand un doigt tient une touche, un peu plus haute quand un doigt s'apprête à jouer, haute au repos (2,7)
-      const khT0 = eng.some(o => o.f.pressed) ? 2.0 : eng.length ? 2.2 : 2.7; H.khS = (H.khS === undefined || SNAP) ? khT0 : H.khS + (khT0 - H.khS) * AL; const khT = H.khS;
-      const pref = q => 0.004 * Math.abs(q.dx) + 0.01 * Math.abs(q.bz - 2.2) + 0.3 * Math.abs(q.py - PALM * Math.sin(q.th * D2R) * Math.cos(q.rho * D2R) - khT) + 0.004 * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + 0.02 * Math.abs(q.psi - 5);
+      // hauteur préférée de la LIGNE des bases 2.0–5.0 : basse partout (la main ne remonte pas entre les notes) ; baisser la ligne étend les doigts (FLEXP)
+      const khT0 = eng.length ? 1.0 : 1.2; H.khS = (H.khS === undefined || SNAP) ? khT0 : H.khS + (khT0 - H.khS) * AL; const khT = H.khS;
+      const pref = q => 0.004 * Math.abs(q.dx) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.06 * Math.abs(q.bz - 3) : 0.01 * Math.abs(q.bz - 2.2)) + 1.2 * Math.abs(q.py - khT) + 0.004 * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5));
       const scoreQ = q => (stats.ev = (stats.ev || 0) + 1, stats.evF = stats.evF || 0, evalPose)(px0 + q.dx, q.bz, q.py, q.th, q.rho, q.psi) + pref(q);
       let pose = H.pose || { dx: 0, bz: 2.2, py: 1.8, th: 10, rho: 0, psi: 5 };   // lacet de P par défaut : 5° vers l'extérieur
-      if (!eng.length) pose = { dx: 0, bz: 2.2, py: 3.1, th: 5, rho: 0, psi: 5 };   // au repos : pose neutre, main relevée (jointures à 2,7)
+      if (!eng.length) pose = { dx: 0, bz: 2.8, py: 1.2, th: 5, rho: 0, psi: 5 };   // au repos (entre deux notes) : la main reste près du clavier, sans remonter
       if (eng.length) {
         // recherche en deux temps : (1) départ = pose de l'image précédente (ou grille grossière si elle est mauvaise, si les doigts engagés ont changé, ou toutes les 10 images) ;
         // (2) affinage par pas décroissants, une coordonnée à la fois
-        const key = eng.map(o => o.i).join(''), lim = { th: [0, 40], rho: [-10, 70], psi: [-20, 20], py: [0, YMAX], bz: [0.2, 3], dx: [-2.5, 2.5] };
+        const key = eng.map(o => o.i).join(''), lim = { th: [-15, 40], rho: [-10, 70], psi: [-20, 20], py: [0, YMAX], bz: [0.2, 3], dx: [-2.5, 2.5] };
         let best = H.pose ? scoreQ(H.pose) : Infinity;
         H.fc = (H.fc || 0) + 1;
         if (!H.pose || best > 0.7 || H.engKey !== key || SNAP) {
@@ -349,7 +361,7 @@ const View3D = (() => {
           // au repos (pouce qui ne joue pas) : 1.0 écarté de 20° vers l'extérieur et légèrement abaissé (lacet 20°) ; 1.1–1.2 incliné de 5° vers l'extérieur (seule exception à la flexion vers l'index : flexion −5°) ; il rejoint sa touche à mesure qu'elle approche
           const REST_T = [20, 20, -5], wt = Math.min(1, kws[0]), tl = tl0;   // la pose de repos se mélange à la pose visée en ANGLES (un seul mélange, pas de détour : plus de balancement)
           let bt = null; const pv = F.thS;
-          const ec = (psi, inc, flx) => { const t = thumbOff(psi, inc, flx).t; return Math.hypot(t[0] - tl[0], t[1] - tl[1], t[2] - tl[2]) + 0.0015 * Math.abs(flx - 10) + 0.001 * Math.abs(inc - 10) + 0.0006 * Math.abs(psi - 20) + (pv && !SNAP ? 0.0003 * (Math.abs(psi - pv.psi) + Math.abs(inc - pv.inc) + Math.abs(flx - pv.flx)) : 0); };
+          const ec = (psi, inc, flx) => { const oo = thumbOff(psi, inc, flx), t = oo.t; return (oo.m[1] < 0 || t[1] - oo.m[1] < 0 ? 1000 : 0) + (tuckOK ? 0 : 6 * Math.max(0, oo.m[0]) + 3 * Math.max(0, t[0])) + Math.hypot(t[0] - tl[0], t[1] - tl[1], t[2] - tl[2]) + 0.004 * Math.abs(flx - 10) + 0.003 * Math.abs(inc - 10) + 0.0006 * Math.abs(psi - 20) + (pv && !SNAP ? 0.0003 * (Math.abs(psi - pv.psi) + Math.abs(inc - pv.inc) + Math.abs(flx - pv.flx)) : 0); };
           for (let psi = TPSI[0]; psi <= TPSI[1]; psi += 15) for (let inc = TINC[0]; inc <= TINC[1]; inc += 11) for (let flx = TFLX[0]; flx <= TFLX[1]; flx += 15) { const e = ec(psi, inc, flx); if (!bt || e < bt.e) bt = { e, psi, inc, flx }; }
           if (pv && !SNAP) { const e = ec(pv.psi, pv.inc, pv.flx); if (e < bt.e) bt = { e, psi: pv.psi, inc: pv.inc, flx: pv.flx }; }
           for (const stp of [7.5, 3.75, 1.9]) for (let it = 0; it < 8; it++) { let mv = false;
@@ -377,9 +389,9 @@ const View3D = (() => {
           let best = null; const R2D = Math.PI / 180;
           for (let dz = 0; dz <= 0; dz += 1) for (let e1 = th - 70; e1 <= th + 5; e1 += 3) for (let f2 = 0; f2 <= 90; f2 += 3) {
             const a1 = e1 * R2D, a2 = a1 - f2 * R2D, a3 = a2 - 0.45 * f2 * R2D;
-            if (a2 < -100 * R2D || a3 < -115 * R2D) continue;   // RÈGLE : le dernier segment ne pointe jamais vers l'arrière (angle absolu ≥ −115° : au plus 25° au-delà de la verticale) et le segment moyen ne dépasse pas −100°
+            if (a2 < -90 * R2D || a3 < -90 * R2D) continue;   // même règle que dans la recherche de pose (chainErr) : aucun segment au-delà de la verticale ; les deux doivent rester identiques
             const mu = La * Math.cos(a1), my = La * Math.sin(a1), du = mu + Lb * Math.cos(a2), dy = my + Lb * Math.sin(a2), tu2 = du + Lc * Math.cos(a3), ty2 = dy + Lc * Math.sin(a3);
-            const err = Math.hypot(tu2 + dz - tu, ty2 - ty) + 0.004 * Math.abs((th - e1) - 25) + 0.0015 * Math.abs(f2 - 45) + 0.03 * Math.abs(dz);
+            const err = Math.hypot(tu2 + dz - tu, ty2 - ty) + 0.005 * Math.abs((th - e1) - FLEXP[lvOf(hy)][0]) + 0.003 * Math.abs(f2 - FLEXP[lvOf(hy)][1]) + 0.03 * Math.abs(dz);
             if (!best || err < best.err) best = { err, e1, f2, dz, mu, my, du, dy, tu2, ty2 };
           }
           // lissage temporel : les angles retenus sont filtrés (≈ 70 ms) pour que les doigts ne « tremblent » pas quand la meilleure pose change d'une image à l'autre
@@ -387,13 +399,17 @@ const View3D = (() => {
             const a1 = F.e1S * R2D, a2 = a1 - F.f2S * R2D, a3 = a2 - 0.45 * F.f2S * R2D;
             best.mu = La * Math.cos(a1); best.my = La * Math.sin(a1); best.du = best.mu + Lb * Math.cos(a2); best.dy = best.my + Lb * Math.sin(a2); best.tu2 = best.du + Lc * Math.cos(a3); best.ty2 = best.dy + Lc * Math.sin(a3); }
           { const A1 = F.e1S, A2 = A1 - F.f2S, A3 = A2 - 0.45 * F.f2S, v = stats.val = stats.val || { n: 0, mcp: 0, pip: 0, dip: 0, back: 0 };
-            v.n++; if (A1 < th - 71 || A1 > th + 6) v.mcp++; if (F.f2S < -0.5 || F.f2S > 91) v.pip++; if (0.45 * F.f2S > 41 || 0.45 * F.f2S < -0.5) v.dip++; if (A2 < -101 || A3 < -116 || Math.cos(A2 * R2D) < -0.2 || Math.cos(A3 * R2D) < -0.45) v.back++; }
+            v.n++; if (A1 < th - 71 || A1 > th + 6) v.mcp++; if (F.f2S < -0.5 || F.f2S > 91) v.pip++; if (0.45 * F.f2S > 41 || 0.45 * F.f2S < -0.5) v.dip++; if (A2 < -91 || A3 < -91 || Math.cos(A2 * R2D) < -0.02 || Math.cos(A3 * R2D) < -0.02) v.back++; }
           const dzS = F.dzS;   // la base du doigt (articulation métacarpo-phalangienne) glisse de ±0,8 touche le long du métacarpien : les doigts s'adaptent à des touches proches ou éloignées
           const at = (X, Y) => { const u = X * cT + Y * sT + dzS, y = -X * sT + Y * cT; return V(K.x + u * dd[0] + y * NN[0], K.y + u * dd[1] + y * NN[1], K.z + u * dd[2] + y * NN[2]); };
           K0 = at(0, 0);
           M = at(best.mu, best.my); D = at(best.du, best.dy); T.copy(at(best.tu2, best.ty2));
           if (f.pressed) { const real = Math.hypot(best.tu2 + dzS - tu, best.ty2 - ty); (stats.errF = stats.errF || {})[h + F.f] = +real.toFixed(2); stats.press = (stats.press || 0) + 1; stats.frameErr = Math.max(stats.frameErr || 0, real); if (real > 0.12) { stats.miss = (stats.miss || 0) + 1; (stats.ml = stats.ml || []).push([+sp.toFixed(2), h, F.f, +real.toFixed(2)]); } if (real > 0.3) { stats.big = (stats.big || 0) + 1; (stats.bl = stats.bl || []).push([F.f, +real.toFixed(2), +tu.toFixed(2), +ty.toFixed(2), +best.tu2.toFixed(2), +best.ty2.toFixed(2), +th.toFixed(0), +hz.toFixed(1), +hy.toFixed(1), +blk.toFixed(1), +(T.x - K.x).toFixed(1), +(xs[F.f - 1] - K.x).toFixed(1), +dzS.toFixed(2), best.dz]); } }   // écart réel entre le bout du doigt et la touche visée (en largeurs de touche)
         }
+        // RÈGLE : aucun os ne traverse une touche. Les articulations (et le bout d'un doigt qui ne joue pas) restent au-dessus du dessus des touches : 0,45 au-dessus d'une touche noire (tant qu'on est dans sa longueur), 0 au-dessus d'une touche blanche, plus le rayon de l'os
+        { const flr = (p, r) => { if (p.z < ZB) for (const bx of blackXs) if (Math.abs(p.x - bx) < 0.36) return 0.45 + r; return r; };
+          [M, D].forEach(p => { if (p) p.y = Math.max(p.y, flr(p, 0.12)); });
+          if (!f.pressed) T.y = Math.max(T.y, flr(T, 0.1)); }
         const tm = H.sk.fing[F.f - 1].tipMat; tm.color.setHex(f.pressed ? col : 0xffffff); tm.emissive.setHex(f.pressed ? 0x553300 : 0x444444);   // bout du doigt qui joue : couleur vive
         F.sp.visible = st.fing !== false; F.sp.position.set(T.x, T.y + 0.85, T.z); F.sp.material.opacity = f.pressed ? 1 : 0.55;
         const nextF = st.anticip && !f.pressed && (f.wN || 0) > 0.02;   // prochain doigt : pastille qui clignote (3 fois par seconde), bout du doigt qui s'éclaire
