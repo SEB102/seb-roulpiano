@@ -82,7 +82,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261011m"></script>
+<script src="view3d.js?v=20261011y"></script>
 <script src="core.js?v=20261010d"></script>
 <script src="hands.js?v=20261017e"></script>
 <script src="hands_legacy.js?v=20261010g"></script>
@@ -99,10 +99,10 @@
     </div>
     <div class="sepv"></div>
     <div class="grp"><span class="lab" title="En pas à pas : cadence du défilement automatique des pas (¼× = un pas toutes les 5,7 s, 1× = toutes les 1,4 s). Hors pas à pas : vitesse de lecture du morceau.">Vitesse</span>
-      <input type="range" id="bSld" min="0.25" max="1" step="0.05" title="Vitesse (curseur)" style="width:110px"><span id="bSpd" class="lab"></span></div>
+      <input type="range" id="bSld" min="0.25" max="1" step="0.05" title="Vitesse (curseur)" style="width:90px"><span id="bSpd" class="lab"></span></div>
     <div class="sepv"></div>
     <div class="grp">
-      <label for="tempo">Tempo ♩ =</label>
+      <label for="tempo" title="Tempo de départ (noires par minute)">♩ =</label>
       <input id="tempo" type="number" min="20" max="300" step="1" disabled title="Tempo de départ (noires par minute). Par défaut : celui du fichier ; modifiable.">
       <button id="tempoReset" title="Revenir au tempo du fichier">↺</button>
     </div>
@@ -111,7 +111,7 @@
       <button id="bhL" title="Afficher / masquer la main gauche">M.G.</button><button id="bhR" title="Afficher / masquer la main droite">M.D.</button></div>
     <div class="sepv"></div>
     <div class="grp">
-      <label for="vis">Mesures visibles</label>
+      <label for="vis" title="Nombre de mesures à venir affichées au-dessus du clavier">Mesures</label>
       <select id="vis"><option selected>1</option><option>2</option><option>3</option><option>4</option></select>
     </div>
     <div class="sepv"></div>
