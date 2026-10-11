@@ -254,17 +254,20 @@ function buildStems() {
   // une « ligne » = une main + une voix (portée/voix du fichier MusicXML) : les notes simultanées d'une même voix forment un accord (une hampe) ; deux voix = deux hampes
   const lines = {}, groups = [];
   song.notes.forEach(n => { const h = noteHand(n) === 'L' ? 'L' : 'R', lk = h + '|' + (n.staff || 0) + '/' + (n.voice || 0), L = lines[lk] = lines[lk] || { h, map: {}, units: [] }; let u = L.map[n.tick]; if (!u) { u = L.map[n.tick] = { h, tick: n.tick, notes: [] }; L.units.push(u); } u.notes.push(n); });
+  // sens des hampes : une seule voix dans la main = sens habituel (main gauche vers les graves, main droite vers les aigus) ; deux voix ou plus = voix haute hampes vers les aigus, voix basse vers les graves, comme sur une portée
+  ['L', 'R'].forEach(h => { const vs = Object.values(lines).filter(L => L.h === h); vs.forEach(L => { L.avg = L.units.reduce((a, u) => a + u.notes.reduce((b, n) => b + n.midi, 0) / u.notes.length, 0) / Math.max(1, L.units.length); });
+    vs.sort((a, b) => b.avg - a.avg); vs.forEach((L, i) => { L.sd = vs.length < 2 ? (h === 'L' ? -1 : 1) : (i < vs.length / 2 ? 1 : -1); }); });
   Object.values(lines).forEach(L => {
     const us = L.units.sort((a, b) => a.tick - b.tick); let g = null;
     us.forEach(u => {
       let c = null; u.notes.forEach(n => { const cc = noteClass(n); if (cc && (!c || cc.k > c.k)) c = cc; }); u.cls = c; u.end = u.tick + Math.min(...u.notes.map(n => n.dur));
       if (!c || c.beams < 1) { g = null; return; }
       const mi = measureIndexAt(u.tick), m = song.measures[mi], gr = meterGrid(m), bi = mi * 1000 + Math.floor((u.tick - m.startTick + 1) / gr.B);
-      if (g && g.bi === bi && u.tick - g.units[g.units.length - 1].end <= song.ppq / 8) g.units.push(u); else { g = { h: L.h, bi, units: [u] }; groups.push(g); }
+      if (g && g.bi === bi && u.tick - g.units[g.units.length - 1].end <= song.ppq / 8) g.units.push(u); else { g = { h: L.h, sd: L.sd, bi, units: [u] }; groups.push(g); }
     });
   });
   const byMeasure = {};   // main + mesure -> unités qui ont une hampe (pour aligner le bout des hampes d'une même mesure)
-  Object.values(lines).forEach(L => L.units.forEach(u => { if (u.cls && u.cls.k >= 1) { u.mi = measureIndexAt(u.tick); (byMeasure[L.h + '|' + u.mi] = byMeasure[L.h + '|' + u.mi] || []).push(u); } }));
+  Object.values(lines).forEach(L => L.units.forEach(u => { if (u.cls && u.cls.k >= 1) { u.mi = measureIndexAt(u.tick); (byMeasure[L.h + '|' + L.sd + '|' + u.mi] = byMeasure[L.h + '|' + L.sd + '|' + u.mi] || []).push(u); } }));
   return { song, lines: Object.values(lines), groups, byMeasure };
 }
 // Mise en page générique des hampes : primitives { k: 'h'|'v'|'dot'|'txt' } dans le repère de la cible (2D : pixels, y vers le bas ; 3D : unités de touche, z vers le joueur).
@@ -273,13 +276,13 @@ function layoutStems(posTick, topTick, vh, geo, at, U) {
   if (!STEMS || STEMS.song !== song) STEMS = buildStems();
   const P = [], inWin = u => u.tick < topTick && u.end + song.ppq > posTick, grouped = new Set(), ends = {};
   // toutes les hampes d'une même mesure (et d'une même main) arrivent à la même hauteur : celle de la note la plus éloignée de la mesure
-  const endOf = (h, mi) => { const key = h + '|' + mi; if (key in ends) return ends[key]; const us = STEMS.byMeasure[key] || [], gs = us.map(geo); return (ends[key] = h === 'L' ? Math.min(...gs.map(q => q.x0)) - U.ext : Math.max(...gs.map(q => q.x1)) + U.ext); };
+  const endOf = (h, sd, mi) => { const key = h + '|' + sd + '|' + mi; if (key in ends) return ends[key]; const us = STEMS.byMeasure[key] || [], gs = us.map(geo); return (ends[key] = sd < 0 ? Math.min(...gs.map(q => q.x0)) - U.ext : Math.max(...gs.map(q => q.x1)) + U.ext); };
   const dot = (u, gx, sd, p) => { if (u.cls.dot) P.push({ k: 'dot', x: sd > 0 ? gx.x1 + U.dx : gx.x0 - U.dx, p: p - U.dt }); };
   STEMS.groups.forEach(g => {
     if (g.units.length < 2) return;   // une croche seule n'a pas de ligature : elle est dessinée plus bas avec son crochet
     g.units.forEach(u => grouped.add(u));
     const a = g.units[0], z = g.units[g.units.length - 1]; if (!vh.includes(g.h) || !(a.tick < topTick && z.end + song.ppq > posTick)) return;
-    const sd = g.h === 'L' ? -1 : 1, gs = g.units.map(geo), bx = endOf(g.h, measureIndexAt(a.tick)), ps = g.units.map(u => at(u.tick) - U.t0 + sd * (U.R - U.hw));   // hampe tangente au haut de la pastille (main gauche) ou à son bas (main droite)
+    const sd = g.sd, gs = g.units.map(geo), bx = endOf(g.h, sd, measureIndexAt(a.tick)), ps = g.units.map(u => at(u.tick) - U.t0 + sd * (U.R - U.hw));   // hampe tangente au haut de la pastille (main gauche) ou à son bas (main droite)
     g.units.forEach((u, i) => { P.push({ k: 'h', a: sd > 0 ? gs[i].c0 : gs[i].c1, b: bx, p: ps[i], w: U.sw }); dot(u, gs[i], sd, ps[i]); });
     const maxB = Math.max(...g.units.map(u => u.cls.beams));
     for (let j = 1; j <= maxB; j++) {
@@ -295,10 +298,10 @@ function layoutStems(posTick, topTick, vh, geo, at, U) {
     if (g.units.length >= 2 && g.units.every(u => u.cls.trip)) P.push({ k: 'txt', x: bx + sd * U.txt, p: (ps[0] + ps[ps.length - 1]) / 2, s: '3' });
   });
   STEMS.lines.forEach(L => {
-    if (!vh.includes(L.h)) return; const sd = L.h === 'L' ? -1 : 1;
+    if (!vh.includes(L.h)) return; const sd = L.sd;
     L.units.forEach(u => {
       if (grouped.has(u) || !u.cls || u.cls.k < 1 || !inWin(u)) return;
-      const gx = geo(u), p = at(u.tick) - U.t0 + sd * (U.R - U.hw), bx = endOf(L.h, u.mi);
+      const gx = geo(u), p = at(u.tick) - U.t0 + sd * (U.R - U.hw), bx = endOf(L.h, sd, u.mi);
       P.push({ k: 'h', a: sd > 0 ? gx.c0 : gx.c1, b: bx, p, w: U.sw }); dot(u, gx, sd, p);
       for (let j = 1; j <= u.cls.beams; j++) {   // crochet(s) d'une note isolée : courbe arrondie qui part du bout de la hampe puis redescend le long d'elle
         const x0 = bx - sd * U.lvl * (j - 1), L = U.flagL, T = U.flagT;
@@ -666,22 +669,37 @@ let selGroup = new Set(), selRect = null, dragStart = null, justDragged = false;
 function clearGroup() { selGroup = new Set(); selRect = null; $('gpop').style.display = 'none'; }
 const rollBottom = () => cssH - kbHeight(cssH);
 const canvasXY = e => { const r = cv.getBoundingClientRect(); return [(e.clientX - r.left) * cssW / r.width, (e.clientY - r.top) * cssH / r.height]; };
+// ---------- Défilement du rouleau à la molette ou au doigt ----------
+function scrollRollBy(frac) {   // frac : fraction de la hauteur du rouleau 2D (> 0 = le temps avance)
+  if (!song || exp.active) return;
+  const sp = song.timeline.secToTick(pos), M = song.measures[measureIndexAt(sp)], winT = Math.max(1, Math.round(song.ppq * 4 * M.num / M.den) * (rollVisible ? visMeasures : 2)), winSec = Math.max(0.5, song.timeline.tickToSec(sp + winT) - pos);
+  scrollRollSec(frac * winSec);
+}
+function scrollRollSec(sec) { if (!song || exp.active) return; if (playing) pause(); seek(pos + sec); }   // la lecture s'arrête, la position se recale
+cv.style.touchAction = 'none';
+cv.addEventListener('wheel', e => { if (!song || exp.active) return; const [, y] = canvasXY(e); if (y > rollBottom()) return; e.preventDefault(); scrollRollBy(e.deltaY * (e.deltaMode === 1 ? 16 : 1) / Math.max(1, rollBottom())); }, { passive: false });
+let tScroll = null;
+cv.addEventListener('touchstart', e => { if (e.touches.length !== 1 || !song || exp.active) { tScroll = null; return; } const [, y] = canvasXY(e.touches[0]); tScroll = y > rollBottom() ? null : { y: e.touches[0].clientY, moved: false }; }, { passive: true });
+cv.addEventListener('touchmove', e => { if (!tScroll || e.touches.length !== 1) return; const cy = e.touches[0].clientY, dy = cy - tScroll.y; if (!tScroll.moved && Math.abs(dy) < 6) return; tScroll.moved = true; tScroll.y = cy; e.preventDefault(); scrollRollBy(dy / Math.max(1, rollBottom() * cv.getBoundingClientRect().height / cssH)); }, { passive: false });   // le contenu suit le doigt : glisser vers le bas fait avancer le temps
+cv.addEventListener('touchend', () => { tScroll = null; }, { passive: true });
 cv.addEventListener('mousedown', e => {
   if (!song || exp.active || e.button !== 0) return;
   const [x, y] = canvasXY(e); if (y > rollBottom()) return;
-  dragStart = { x, y, moved: false };
+  dragStart = { x, y, moved: false, scroll: !e.shiftKey, lastY: y };   // glisser = faire défiler le rouleau ; Maj + glisser = sélectionner un groupe de notes
 });
 addEventListener('mousemove', e => {
   if (!dragStart) return;
   let [x, y] = canvasXY(e); x = Math.max(0, Math.min(cssW, x)); y = Math.max(0, Math.min(rollBottom(), y));
-  if (!dragStart.moved) { if (Math.hypot(x - dragStart.x, y - dragStart.y) < 5) return; dragStart.moved = true; pause(); hideFpop(); $('gpop').style.display = 'none'; }
+  if (!dragStart.moved) { if (Math.hypot(x - dragStart.x, y - dragStart.y) < 5) return; dragStart.moved = true; pause(); hideFpop(); $('gpop').style.display = 'none'; if (dragStart.scroll) { dragStart.lastY = dragStart.y; cv.style.cursor = 'grabbing'; } }
+  if (dragStart.scroll) { scrollRollBy((y - dragStart.lastY) / Math.max(1, rollBottom())); dragStart.lastY = y; return; }
   selRect = { x: Math.min(x, dragStart.x), y: Math.min(y, dragStart.y), w: Math.abs(x - dragStart.x), h: Math.abs(y - dragStart.y) };
   selGroup = new Set(hit.filter(h => h.x < selRect.x + selRect.w && h.x + h.w > selRect.x && h.top < selRect.y + selRect.h && h.bottom > selRect.y).map(h => h.n));
 });
 addEventListener('mouseup', () => {
   if (!dragStart) return;
-  const moved = dragStart.moved; dragStart = null; if (!moved) return;
+  const moved = dragStart.moved, wasScroll = dragStart.scroll; dragStart = null; cv.style.cursor = ''; if (!moved) return;
   justDragged = true; setTimeout(() => { justDragged = false; }, 0); // le « click » qui suit le relâchement ne doit rien faire
+  if (wasScroll) return;
   if (!selGroup.size) { clearGroup(); return; }
   const g = $('gpop'); $('gcount').textContent = selGroup.size + (selGroup.size > 1 ? ' notes' : ' note');
   g.style.display = 'flex'; const w = g.offsetWidth, h = g.offsetHeight, below = selRect.y + selRect.h + 8;
@@ -928,6 +946,7 @@ function scene(W, H, dpr) {
 
   ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, rollH); ctx.clip();
 
+  const lateDraw = [];   // indicateurs actifs : dessinés après les notes, au premier plan
   // bandes de mesures + temps + numéros
   for (let i = mi; i < song.measures.length && song.measures[i].startTick < topTick; i++) {
     const m = song.measures[i], yTop = y(m.startTick + m.lenTick), yBot = y(m.startTick);
@@ -938,7 +957,7 @@ function scene(W, H, dpr) {
     for (let k = 0; k < g.n; k++) {
       const tb = m.startTick + k * g.B;
       if (k > 0) { const yy = Math.round(y(tb)) + .5; ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = keyLanes ? 'rgba(31,37,71,.95)' : paper ? 'rgba(0,0,0,.34)' : 'rgba(255,255,255,.32)'; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }   // temps : traits pleins, plus fins que la barre de mesure
-      for (let q = g.sub; q < g.B - 1; q += g.sub) { if (tb + q >= endT) break; const yy = Math.round(y(tb + q)) + .5; ctx.setLineDash([]); ctx.lineWidth = 1; ctx.strokeStyle = keyLanes ? 'rgba(31,37,71,.5)' : paper ? 'rgba(0,0,0,.16)' : 'rgba(255,255,255,.13)'; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
+      for (let q = g.fine; q < g.B - 1; q += g.fine) { if (tb + q >= endT) break; const isSub = Math.abs(q / g.sub - Math.round(q / g.sub)) < 1e-6, yy = Math.round(y(tb + q)) + .5; ctx.setLineDash([]); ctx.lineWidth = 1; ctx.strokeStyle = !isSub ? (keyLanes ? 'rgba(31,37,71,.24)' : paper ? 'rgba(0,0,0,.07)' : 'rgba(255,255,255,.06)') : keyLanes ? 'rgba(31,37,71,.5)' : paper ? 'rgba(0,0,0,.16)' : 'rgba(255,255,255,.13)'; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
     }
     ctx.restore();
     if (m.startTick >= posTick) { ctx.fillStyle = keyLanes ? 'rgba(31,37,71,1)' : paper ? 'rgba(0,0,0,.7)' : 'rgba(255,255,255,.55)'; ctx.fillRect(0, Math.round(yBot) - 1, W, 4); }
@@ -946,14 +965,18 @@ function scene(W, H, dpr) {
     if (!rollVisible) continue; // (ruban : ni numéros ni étiquettes)
     const cur = { l: 6, r: W - 6 };
     const pill = (txt, yy, left, big, hot) => {   // pastille collée au bord gauche ou droit ; les suivantes s'empilent vers l'intérieur
-      ctx.font = (big ? '700 15px' : '700 11px') + ' -apple-system, sans-serif'; const w = ctx.measureText(txt).width + (big ? 14 : 10), h = big ? 21 : 16, x = left ? cur.l : cur.r - w;
-      ctx.fillStyle = hot ? 'rgba(91,124,255,.95)' : big ? 'rgba(40,48,86,.95)' : 'rgba(40,48,86,.8)'; rrect(x, yy - h + 6, w, h, 6); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(txt, x + (big ? 7 : 5), yy - (big ? 0 : 1)); if (left) cur.l = x + w + 4; else cur.r = x - 4; };
+      const fs = (big ? 15 : 11) * (hot ? 1.45 : 1);   // l'indicateur actif (mesure ou temps en cours) est plus gros
+      ctx.font = '700 ' + fs + 'px -apple-system, sans-serif'; const w = ctx.measureText(txt).width + (big ? 14 : 10) * (hot ? 1.3 : 1), h = (big ? 21 : 16) * (hot ? 1.45 : 1), x = left ? cur.l : cur.r - w;
+      const draw = () => { ctx.font = '700 ' + fs + 'px -apple-system, sans-serif'; ctx.fillStyle = hot ? 'rgba(91,124,255,.95)' : big ? 'rgba(40,48,86,.95)' : 'rgba(40,48,86,.8)'; rrect(x, yy - h + 6, w, h, 6); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.fillText(txt, x + (big ? 7 : 5) * (hot ? 1.3 : 1), yy - (big ? 0 : 1) * (hot ? 1.4 : 1)); };
+      if (hot) lateDraw.push(draw); else draw();
+      if (left) cur.l = x + w + 4; else cur.r = x - 4; };
     const ly = Math.min(yBot, rollH - 4) - 6;
     const first = posTick < m.startTick + g.B || m.startTick > posTick;   // X.1 reste tant qu'on n'est pas arrivé au temps 2 de la mesure
-    ctx.font = '700 15px -apple-system, sans-serif'; const inset = ctx.measureText(m.label).width + 14 + 4;   // décalage de X.1 par rapport à X : X.2, X.3… s'alignent dessus
-    pill(m.label, ly, true, true, i === mi); if (first) pill(m.label + '.1', ly, true, false, false); pill(m.label, ly, false, true, i === mi); if (first) pill(m.label + '.1', ly, false, false, false);
-    for (let k = 1; k < g.n; k++) { const yy = Math.round(y(m.startTick + k * g.B)); if (yy < 6 || yy > rollH) continue; const txt = m.label + '.' + (k + 1); cur.l = 6 + inset; cur.r = W - 6 - inset; pill(txt, yy + 6, true, false, false); pill(txt, yy + 6, false, false, false); }
+    ctx.font = '700 ' + (i === mi ? 15 * 1.45 : 15) + 'px -apple-system, sans-serif'; const inset = ctx.measureText(m.label).width + 14 * (i === mi ? 1.3 : 1) + 4;   // décalage de X.1 par rapport à X : X.2, X.3… s'alignent dessus
+    pill(m.label, ly, true, true, i === mi); const beatNow = i === mi ? Math.floor((posTick - m.startTick) / g.B) : -1;   // temps en cours dans la mesure en cours : son indicateur s'allume comme celui de la mesure
+    if (first) pill(m.label + '.1', ly, true, false, beatNow === 0); pill(m.label, ly, false, true, i === mi); if (first) pill(m.label + '.1', ly, false, false, beatNow === 0);
+    for (let k = 1; k < g.n; k++) { const yy = Math.round(y(m.startTick + k * g.B)); const stuck = beatNow === k && yy > rollH; if (yy < 6 || (yy > rollH && !stuck)) continue; const txt = m.label + '.' + (k + 1), py = stuck ? ly : yy + 6; cur.l = 6 + inset; cur.r = W - 6 - inset; pill(txt, py, true, false, beatNow === k); pill(txt, py, false, false, beatNow === k); }   // le temps en cours reste collé en bas (comme X.1) tant qu'il dure
   }
 
   // notes visibles
@@ -1033,6 +1056,7 @@ function scene(W, H, dpr) {
       else if (kr.w >= 12) { ctx.fillStyle = '#9aa3c7'; ctx.font = '700 9px -apple-system, sans-serif'; ctx.fillText(NOMS[m % 12], cx, 26); } }
     ctx.textBaseline = 'alphabetic'; ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(0, 34, W, 1);
   }
+  lateDraw.forEach(f => f());
   if (onScreen && selRect) { // rectangle de sélection en cours
     ctx.fillStyle = 'rgba(91,124,255,.18)'; ctx.fillRect(selRect.x, selRect.y, selRect.w, selRect.h);
     ctx.save(); ctx.setLineDash([6, 4]); ctx.lineWidth = 1.5; ctx.strokeStyle = '#9fb0ff'; ctx.strokeRect(selRect.x + .5, selRect.y + .5, selRect.w, selRect.h); ctx.restore();
@@ -1555,7 +1579,7 @@ function cycleHandsMode() { setHandsMode(handsMode === 'traj' ? 'plain' : handsM
 // ---------- Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en traits épais (glisser pour tourner, molette pour zoomer, double-clic pour revenir) ----------
 function toggle3D() {
   if (typeof THREE === 'undefined' || typeof View3D === 'undefined') { showError('Vue 3D indisponible : la bibliothèque Three.js n\'a pas pu être chargée (connexion ?).'); return; }
-  if (!View3D.el()) View3D.init($('cv').parentElement);
+  if (!View3D.el()) View3D.init($('cv').parentElement); View3D.setScrollHandler(sec => scrollRollSec(sec));
   view3dOn = !view3dOn; View3D.show(view3dOn);
   if (view3dOn) { if (fingMode === 'illus') { fingBefore3d = 'illus'; setFingMode('simple'); } }
   else if (fingBefore3d) { setFingMode(fingBefore3d); fingBefore3d = null; } $('b3d').classList.toggle('pressed', view3dOn);
@@ -1564,7 +1588,7 @@ function toggle3D() {
 // grille d'une mesure : mesure ternaire (6/8 seulement) = temps de 3 croches subdivisés en tiers ; sinon temps de l'unité de la signature subdivisés en demis
 function meterGrid(m) {
   const base = song.ppq * 4 / m.den, ter = m.den === 8 && m.num === 6, B = ter ? base * 3 : base;
-  return { B, n: Math.max(1, Math.round(m.lenTick / B)), sub: ter ? B / 3 : B / 2 };
+  return { B, n: Math.max(1, Math.round(m.lenTick / B)), sub: ter ? B / 3 : B / 2, fine: ter ? B / 6 : B / 4 };   // fine : quart de temps (sixième en ternaire)
 }
 function grid3d(sp, ahead) {
   const out = [], T = song.timeline, mi = measureIndexAt(T.secToTick(Math.max(0, sp)));
@@ -1574,7 +1598,7 @@ function grid3d(sp, ahead) {
     for (let k = 0; k < g.n; k++) {
       const tb = m.startTick + k * g.B;
       if (k > 0) { const ts = T.tickToSec(tb); if (ts >= sp && ts <= sp + ahead) out.push({ t: ts, beatLabel: m.label + '.' + (k + 1) }); }
-      for (let q = g.sub; q < g.B - 1; q += g.sub) { if (tb + q >= end) break; const tsh = T.tickToSec(tb + q); if (tsh >= sp && tsh <= sp + ahead) out.push({ t: tsh, sub: true }); }   // subdivision (demi-temps ou tiers de temps) : ligne plus pâle
+      for (let q = g.fine; q < g.B - 1; q += g.fine) { if (tb + q >= end) break; const tsh = T.tickToSec(tb + q); if (tsh >= sp && tsh <= sp + ahead) out.push({ t: tsh, sub: true, fine: Math.abs(q / g.sub - Math.round(q / g.sub)) > 1e-6 }); }   // subdivision (demi-temps ou tiers de temps) : ligne plus pâle
     }
   }
   return out;

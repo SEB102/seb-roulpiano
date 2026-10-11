@@ -7,6 +7,7 @@ const View3D = (() => {
   const CR = 0xffb347, CL = 0x5fb4ff;                                     // couleurs vives : main droite, main gauche
   const DEF = { az: 0, el: 55 * Math.PI / 180, zoom: 1.1 };
   const stats = { back: 0, n: 0 };
+  let onScroll = null;   // défilement du rouleau, en secondes (> 0 = le temps avance)
   let gridL = [], gridS = [], stemM = [], holeM = [], boxG = null, cylG = null, lblTex = {}, sun, barSp = [], ui, marks = [], pastilles = [], orbit = { ...DEF }, renderer, scene, cam, host, keys = {}, bars = [], hands = {}, built = null, size = [0, 0], tex = {};
   const V = (x, y, z) => new THREE.Vector3(x, y, z), Y = V(0, 1, 0);
 
@@ -87,17 +88,21 @@ const View3D = (() => {
     // rotation à la souris (glisser), zoom (molette), retour à la vue de départ (double-clic)
     const c = renderer.domElement; let drag = null; c.style.touchAction = 'none'; c.style.cursor = 'grab';
     const ptrs = new Map(); let pinch = 0;
-    c.addEventListener('pointerdown', e => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); drag = { x: e.clientX, y: e.clientY }; try { c.setPointerCapture(e.pointerId); } catch (_) {} c.style.cursor = 'grabbing'; });
+    const ray = new THREE.Raycaster(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -0.2), hitV = new THREE.Vector3();
+    const rollZ = e => { const r = c.getBoundingClientRect(); ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), cam); return ray.ray.intersectPlane(plane, hitV) ? hitV.z : null; };   // profondeur du point touché, dans le plan du rouleau
+    let rollDrag = null;   // glisser sur le rouleau = le faire défiler ; en dehors (clavier, mains, fond) = tourner la caméra
+    c.addEventListener('pointerdown', e => { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); const z0 = ptrs.size === 1 && onScroll ? rollZ(e) : null; if (z0 !== null && z0 < BACK + 0.3) { rollDrag = { z: z0 }; drag = null; try { c.setPointerCapture(e.pointerId); } catch (_) {} c.style.cursor = 'ns-resize'; return; } drag = { x: e.clientX, y: e.clientY }; try { c.setPointerCapture(e.pointerId); } catch (_) {} c.style.cursor = 'grabbing'; });
     c.addEventListener('pointermove', e => {
       if (ptrs.has(e.pointerId)) ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (ptrs.size === 2) {   // pincement : zoom à deux doigts (écran tactile)
-        const [a, b] = [...ptrs.values()], dd = Math.hypot(a.x - b.x, a.y - b.y); if (pinch) zoomBy(pinch / dd); pinch = dd; drag = null; return;
+      if (ptrs.size === 2) {   // deux doigts : pincement = zoom, glissement vertical = défilement du rouleau
+        const [a, b] = [...ptrs.values()], dd = Math.hypot(a.x - b.x, a.y - b.y), my = (a.y + b.y) / 2; if (pinch) zoomBy(pinch / dd); if (c._my !== undefined && onScroll) onScroll((my - c._my) / (c.clientHeight || 600) * AHEAD); c._my = my; pinch = dd; drag = null; return;
       }
+      if (rollDrag) { const z = rollZ(e); if (z !== null) { onScroll((z - rollDrag.z) / SPEED); rollDrag.z = z; } return; }
       if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y; drag = { x: e.clientX, y: e.clientY };
       orbit.az = ((orbit.az - dx * 0.006) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI); /* tour complet à 360° */ orbit.el = Math.max(0.09, Math.min(1.5, orbit.el + dy * 0.005));
     });
-    const end = e => { ptrs.delete(e.pointerId); pinch = 0; drag = null; c.style.cursor = 'grab'; }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
-    c.addEventListener('wheel', e => { e.preventDefault(); zoomBy(Math.exp(e.deltaY * 0.001)); }, { passive: false });
+    const end = e => { ptrs.delete(e.pointerId); pinch = 0; c._my = undefined; drag = null; rollDrag = null; c.style.cursor = 'grab'; }; c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+    c.addEventListener('wheel', e => { e.preventDefault(); if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(e.deltaY * 0.01)); else if (onScroll) onScroll(e.deltaY * (e.deltaMode === 1 ? 16 : 1) / (c.clientHeight || 600) * AHEAD); }, { passive: false });   // molette = défilement ; Ctrl/Cmd + molette (ou pincement du pavé tactile) = zoom
     c.addEventListener('dblclick', () => { orbit = { ...DEF }; });
     // boutons de zoom dans un coin de la vue 3D : + / − / retour à la vue de départ
     ui = document.createElement('div'); ui.id = 'zoom3d'; ui.style.cssText = 'position:absolute;right:12px;top:12px;display:none;flex-direction:column;gap:6px;z-index:5';
@@ -145,7 +150,7 @@ const View3D = (() => {
     // repères temporels : barres de mesure (épaisses, avec numéro) et temps (fins) posés sur le plan du rouleau ; ils tournent avec la scène
     gridL = []; gridS = []; stemM = [];
     { const wm = new THREE.MeshBasicMaterial({ color: 0x15172a }); for (let i = 0; i < 260; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), wm); m.visible = false; m.renderOrder = 6; scene.add(m); stemM.push(m); } }   // hampes et ligatures (boîtes blanches posées sur le rouleau)
-    for (let i = 0; i < 60; i++) { const l = new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial({ color: 0x1f2547, transparent: true, opacity: 0.3, depthWrite: false })); l.visible = false; l.renderOrder = 1; scene.add(l); gridL.push(l); }
+    for (let i = 0; i < 140; i++) { const l = new THREE.Mesh(new THREE.BoxGeometry(1, 0.03, 1), new THREE.MeshBasicMaterial({ color: 0x1f2547, transparent: true, opacity: 0.3, depthWrite: false })); l.visible = false; l.renderOrder = 1; scene.add(l); gridL.push(l); }
     for (let i = 0; i < 90; i++) { const q = new THREE.Sprite(new THREE.SpriteMaterial({ toneMapped: false, depthTest: false, transparent: true })); q.scale.set(2.4, 1.2, 1); q.renderOrder = 8; q.visible = false; scene.add(q); gridS.push(q); }
     // mains
     ['L', 'R'].forEach(h => {
@@ -246,7 +251,7 @@ const View3D = (() => {
     { const G = st.grid || [], x0 = built.cx - built.w / 2; let li = 0, si = 0;
       G.forEach(e => {
         const z = BACK - (e.t - sp) * SPEED, l = gridL[li++]; if (!l) return;
-        l.visible = true; l.position.set(built.cx, e.bar ? 0.17 : 0.15, z); l.scale.set(built.w, 1, e.bar ? 0.26 : e.sub ? 0.07 : 0.12); l.material.opacity = e.bar ? 1 : e.sub ? 0.55 : 0.95;   // temps : traits pleins plus fins que la barre de mesure
+        l.visible = true; l.position.set(built.cx, e.bar ? 0.17 : 0.15, z); l.scale.set(built.w, 1, e.bar ? 0.26 : e.fine ? 0.04 : e.sub ? 0.07 : 0.12); l.material.opacity = e.bar ? 1 : e.fine ? 0.3 : e.sub ? 0.55 : 0.95;   // temps : traits pleins plus fins que la barre de mesure
         const x1 = x0 + built.w, put = (txt, x, big) => { const q = gridS[si++]; if (!q) return; const tex = measureTex(txt); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.scale.set(big ? 2.4 : 1.7, big ? 1.2 : 0.85, 1); q.visible = true; q.position.set(x, 0.7, z); };
         if (e.bar && e.label !== undefined) { put(e.label, x0 + 1.4, true); put(e.label, x1 - 1.4, true); }   // numéro de mesure aux deux bouts
         if (e.beatLabel) { const off = 3.3; put(e.beatLabel, x0 + off, false); put(e.beatLabel, x1 - off, false); }   // X.1, X.2, X.3… aux deux bouts, sur chaque temps
@@ -468,5 +473,5 @@ const View3D = (() => {
   const zoomBy = f => { orbit.zoom = Math.max(0.25, Math.min(3, orbit.zoom * f)); };
   const show = on => { if (renderer) renderer.domElement.style.display = on ? 'block' : 'none'; if (ui) ui.style.display = on ? 'flex' : 'none'; };
   const el = () => renderer && renderer.domElement;
-  return { init, render, renderTo, el, zoomBy, show, stats, setContact: v => { contact = !!v; } };
+  return { init, render, renderTo, el, zoomBy, show, stats, setContact: v => { contact = !!v; }, setScrollHandler: f => { onScroll = f; } };
 })();
