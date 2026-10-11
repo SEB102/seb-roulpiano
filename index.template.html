@@ -82,7 +82,7 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261011zi"></script>
+<script src="view3d.js?v=20261011zt"></script>
 <script src="core.js?v=20261010d"></script>
 <script src="hands.js?v=20261017e"></script>
 <script src="hands_legacy.js?v=20261010g"></script>
@@ -116,6 +116,7 @@
     </div>
     <div class="sepv"></div>
     <div class="grp"><button id="b3d" title="Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en traits épais ; glisser pour tourner, molette pour zoomer, double-clic pour revenir (V)">vue 3D</button>
+      <button id="bRythme" title="Rythme : notes rondes, hampes, ligatures, points et têtes évidées (blanche, ronde) sur le rouleau, en 2D et en 3D (B)">Rythme</button>
       <button id="bPanel" title="Tout le reste : fichiers, exemples, export, boucle, mains virtuelles, doigtés, synchro… (H)">☰ Réglages</button></div>
     <span id="bInfo"></span><span id="status"></span>
   </div>
@@ -239,6 +240,99 @@ function keyRect(m, W) {
   return { x: (whiteIdx[m - 1] + 1) * ww - bw / 2 - o, w: bw, black: true };
 }
 const NOMS = ['Do', 'Do♯', 'Ré', 'Ré♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
+// ---------- Hampes et ligatures (partition « couchée » : le temps descend, donc les hampes sont horizontales et les ligatures verticales) ----------
+// noire / blanche : une hampe ; croche : ligature simple entre croches d'un même temps (crochet seul si isolée) ; double croche : double ligature ; point : petit point après la note ;
+// croche pointée + double croche : ligature simple et crochet partiel sur la double croche. Touche B pour afficher / masquer.
+let showStems = false, STEMS = null, keyLanes = true;   // showStems : bouton « Rythme » (désactivé au départ)   // keyLanes : colonnes du rouleau en blanc / noir, comme un second clavier (touche K)
+function noteClass(n) {
+  const v = n.dur / (song.ppq * 4); if (!(v > 0)) return null; let best = null;
+  for (let k = 0; k <= 6; k++) { const b = Math.pow(2, -k); [[1, 0, 0], [1.5, 1, 0], [2 / 3, 0, 1]].forEach(([f, dot, trip]) => { const e = Math.abs(Math.log(v / (b * f))); if (!best || e < best.e) best = { e, k, dot, trip }; }); }
+  return best.e > 0.2 ? null : { k: best.k, dot: best.dot, trip: best.trip, beams: Math.max(0, best.k - 2) };   // k : 0 ronde, 1 blanche, 2 noire, 3 croche, 4 double croche…
+}
+function buildStems() {
+  // une « ligne » = une main + une voix (portée/voix du fichier MusicXML) : les notes simultanées d'une même voix forment un accord (une hampe) ; deux voix = deux hampes
+  const lines = {}, groups = [];
+  song.notes.forEach(n => { const h = noteHand(n) === 'L' ? 'L' : 'R', lk = h + '|' + (n.staff || 0) + '/' + (n.voice || 0), L = lines[lk] = lines[lk] || { h, map: {}, units: [] }; let u = L.map[n.tick]; if (!u) { u = L.map[n.tick] = { h, tick: n.tick, notes: [] }; L.units.push(u); } u.notes.push(n); });
+  Object.values(lines).forEach(L => {
+    const us = L.units.sort((a, b) => a.tick - b.tick); let g = null;
+    us.forEach(u => {
+      let c = null; u.notes.forEach(n => { const cc = noteClass(n); if (cc && (!c || cc.k > c.k)) c = cc; }); u.cls = c; u.end = u.tick + Math.min(...u.notes.map(n => n.dur));
+      if (!c || c.beams < 1) { g = null; return; }
+      const mi = measureIndexAt(u.tick), m = song.measures[mi], gr = meterGrid(m), bi = mi * 1000 + Math.floor((u.tick - m.startTick + 1) / gr.B);
+      if (g && g.bi === bi && u.tick - g.units[g.units.length - 1].end <= song.ppq / 8) g.units.push(u); else { g = { h: L.h, bi, units: [u] }; groups.push(g); }
+    });
+  });
+  const byMeasure = {};   // main + mesure -> unités qui ont une hampe (pour aligner le bout des hampes d'une même mesure)
+  Object.values(lines).forEach(L => L.units.forEach(u => { if (u.cls && u.cls.k >= 1) { u.mi = measureIndexAt(u.tick); (byMeasure[L.h + '|' + u.mi] = byMeasure[L.h + '|' + u.mi] || []).push(u); } }));
+  return { song, lines: Object.values(lines), groups, byMeasure };
+}
+// Mise en page générique des hampes : primitives { k: 'h'|'v'|'dot'|'txt' } dans le repère de la cible (2D : pixels, y vers le bas ; 3D : unités de touche, z vers le joueur).
+// geo(unité) -> { x0, x1 } ; at(tick) -> coordonnée sur l'axe du temps ; U : distances propres à la cible.
+function layoutStems(posTick, topTick, vh, geo, at, U) {
+  if (!STEMS || STEMS.song !== song) STEMS = buildStems();
+  const P = [], inWin = u => u.tick < topTick && u.end + song.ppq > posTick, grouped = new Set(), ends = {};
+  // toutes les hampes d'une même mesure (et d'une même main) arrivent à la même hauteur : celle de la note la plus éloignée de la mesure
+  const endOf = (h, mi) => { const key = h + '|' + mi; if (key in ends) return ends[key]; const us = STEMS.byMeasure[key] || [], gs = us.map(geo); return (ends[key] = h === 'L' ? Math.min(...gs.map(q => q.x0)) - U.ext : Math.max(...gs.map(q => q.x1)) + U.ext); };
+  const dot = (u, gx, sd, p) => { if (u.cls.dot) P.push({ k: 'dot', x: sd > 0 ? gx.x1 + U.dx : gx.x0 - U.dx, p: p - U.dt }); };
+  STEMS.groups.forEach(g => {
+    g.units.forEach(u => grouped.add(u));
+    const a = g.units[0], z = g.units[g.units.length - 1]; if (!vh.includes(g.h) || !(a.tick < topTick && z.end + song.ppq > posTick)) return;
+    const sd = g.h === 'L' ? -1 : 1, gs = g.units.map(geo), bx = endOf(g.h, measureIndexAt(a.tick)), ps = g.units.map(u => at(u.tick) - U.t0 + sd * (U.R - U.hw));   // hampe tangente au haut de la pastille (main gauche) ou à son bas (main droite)
+    g.units.forEach((u, i) => { P.push({ k: 'h', a: sd > 0 ? gs[i].c0 : gs[i].c1, b: bx, p: ps[i], w: U.sw }); dot(u, gs[i], sd, ps[i]); });
+    const maxB = Math.max(...g.units.map(u => u.cls.beams));
+    for (let j = 1; j <= maxB; j++) {
+      const xb = bx - sd * U.lvl * (j - 1); let i = 0;
+      while (i < g.units.length) {
+        if (g.units[i].cls.beams < j) { i++; continue; }
+        let e = i; while (e + 1 < g.units.length && g.units[e + 1].cls.beams >= j) e++;
+        if (e > i) P.push({ k: 'v', x: xb, a: ps[i], b: ps[e], w: U.bw });
+        else if (j >= 2) P.push({ k: 'v', x: xb, a: ps[i], b: ps[i] + (i > 0 ? U.stub : -U.stub), w: U.bw });   // ligature partielle : tournée vers la note voisine
+        i = e + 1;
+      }
+    }
+    if (g.units.length >= 2 && g.units.every(u => u.cls.trip)) P.push({ k: 'txt', x: bx + sd * U.txt, p: (ps[0] + ps[ps.length - 1]) / 2, s: '3' });
+  });
+  STEMS.lines.forEach(L => {
+    if (!vh.includes(L.h)) return; const sd = L.h === 'L' ? -1 : 1;
+    L.units.forEach(u => {
+      if (grouped.has(u) || !u.cls || u.cls.k < 1 || !inWin(u)) return;
+      const gx = geo(u), p = at(u.tick) - U.t0 + sd * (U.R - U.hw), bx = endOf(L.h, u.mi);
+      P.push({ k: 'h', a: sd > 0 ? gx.c0 : gx.c1, b: bx, p, w: U.sw }); dot(u, gx, sd, p);
+      for (let j = 1; j <= u.cls.beams; j++) P.push({ k: 'v', x: bx - sd * U.lvl * (j - 1), a: p, b: p - U.stub, w: U.bw });   // crochet(s) d'une note isolée
+    });
+  });
+  return P;
+}
+function noteSpan(m, W) {   // largeur utile d'une colonne pour une note rectangulaire : une touche blanche s'arrête aux colonnes des touches noires voisines
+  const kr = keyRect(m, W); if (kr.black) return { x: kr.x + 1, w: kr.w - 2 };
+  let x0 = kr.x, x1 = kr.x + kr.w;
+  if (m > FIRST && isBlack(m - 1)) { const b = keyRect(m - 1, W); x0 = Math.max(x0, b.x + b.w); }
+  if (m < LAST && isBlack(m + 1)) { const b = keyRect(m + 1, W); x1 = Math.min(x1, b.x); }
+  return { x: x0 + 1, w: Math.max(4, x1 - x0 - 2) };
+}
+function headR(W) { return Math.max(6, Math.min(20, W / VIEW.n * 0.46)); }   // rayon commun des têtes de note (≈ une touche blanche)
+function drawStems(ctx, y, W, posTick, topTick, vh) {
+  const R = headR(W), geo = u => { const cs = u.notes.map(n => { const r = keyRect(n.midi, W); return r.x + r.w / 2; }); return { x0: Math.min(...cs) - R, x1: Math.max(...cs) + R, c0: Math.min(...cs), c1: Math.max(...cs) }; };
+  const P = layoutStems(posTick, topTick, vh, geo, y, { ext: 84, lvl: 17, stub: 17, dx: 12, dt: 14, t0: R + 1.5, R, hw: 5, sw: 10, bw: 14, txt: 12 });
+  ctx.save(); ctx.lineCap = 'round';
+  [false].forEach(outline => {   // hampes sombres, lisibles sur les colonnes beiges et grises
+    ctx.strokeStyle = '#15172a'; ctx.fillStyle = '#15172a'; const e = 0;
+    P.forEach(q => {
+      if (q.k === 'h') { ctx.lineWidth = q.w + e; ctx.beginPath(); ctx.moveTo(q.a, q.p); ctx.lineTo(q.b, q.p); ctx.stroke(); }
+      else if (q.k === 'v') { ctx.lineWidth = q.w + e; ctx.beginPath(); ctx.moveTo(q.x, q.a); ctx.lineTo(q.x, q.b); ctx.stroke(); }
+      else if (q.k === 'dot') { ctx.beginPath(); ctx.arc(q.x, q.p, 6.2 + e / 2, 0, 6.2832); ctx.fill(); }
+      else if (!outline) { ctx.font = '800 20px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = '#15172a'; ctx.fillText(q.s, q.x, q.p + 7); }
+    });
+  });
+  ctx.restore();
+}
+function stems3d(sp, ahead) {   // hampes du rouleau 3D : x en largeurs de touche, z = profondeur du rouleau (le temps s'éloigne)
+  if (!showStems || !song) return [];
+  const T = song.timeline, pT = T.secToTick(Math.max(0, sp)), tT = T.secToTick(sp + ahead);
+  const geo = u => { const cs = u.notes.map(n => PianoHands.ux(n.midi)); return { x0: Math.min(...cs) - 0.47, x1: Math.max(...cs) + 0.47, c0: Math.min(...cs), c1: Math.max(...cs) }; };
+  return layoutStems(pT, tT, visibleHands(), geo, tick => -T.tickToSec(tick), { ext: 4.6, lvl: 0.8, stub: 0.17, dx: 0.6, dt: 0.07, t0: 0.12, R: 0.118, hw: 0.0375, sw: 0.3, bw: 0.45, txt: 0.8 });   // axe du temps = −secondes (plus grand = plus tôt, comme les y du 2D) ; la vue le convertit en profondeur
+}
+
 
 // ---------- Couleurs : main droite (M.D.) = orange, main gauche (M.G.) = bleu ; la main est celle du doigté, indépendamment des clés ----------
 const COL = {
@@ -691,7 +785,7 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' && e.target.type !== 'range' || e.target.tagName === 'SELECT') return;
   const k = e.metaKey || e.ctrlKey || e.altKey ? '' : e.key.toLowerCase();
   if (view3dOn && k && 'aptzr'.includes(k)) return;   // en 3D : anticipation, pré-écoute, mains virtuelles, zoom auto et rouleau sont inaccessibles
-  if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 't') cycleHandsMode(); 
+  if (k === 'r') toggleRoll(); else if (k === 'h') togglePanel(); else if (k === 'b') setRythme(!showStems); else if (k === 'k') keyLanes = !keyLanes; else if (k === 't') cycleHandsMode(); 
   else if (k === 'v') toggle3D(); else if (k === 'a') anticip = !anticip; else if (k === 'z') zoomAuto = !zoomAuto; else if (k === 'p') { if (stepMode) stepPre = !stepPre; else preListen = !preListen; } else if (k === 'c') countIn = !countIn; else if (k === 'l') startLoop();
   else if (view3dOn && (k === '+' || k === '=')) View3D.zoomBy(1 / 1.15); else if (view3dOn && k === '-') View3D.zoomBy(1.15);
   else if (k === '+' || k === '=') handScale = Math.min(2.4, Math.round((handScale + 0.15) * 100) / 100); else if (k === '-') handScale = Math.max(0.8, Math.round((handScale - 0.15) * 100) / 100);
@@ -787,20 +881,29 @@ function scene(W, H, dpr) {
   const onScreen = ctx === screenCtx; if (onScreen) hit.length = 0;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const kbH = kbHeight(H), rollH = H - kbH;
-  const g = ctx.createLinearGradient(0, 0, 0, rollH); g.addColorStop(0, '#0b0e1c'); g.addColorStop(1, '#161b34');
+  const paper = false;   // (fond de partition blanche : essayé puis abandonné ; passer à showStems pour le retrouver)
+  const g = ctx.createLinearGradient(0, 0, 0, rollH); g.addColorStop(0, paper ? '#ffffff' : '#0b0e1c'); g.addColorStop(1, paper ? '#f1f2f7' : '#161b34');
   ctx.fillStyle = g; ctx.fillRect(0, 0, W, rollH);
 
   // rails verticaux : une ligne par touche (blanche ou noire), à la verticale exacte de sa touche, le long de laquelle glisse sa note ;
   // les touches noires ont en plus une bande sombre de la largeur de la touche, les Do sont plus marqués
   const ww = W / VIEW.n;
-  for (let m = FIRST; m <= LAST; m++) {
-    const kr = keyRect(m, W);
-    if (kr.black) { ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); }
-  }
-  for (let m = FIRST; m <= LAST; m++) {
-    const kr = keyRect(m, W), x = Math.round(kr.x + kr.w / 2) - 0.5;
-    ctx.fillStyle = m % 12 === 0 ? 'rgba(255,255,255,.26)' : kr.black ? 'rgba(255,255,255,.11)' : 'rgba(255,255,255,.14)';
-    ctx.fillRect(x, 0, m % 12 === 0 ? 1.5 : 1, rollH);
+  if (keyLanes) {   // second clavier : colonnes blanches pour les touches blanches, noires pour les noires
+    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (!kr.black) { ctx.fillStyle = '#d9cdb1'; ctx.fillRect(Math.round(kr.x), 0, Math.ceil(kr.w), rollH); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(kr.x), 0, 1, rollH); } }
+    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (kr.black) { ctx.fillStyle = '#70747f'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); } }
+  } else {
+  const ww = W / VIEW.n;
+    for (let m = FIRST; m <= LAST; m++) {
+      const kr = keyRect(m, W);
+      if (kr.black) { ctx.fillStyle = paper ? 'rgba(0,0,0,.055)' : 'rgba(0,0,0,.66)'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); }   // colonnes des touches noires : bien plus foncées
+      else if (!paper) { ctx.fillStyle = 'rgba(255,255,255,.085)'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); }   // colonnes des touches blanches : éclaircies   // bande des touches noires : plus foncée
+    }
+    for (let m = FIRST; m <= LAST; m++) {
+      const kr = keyRect(m, W), x = Math.round(kr.x + kr.w / 2) - 0.5;
+      ctx.fillStyle = paper ? (m % 12 === 0 ? 'rgba(0,0,0,.20)' : kr.black ? 'rgba(0,0,0,.08)' : 'rgba(0,0,0,.10)') : m % 12 === 0 ? 'rgba(255,255,255,.26)' : kr.black ? 'rgba(255,255,255,.11)' : 'rgba(255,255,255,.14)';
+      ctx.fillRect(x, 0, m % 12 === 0 ? 1.5 : 1, rollH);
+    }
+  
   }
 
   const active = new Map(); // midi -> note en cours
@@ -822,17 +925,17 @@ function scene(W, H, dpr) {
   // bandes de mesures + temps + numéros
   for (let i = mi; i < song.measures.length && song.measures[i].startTick < topTick; i++) {
     const m = song.measures[i], yTop = y(m.startTick + m.lenTick), yBot = y(m.startTick);
-    if (i % 2 === 0) { ctx.fillStyle = 'rgba(255,255,255,.035)'; ctx.fillRect(0, yTop, W, yBot - yTop); }
+    if (i % 2 === 0) { ctx.fillStyle = keyLanes ? 'rgba(80,92,150,.06)' : paper ? 'rgba(0,0,0,.03)' : 'rgba(255,255,255,.035)'; ctx.fillRect(0, yTop, W, yBot - yTop); }
     const g = meterGrid(m), endT = m.startTick + m.lenTick - 1;
     // barres de temps (pointillés bien visibles) et de subdivision (demi-temps ou tiers de temps : pointillés pâles), plus fines que les barres de mesure
-    ctx.save(); ctx.lineWidth = 1;
+    ctx.save();
     for (let k = 0; k < g.n; k++) {
       const tb = m.startTick + k * g.B;
-      if (k > 0) { const yy = Math.round(y(tb)) + .5; ctx.strokeStyle = 'rgba(255,255,255,.32)'; ctx.setLineDash([7, 5]); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
-      for (let q = g.sub; q < g.B - 1; q += g.sub) { if (tb + q >= endT) break; const yy = Math.round(y(tb + q)) + .5; ctx.strokeStyle = 'rgba(255,255,255,.13)'; ctx.setLineDash([3, 6]); ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
+      if (k > 0) { const yy = Math.round(y(tb)) + .5; ctx.setLineDash([]); ctx.lineWidth = 2; ctx.strokeStyle = keyLanes ? 'rgba(31,37,71,.95)' : paper ? 'rgba(0,0,0,.34)' : 'rgba(255,255,255,.32)'; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }   // temps : traits pleins, plus fins que la barre de mesure
+      for (let q = g.sub; q < g.B - 1; q += g.sub) { if (tb + q >= endT) break; const yy = Math.round(y(tb + q)) + .5; ctx.setLineDash([]); ctx.lineWidth = 1; ctx.strokeStyle = keyLanes ? 'rgba(31,37,71,.5)' : paper ? 'rgba(0,0,0,.16)' : 'rgba(255,255,255,.13)'; ctx.beginPath(); ctx.moveTo(0, yy); ctx.lineTo(W, yy); ctx.stroke(); }
     }
     ctx.restore();
-    if (m.startTick >= posTick) { ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(0, Math.round(yBot), W, 2); }
+    if (m.startTick >= posTick) { ctx.fillStyle = keyLanes ? 'rgba(31,37,71,1)' : paper ? 'rgba(0,0,0,.7)' : 'rgba(255,255,255,.55)'; ctx.fillRect(0, Math.round(yBot) - 1, W, 4); }
     // numéros (collés en bas si la mesure est en cours) : numéro de mesure et X.1 aux deux bouts, X.2, X.3… sur chaque temps
     if (!rollVisible) continue; // (ruban : ni numéros ni étiquettes)
     const cur = { l: 6, r: W - 6 };
@@ -856,22 +959,28 @@ function scene(W, H, dpr) {
     vis.push(n);
     if (n.tick <= posTick) active.set(n.midi, n);
   }
+  if (showStems) drawStems(ctx, y, W, posTick, topTick, vh);   // hampes et ligatures : dessinées avant les têtes de note, qui passent au premier plan
   [false, true].forEach(blackPass => {
     vis.forEach(n => {
       const kr = keyRect(n.midi, W); if (kr.black !== blackPass) return;
-      const c = COL[noteHand(n)], lit = n.tick <= posTick;
-      const y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5);
-      const x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
-      ctx.save();
-      if (lit) { ctx.shadowColor = c.note; ctx.shadowBlur = 16; }
-      ctx.fillStyle = lit ? c.lit : (kr.black ? c.noteB : c.note);
-      rrect(x, y0, w, bottom - y0, 5); ctx.fill();
-      ctx.restore();
-      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; rrect(x + .5, y0 + .5, w - 1, bottom - y0 - 1, 5); ctx.stroke();
-      if (!kr.black && w >= 19 && bottom - y0 >= 15) {
-        ctx.fillStyle = 'rgba(10,12,30,.85)'; ctx.font = '700 10px -apple-system, sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(NOMS[n.midi % 12], x + w / 2, bottom - 4);
+      const c = COL[noteHand(n)];
+      if (!showStems) {   // rythme désactivé : notes rectangulaires, la hauteur donne la durée (sans nom de note)
+        const lit = n.tick <= posTick, y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), sp0 = noteSpan(n.midi, W), x = sp0.x, w = sp0.w, bottom = y1 - 1.5;
+        ctx.save();
+        if (lit) { ctx.shadowColor = c.note; ctx.shadowBlur = 16; }
+        ctx.fillStyle = lit ? c.lit : (kr.black ? c.noteB : c.note);
+        rrect(x, y0, w, bottom - y0, 5); ctx.fill();
+        ctx.restore();
+        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; rrect(x + .5, y0 + .5, w - 1, bottom - y0 - 1, 5); ctx.stroke();
+        return;
       }
+      const R = headR(W), cx = kr.x + kr.w / 2, y1 = y(n.tick), cy = y1 - 1.5 - R, cl = noteClass(n), hollow = !!cl && cl.k <= 1;   // rythme activé : têtes de note rondes
+      if (n.tick < posTick - 1) return;   // la tête de note part avec le début de la note
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, 6.2832);
+      if (hollow) { ctx.fillStyle = 'rgba(10,12,30,.92)'; ctx.fill(); ctx.lineWidth = 4; ctx.strokeStyle = kr.black ? c.noteB : c.note; ctx.stroke(); }
+      else { ctx.fillStyle = kr.black ? c.noteB : c.note; ctx.fill(); ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.stroke(); }
+      ctx.restore();
     });
   });
   // doigtés (au-dessus de chaque note ; dans la note si elle touche le haut de la zone)
@@ -880,18 +989,22 @@ function scene(W, H, dpr) {
   // et sont de plus en plus estompées.
   for (let vi = vis.length - 1; vi >= 0; vi--) {
     const n = vis[vi];
-    const kr = keyRect(n.midi, W), kk = kr, y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), x = kr.x + 1, w = kr.w - 2, bottom = y1 - 1.5;
+    if (showStems && n.tick < posTick - 1) continue;   // tête de note déjà partie
+    const kr = keyRect(n.midi, W), kk = kr, HR = headR(W), cl2 = noteClass(n), hollow2 = showStems && !!cl2 && cl2.k <= 1, hcx = kr.x + kr.w / 2, y1 = y(n.tick), bottom = y1 - 1.5, y0 = showStems ? bottom - 2 * HR : Math.min(y(n.tick + n.dur), y1 - 5), x = showStems ? hcx - HR : noteSpan(n.midi, W).x, w = showStems ? 2 * HR : noteSpan(n.midi, W).w;
     const rec = { n, x, w, top: y0, bottom };
     const fo = fof(n);
     if (showFing && fo && rollVisible) {
       ctx.save(); if (!n.finger) ctx.globalAlpha = 0.62; // doigté proposé (non saisi) : plus discret
-      if (!fingIllus) { // doigté simple : « M.D. 1 »
-        // pastille du doigt (même format que sur le clavier et en 3D) : disque de la couleur vive de la main, liseré sombre puis blanc, numéro dedans
-        const R = 9.5, pw = 2 * R + 4, ph = pw, px = Math.max(2, Math.min(W - pw - 2, x + w / 2 - pw / 2)), py = y0 >= ph + 6 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3), cx = px + pw / 2, cy = py + ph / 2;
+      if (!fingIllus && !showStems) { // doigté simple (notes rectangulaires) : pastille du doigt au-dessus de la note
+        const R = 14.5, pw = 2 * R + 4, ph = pw, px = Math.max(2, Math.min(W - pw - 2, x + w / 2 - pw / 2)), py = y0 >= ph + 6 ? y0 - ph - 3 : Math.max(2, bottom - ph - 3), cx = px + pw / 2, cy = py + ph / 2;
         ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fillStyle = noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'; ctx.fill();
-        ctx.lineWidth = 3; ctx.strokeStyle = '#10121f'; ctx.stroke(); ctx.lineWidth = 1.5; ctx.strokeStyle = '#fff'; ctx.stroke();
-        ctx.fillStyle = '#10121f'; ctx.font = '800 12px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(fo), cx, cy + 0.5); ctx.textBaseline = 'alphabetic';
+        ctx.lineWidth = 3.5; ctx.strokeStyle = '#10121f'; ctx.stroke(); ctx.lineWidth = 1.8; ctx.strokeStyle = '#fff'; ctx.stroke();
+        ctx.fillStyle = '#10121f'; ctx.font = '800 18px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(fo), cx, cy + 0.5); ctx.textBaseline = 'alphabetic';
         Object.assign(rec, { px, py, pw, ph });
+      } else if (!fingIllus) { // doigté simple : numéro du doigt au centre de la tête de note (disque)
+        const hc = COL[noteHand(n)];
+        ctx.fillStyle = hollow2 ? hc.note : '#10121f'; ctx.font = '800 ' + Math.round(HR * 1.25) + 'px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(String(fo), hcx, bottom - HR + 0.5); ctx.textBaseline = 'alphabetic';
+        Object.assign(rec, { px: x, py: y0, pw: w, ph: 2 * HR });
       } else {
       const pw = Math.max(36, Math.min(76, kk.w * 1.9)), ph = (RAKE_BASE + 2) * pw / 122;
       const px = Math.max(1, Math.min(W - pw - 1, x + w / 2 - pw / 2));
@@ -905,7 +1018,14 @@ function scene(W, H, dpr) {
       }
       ctx.restore();
     }
-    if (onScreen) { hit.push(rec); if (n === selNote || selGroup.has(n)) { ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; rrect(x - 1, y0 - 1, w + 2, bottom - y0 + 2, 6); ctx.stroke(); } }
+    if (onScreen) { hit.push(rec); if (n === selNote || selGroup.has(n)) { ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; if (showStems) { ctx.beginPath(); ctx.arc(hcx, bottom - HR, HR + 2, 0, 6.2832); ctx.stroke(); } else { rrect(x - 1, y0 - 1, w + 2, bottom - y0 + 2, 6); ctx.stroke(); } } }
+  }
+  if (rollVisible) {   // en-têtes de colonnes : le nom de chaque touche en haut du rouleau (jamais dans les notes)
+    ctx.fillStyle = 'rgba(10,12,30,.92)'; ctx.fillRect(0, 0, W, 34); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W), cx = kr.x + kr.w / 2; if (cx < 6 || cx > W - 6) continue;
+      if (!kr.black) { ctx.fillStyle = '#e8ebf7'; ctx.font = '700 11px -apple-system, sans-serif'; ctx.fillText(NOMS[m % 12], cx, 12); }
+      else if (kr.w >= 12) { ctx.fillStyle = '#9aa3c7'; ctx.font = '700 9px -apple-system, sans-serif'; ctx.fillText(NOMS[m % 12], cx, 26); } }
+    ctx.textBaseline = 'alphabetic'; ctx.fillStyle = 'rgba(255,255,255,.18)'; ctx.fillRect(0, 34, W, 1);
   }
   if (onScreen && selRect) { // rectangle de sélection en cours
     ctx.fillStyle = 'rgba(91,124,255,.18)'; ctx.fillRect(selRect.x, selRect.y, selRect.w, selRect.h);
@@ -1455,7 +1575,7 @@ function render3D() {
   if (!view3dOn || !song) return;
   ensurePlan();
   const sp = pos - vlag * speed;
-  View3D.render({ song, sp, plan: song.plan, vis: visibleHands(), noteHand, lowerBoundSec, ux: PianoHands.ux, isBlack: PianoHands.isBlack, anticip: false, handsMode: 'plain', next: null, fof, fing: showFing, grid: grid3d(pos - vlag * speed, 3.6) });
+  View3D.render({ song, sp, plan: song.plan, vis: visibleHands(), noteHand, lowerBoundSec, ux: PianoHands.ux, isBlack: PianoHands.isBlack, anticip: false, handsMode: 'plain', next: null, fof, fing: showFing, grid: grid3d(pos - vlag * speed, 3.6), stems: stems3d(pos - vlag * speed, 3.6), hollow: n => { const c = showStems && noteClass(n); return !!c && c.k <= 1; }, rhythm: showStems });
 }
 function togglePanel() { panelOpen = !panelOpen; $('panel').hidden = !panelOpen; }
 function toggleRoll() { rollVisible = !rollVisible; }
@@ -1483,7 +1603,9 @@ function refreshBar() {
   const boucle = loopOn ? 'Boucle : pas ' + $('bLA').value + ' à ' + $('bLB').value + ' · tour ' + (loopCount + 1) : '';
   setT($('bInfo'), (song ? [stepMode ? 'un pas toutes les ' + (stepDuration() + stepPause()).toFixed(1).replace('.', ',') + ' s' : '', boucle].filter(Boolean).join('   |   ') : '') + (slowN ? '   |   images lentes : ' + slowN + ' (dernière : ' + (slowLast / 1000).toFixed(1).replace('.', ',') + ' s)' : ''));
 }
-$('bPanel').onclick = togglePanel; $('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll;
+$('bPanel').onclick = togglePanel; function setRythme(v) { showStems = v; $('bRythme').classList.toggle('pressed', v); }
+$('bRythme').onclick = () => setRythme(!showStems);
+$('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll;
 $('bRew').onclick = rewind; $('bPrev').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepPrev(); }; $('bNext').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepNext(); };   // un pas à la main = mode pas à pas
 $('bPlay').onclick = () => { unlockAudio(); if (playing && !stepMode) pause(); else { enterRoll(); play(); } };
 $('bScroll').onclick = () => { unlockAudio(); if (!stepMode) { if (playing) pause(); enterScroll(); } toggleStepAuto(); };
