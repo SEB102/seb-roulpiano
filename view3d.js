@@ -330,9 +330,11 @@ const View3D = (() => {
         // rotation latérale à la base du doigt limitée à ±40° autour de l'axe de la main (ci-dessous)   // rotation latérale uniquement à la première articulation (base du doigt), limitée à ±28°
         let M, D, K0 = null;
         if (thumb) {   // pouce : 1.0 → 1.1 → 1.2 ; pose (lacet, inclinaison de 1.0, flexion de 1.1) cherchée parmi les poses permises, la plus proche de la touche visée
-          const tl0 = [dot([T.x - K.x, T.y - K.y, T.z - K.z], FR.L), dot([T.x - K.x, T.y - K.y, T.z - K.z], FR.F), dot([T.x - K.x, T.y - K.y, T.z - K.z], FR.N)];
-          // au repos (pouce qui ne joue pas) : lacet de 1.0 ≈ 20° (légèrement abaissé), 1.1 droit (flexion 0) ; il rejoint sa touche à mesure qu'elle approche
-          const rt = thumbOff(20, 10, 0).t, wt = Math.min(1, kws[0]), tl = [0, 1, 2].map(k => rt[k] + (tl0[k] - rt[k]) * wt);
+          // cible du pouce = la touche elle-même (hauteur d'une touche enfoncée) : la pose passe de la pose de repos à celle de la touche en ligne droite, sans arc ni élan (c'est ce qui le faisait balancer)
+          const Tt = new THREE.Vector3(fx, 0.08 + 0.44 * blk, zt);
+          const tl0 = [dot([Tt.x - K.x, Tt.y - K.y, Tt.z - K.z], FR.L), dot([Tt.x - K.x, Tt.y - K.y, Tt.z - K.z], FR.F), dot([Tt.x - K.x, Tt.y - K.y, Tt.z - K.z], FR.N)];
+          // au repos (pouce qui ne joue pas) : 1.0 écarté de 20° vers l'extérieur et légèrement abaissé (lacet 20°) ; 1.1–1.2 incliné de 5° vers l'extérieur (seule exception à la flexion vers l'index : flexion −5°) ; il rejoint sa touche à mesure qu'elle approche
+          const REST_T = [20, 20, -5], wt = Math.min(1, kws[0]), tl = tl0;   // la pose de repos se mélange à la pose visée en ANGLES (un seul mélange, pas de détour : plus de balancement)
           let bt = null; const pv = F.thS;
           const ec = (psi, inc, flx) => { const t = thumbOff(psi, inc, flx).t; return Math.hypot(t[0] - tl[0], t[1] - tl[1], t[2] - tl[2]) + 0.0015 * Math.abs(flx - 10) + 0.001 * Math.abs(inc - 10) + 0.0006 * Math.abs(psi - 20) + (pv && !SNAP ? 0.0003 * (Math.abs(psi - pv.psi) + Math.abs(inc - pv.inc) + Math.abs(flx - pv.flx)) : 0); };
           for (let psi = TPSI[0]; psi <= TPSI[1]; psi += 15) for (let inc = TINC[0]; inc <= TINC[1]; inc += 11) for (let flx = TFLX[0]; flx <= TFLX[1]; flx += 15) { const e = ec(psi, inc, flx); if (!bt || e < bt.e) bt = { e, psi, inc, flx }; }
@@ -340,6 +342,7 @@ const View3D = (() => {
           for (const stp of [7.5, 3.75, 1.9]) for (let it = 0; it < 8; it++) { let mv = false;
             for (const [dp, di, df] of [[stp, 0, 0], [-stp, 0, 0], [0, stp, 0], [0, -stp, 0], [0, 0, stp], [0, 0, -stp]]) { const psi = bt.psi + dp, inc = bt.inc + di, flx = bt.flx + df; if (psi < TPSI[0] || psi > TPSI[1] || inc < TINC[0] || inc > TINC[1] || flx < TFLX[0] || flx > TFLX[1]) continue; const e = ec(psi, inc, flx); if (e < bt.e - 1e-9) { bt = { e, psi, inc, flx }; mv = true; } }
             if (!mv) break; }
+          if (wt < 1) { bt = { e: bt.e, psi: wt * bt.psi + (1 - wt) * REST_T[0], inc: wt * bt.inc + (1 - wt) * REST_T[1], flx: wt * bt.flx + (1 - wt) * REST_T[2] }; }   // au repos : pose de repos exacte (y compris flexion −5°, hors de la plage de jeu 0–90°)
           const ALt = 1 - Math.exp(-dtS / (tau * 0.4));   // le pouce suit sa cible plus vite que les doigts (il parcourt de grands angles)
           F.thS = (!pv || SNAP) ? { psi: bt.psi, inc: bt.inc, flx: bt.flx } : { psi: pv.psi + (bt.psi - pv.psi) * ALt, inc: pv.inc + (bt.inc - pv.inc) * ALt, flx: pv.flx + (bt.flx - pv.flx) * ALt };
           const o = thumbOff(F.thS.psi, F.thS.inc, F.thS.flx), w = q => V(K.x + FR.L[0] * q[0] + FR.F[0] * q[1] + FR.N[0] * q[2], K.y + FR.L[1] * q[0] + FR.F[1] * q[1] + FR.N[1] * q[2], K.z + FR.L[2] * q[0] + FR.F[2] * q[1] + FR.N[2] * q[2]);
