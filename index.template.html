@@ -615,7 +615,7 @@ addEventListener('mouseup', () => {
   justDragged = true; setTimeout(() => { justDragged = false; }, 0); // le « click » qui suit le relâchement ne doit rien faire
   if (wasScroll) return;
   if (!selGroup.size) { clearGroup(); return; }
-  if (pasteBuf) { const dest = [...selGroup]; clearGroup(); doPaste(dest); return; }   // mode collage : le rectangle choisit lui-même les notes de destination
+  if (pasteBuf && pasteArmed) { const dest = [...selGroup]; clearGroup(); doPaste(dest); return; }   // mode collage : le rectangle choisit lui-même les notes de destination
   const g = $('gpop'); $('gcount').textContent = selGroup.size + (selGroup.size > 1 ? ' notes' : ' note');
   g.style.display = 'flex'; const w = g.offsetWidth, h = g.offsetHeight, below = selRect.y + selRect.h + 8;
   g.style.left = Math.max(4, Math.min(cssW - w - 4, selRect.x + selRect.w / 2 - w / 2)) + 'px';
@@ -625,17 +625,19 @@ addEventListener('mouseup', () => {
 $('gpop').addEventListener('click', e => {
   const b = e.target.closest('button[data-gh]');
   if (b) { selGroup.forEach(n => setHand(n, b.dataset.gh)); clearGroup(); } else if (e.target.closest('#gcancel')) clearGroup();
-  else if (e.target.closest('#gcopy')) { pasteBuf = [...selGroup]; clearGroup(); toast('Doigtés de ' + pasteBuf.length + (pasteBuf.length > 1 ? ' notes copiés' : ' note copié') + ' : cliquez sur la <b>note de départ</b> du collage, ou sélectionnez (Maj + glisser) les notes de destination (Échap pour annuler)', 0); }
+  else if (e.target.closest('#gcopy')) { copyFingerings([...selGroup]); clearGroup(); pasteArmed = true; toast('Doigtés de ' + pasteBuf.length + (pasteBuf.length > 1 ? ' notes copiés' : ' note copié') + ' : cliquez sur la <b>note de départ</b> du collage, ou sélectionnez (Maj + glisser) les notes de destination (Échap pour annuler) — ou ' + MOD + ' + V', 0); }
 });
 // ---------- Copier les doigtés d'un passage vers un autre ----------
-let pasteBuf = null, tToast = null;
+let pasteBuf = null, pasteArmed = false, tToast = null;   // pasteBuf : doigtés copiés (instantané, collable plusieurs fois) ; pasteArmed : le prochain clic sur une note / la prochaine sélection colle (bouton « copier »)
+const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
+function copyFingerings(notes) { pasteBuf = notes.map(n => ({ midi: n.midi, tick: n.tick, hand: noteHand(n), finger: fof(n) })); }   // instantané : reste valable même si les doigtés changent ou si l'on ouvre un autre morceau
 function toast(html, ms) { const t = $('toast'); clearTimeout(tToast); t.innerHTML = html; t.style.display = 'block'; if (ms) tToast = setTimeout(() => { t.style.display = 'none'; }, ms); }
-function cancelPaste() { pasteBuf = null; clearTimeout(tToast); $('toast').style.display = 'none'; }
-function doPaste(target) {   // target : une note (le collage commence là) ou une liste de notes choisies
-  const r = PianoHands.pasteFingerings(song.notes, pasteBuf, target, { hand: noteHand, shown: fof });
-  r.pairs.forEach(p => setFinger(p.n, p.f)); pasteBuf = null;
+function cancelPaste() { pasteBuf = null; pasteArmed = false; clearTimeout(tToast); $('toast').style.display = 'none'; }
+function doPaste(target) {   // target : une note (le collage commence là) ou une liste de notes choisies ; la séquence copiée reste dans le presse-papier de l'appli (on peut recoller ailleurs)
+  const r = PianoHands.pasteFingerings(song.notes, pasteBuf, target, { hand: noteHand, shown: n => n.finger || 0 });
+  r.pairs.forEach(p => setFinger(p.n, p.f)); pasteArmed = false;
   const mains = { R: 'main droite', L: 'main gauche' }, ch = r.fromHand && r.fromHand !== r.toHand ? ' (' + mains[r.fromHand] + ' → ' + mains[r.toHand] + ')' : '';
-  toast(r.pairs.length ? r.pairs.length + (r.pairs.length > 1 ? ' doigtés collés' : ' doigté collé') + ch + (r.stop ? ' — ' + r.stop + ' : ' + r.copied + ' notes sur ' + r.total : '') : 'Rien de collé — ' + (r.stop || 'aucun doigté dans le passage copié'), 7000);
+  toast(r.pairs.length ? r.pairs.length + (r.pairs.length > 1 ? ' doigtés collés' : ' doigté collé') + ch + (r.stop ? ' — ' + r.stop + ' : ' + r.copied + ' notes sur ' + r.total : '') + ' — ' + MOD + ' + V pour recoller ailleurs' : 'Rien de collé — ' + (r.stop || 'aucun doigté dans le passage copié'), 7000);
 }
 function hideFpop() { selNote = null; $('fpop').style.display = 'none'; }
 function showFpop(h) {
@@ -666,7 +668,7 @@ cv.addEventListener('click', e => {
   for (let i = hit.length - 1; i >= 0; i--) {
     const h = hit[i];
     if ((px >= h.x && px <= h.x + h.w && py >= h.top && py <= h.bottom) || (h.pw && px >= h.px && px <= h.px + h.pw && py >= h.py && py <= h.py + h.ph)) {
-      pause(); if (pasteBuf) { doPaste(h.n); return; } showFpop(h); return;
+      pause(); if (pasteBuf && pasteArmed) { doPaste(h.n); return; } showFpop(h); return;
     }
   }
   hideFpop();
@@ -723,7 +725,19 @@ $('progress').addEventListener('pointerleave', () => { hoverFrac = null; });
 $('progress').oninput = e => { seeking = true; const a = startPos(); seek(a + parseFloat(e.target.value) * (song.durationSec - a)); showMeasureBubble(parseFloat(e.target.value)); };
 $('progress').onchange = () => { seeking = false; };
 addEventListener('keydown', e => {
-  if (e.key === 'Escape' && pasteBuf) { cancelPaste(); return; }
+  if (song && (e.metaKey || e.ctrlKey) && !e.altKey && !(e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA')) {   // ⌘/Ctrl + C : copier les doigtés de la sélection ; ⌘/Ctrl + V : les coller (autant de fois qu'on veut)
+    const kk = e.key.toLowerCase();
+    if (kk === 'c' && (selGroup.size || selNote)) {
+      e.preventDefault(); copyFingerings(selGroup.size ? [...selGroup] : [selNote]); pasteArmed = false;
+      toast(pasteBuf.length + (pasteBuf.length > 1 ? ' notes copiées' : ' note copiée') + ' : choisissez la destination (clic sur une note, ou Maj + glisser) puis ' + MOD + ' + V', 6000); return;
+    }
+    if (kk === 'v' && pasteBuf) {
+      e.preventDefault(); const dest = selGroup.size ? [...selGroup] : selNote ? selNote : null;
+      if (!dest) { toast('Choisissez d\'abord la destination : cliquez sur la note de départ, ou sélectionnez les notes (Maj + glisser), puis ' + MOD + ' + V', 5000); return; }
+      pause(); doPaste(dest); return;
+    }
+  }
+  if (e.key === 'Escape' && pasteArmed) { pasteArmed = false; $('toast').style.display = 'none'; return; }   // annule le collage « au clic » ; la séquence copiée reste collable avec ⌘/Ctrl + V
   if (e.key === 'Escape' && selGroup.size) { clearGroup(); return; }
   if (selNote && !(e.target.tagName === 'INPUT' && e.target.type === 'number')) {
     if (/^[1-5]$/.test(e.key)) { e.preventDefault(); chooseFinger(parseInt(e.key, 10)); return; }
