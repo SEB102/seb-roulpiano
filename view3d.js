@@ -232,7 +232,7 @@ const View3D = (() => {
         if (n.t1 < sp) continue;
         const a = Math.max(0, n.t0 - sp), b = Math.min(AHEAD, n.t1 - sp), z0 = BACK - a * SPEED, z1 = BACK - b * SPEED, blk = built.isBlack(n.midi), bar = bars[bi++];
         { const q = barSp[bi - 1], f = st.fof && st.fing !== false ? st.fof(n) : 0;
-          if (f) { const tex = digit(f, st.noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.visible = true; q.position.set(built.ux(n.midi), 0.85, z0 - 0.3); } else q.visible = false; }
+          if (f) { const tex = digit(f, st.noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.visible = true; q.position.set(built.ux(n.midi), 0.85, z1 - 0.62); } else q.visible = false; }   // pastille détachée du rectangle : juste au-delà de sa fin (comme en 2D), pour ne pas cacher les notes courtes
         if (bar.geometry !== boxG) bar.geometry = boxG;
         bar.visible = true; bar.position.set(built.ux(n.midi), 0.3, (z0 + z1) / 2); bar.scale.set(blk ? 0.5 : 0.84, 1, Math.max(0.12, z0 - z1 - 0.06));
         bar.material.color.setHex(st.noteHand(n) === 'R' ? CR : CL);
