@@ -232,7 +232,7 @@ const View3D = (() => {
           if (f) { const tex = digit(f, st.noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.visible = true; q.position.set(built.ux(n.midi), 0.85, zc); } else q.visible = false; }
         if (bar.geometry !== cylG) bar.geometry = cylG;
         bar.visible = true; bar.position.set(built.ux(n.midi), 0.3, zc); bar.scale.set(0.94, 1, 0.94);
-        bar.material.color.setHex(st.noteHand(n) === 'R' ? (blk ? 0xe0801a : CR) : (blk ? 0x2f78d8 : CL));
+        bar.material.color.setHex(st.noteHand(n) === 'R' ? CR : CL);
         if (st.hollow && st.hollow(n)) { hole.visible = true; hole.position.set(built.ux(n.midi), 0.3, zc); } else hole.visible = false;
       } else {    // rythme désactivé : barres rectangulaires, la longueur donne la durée
         if (n.t1 < sp) continue;
@@ -241,7 +241,7 @@ const View3D = (() => {
           if (f) { const tex = digit(f, st.noteHand(n) === 'R' ? '#ffc23a' : '#7fd0ff'); if (q.material.map !== tex) { q.material.map = tex; q.material.needsUpdate = true; } q.visible = true; q.position.set(built.ux(n.midi), 0.85, z0 - 0.3); } else q.visible = false; }
         if (bar.geometry !== boxG) bar.geometry = boxG;
         bar.visible = true; bar.position.set(built.ux(n.midi), 0.3, (z0 + z1) / 2); bar.scale.set(blk ? 0.5 : 0.84, 1, Math.max(0.12, z0 - z1 - 0.06));
-        bar.material.color.setHex(st.noteHand(n) === 'R' ? (blk ? 0xe0801a : CR) : (blk ? 0x2f78d8 : CL));
+        bar.material.color.setHex(st.noteHand(n) === 'R' ? CR : CL);
         holeM[bi - 1].visible = false;
       }
     }
