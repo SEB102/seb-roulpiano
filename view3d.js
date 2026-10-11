@@ -19,13 +19,7 @@ const View3D = (() => {
   }
   // Règle : les doigts 2 à 5 ne se croisent jamais (ni se chevauchent) latéralement. Si deux doigts voisins se rejoignent ou s'inversent, le doigt qui ne joue pas est écarté ;
   // si les deux sont sans appui, ils s'écartent de moitié chacun. Un doigt qui joue ou qui va frapper (« épinglé ») ne bouge pas.
-  function enforceOrder(xs, pin, sg) {
-    const GAP = 0.62;
-    for (let pass = 0; pass < 4; pass++) for (let i = 1; i < 4; i++) {
-      const need = GAP - sg * (xs[i + 1] - xs[i]); if (need <= 0) continue;
-      if (pin[i] && !pin[i + 1]) xs[i + 1] += sg * need; else if (!pin[i] && pin[i + 1]) xs[i] -= sg * need; else if (!pin[i] && !pin[i + 1]) { xs[i] -= sg * need / 2; xs[i + 1] += sg * need / 2; }
-    }
-  }
+  function enforceOrder(xs, pin, sg) { PianoHands.enforceFingerOrder(xs, pin, sg, PianoHands.FINGER_GAP); }   // règle unique, définie dans hands.js
   function nameTex(label) {
     const key = 'n:' + label; if (lblTex[key]) return lblTex[key];
     const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64; const g = cv.getContext('2d');

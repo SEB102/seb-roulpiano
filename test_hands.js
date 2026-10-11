@@ -107,5 +107,31 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
       assert.ok(maxJ < 3, h + ' saut ' + maxJ.toFixed(2));
     });
   });
+
+  // ---------- Non-croisement des doigts (2D et 3D) : ne doit plus jamais revenir ----------
+  await t('enforceFingerOrder : un doigt qui joue ne bouge pas, ses voisins s\'écartent ; jamais de croisement (hors deux doigts qui jouent ensemble)', () => {
+    const xs = [0, 10, 10.1, 10.2, 10.3], pin = [false, false, true, false, false]; H.enforceFingerOrder(xs, pin, 1, 0.62);
+    near(xs[2], 10.1); for (let i = 1; i < 4; i++) assert.ok(xs[i + 1] - xs[i] >= 0.62 - 1e-9, 'écart ' + i);
+    const xl = [0, -10, -9.9, -10.5, -10.6], pl = [false, false, false, true, false]; H.enforceFingerOrder(xl, pl, -1, 0.62);
+    for (let i = 1; i < 4; i++) assert.ok(-(xl[i + 1] - xl[i]) >= 0.62 - 1e-9, 'main gauche, écart ' + i);
+  });
+  const croisements = (notesByHand, dur) => { let bad = 0;
+    ['R', 'L'].forEach(h => { const ns = notesByHand.filter(x => x.hand === h); if (!ns.length) return; H.assignFingerings(ns, h); const p = H.buildPlan(ns, h), sg = h === 'R' ? 1 : -1;
+      for (let x = -1; x < dur; x += 0.05) { const a = p.at(x), xs = a.fingers.map(f => f.x), pin = a.fingers.map(f => !!f.pressed || (f.depth || 0) > 0.6 || (f.wN || 0) > 0.85);
+        H.enforceFingerOrder(xs, pin, sg, H.FINGER_GAP); for (let i = 1; i < 4; i++) if (sg * (xs[i + 1] - xs[i]) < 0 && !(pin[i] && pin[i + 1])) bad++; } });
+    return bad; };
+  const exemples = [['exemple.musicxml', 'Élise'], ['exemple-tabac.musicxml', 'J\'ai du bon tabac'], ['partition.musicxml', 'Dorian']];
+  for (const [fn, nm] of exemples) {
+    if (!fs.existsSync(__dirname + '/' + fn)) continue;
+    await t(nm + ' : aucun croisement de doigts dans le dessin (règle de non-croisement appliquée au plan)', async () => {
+      const s = await C.loadSong(fn, fs.readFileSync(__dirname + '/' + fn)); assert.strictEqual(croisements(s.notes, s.durationSec), 0, 'des doigts se croisent');
+    });
+  }
+  await t('La règle de non-croisement est bien appelée par le dessin 2D et par la vue 3D (aucune copie locale)', () => {
+    const tpl = fs.readFileSync(__dirname + '/index.template.html', 'utf8'), v3 = fs.readFileSync(__dirname + '/view3d.js', 'utf8');
+    const g = tpl.slice(tpl.indexOf('function handGeometry'), tpl.indexOf('function drawHand('));
+    assert.ok(g.includes('PianoHands.enforceFingerOrder'), 'handGeometry (2D) doit appeler PianoHands.enforceFingerOrder');
+    assert.ok(v3.includes('PianoHands.enforceFingerOrder'), 'view3d.js doit appeler PianoHands.enforceFingerOrder');
+  });
   console.log(`\n${n} tests passés`);
 })();

@@ -306,5 +306,18 @@
   // nom d'un intervalle (en demi-tons, signé : positif = vers l'aigu)
   const INTERVALS = ['même note', '2de mineure', '2de majeure', '3ce mineure', '3ce majeure', '4te', 'triton', '5te', '6te mineure', '6te majeure', '7e mineure', '7e majeure', 'octave'];
   function intervalName(semi) { const a = Math.abs(semi); if (!a) return INTERVALS[0]; const o = Math.floor(a / 12); return (semi > 0 ? '↑ ' : '↓ ') + (a <= 12 ? INTERVALS[a] : (o === 1 ? 'octave' : o + ' octaves') + (a % 12 ? ' + ' + INTERVALS[a % 12] : '')); }
-  return { ux, isBlack, pairCost, assignFingerings, buildPlan, intervalName };
+  // Règle UNIQUE de non-croisement des doigts voisins 2 à 5 (hors pouce), utilisée par le dessin 2D ET la vue 3D (ne pas la dupliquer) :
+  // xs = positions des 5 doigts (doigt 1 = pouce, ignoré), pin[i] = doigt qui joue ou s'apprête à jouer (il ne bouge pas, ses voisins s'écartent), sg = +1 main droite, −1 main gauche, gap = écart minimal.
+  // Seuls deux doigts qui jouent en même temps dans le mauvais ordre (doigté du fichier) peuvent encore se croiser.
+  function enforceFingerOrder(xs, pin, sg, gap) {
+    for (let pass = 0; pass < 4; pass++) for (let i = 1; i < 4; i++) {
+      const need = gap - sg * (xs[i + 1] - xs[i]); if (need <= 0) continue;
+      if (pin[i] && !pin[i + 1]) xs[i + 1] += sg * need; else if (!pin[i] && pin[i + 1]) xs[i] -= sg * need; else if (!pin[i] && !pin[i + 1]) { xs[i] -= sg * need / 2; xs[i + 1] += sg * need / 2; }
+    }
+    // balayages exacts (garantissent la règle, sauf entre deux doigts qui jouent) : vers l'extérieur, puis retour
+    for (let i = 1; i < 4; i++) if (!pin[i + 1] && sg * (xs[i + 1] - xs[i]) < gap) xs[i + 1] = xs[i] + sg * gap;
+    for (let i = 3; i >= 1; i--) if (!pin[i] && sg * (xs[i + 1] - xs[i]) < gap) xs[i] = xs[i + 1] - sg * gap;
+  }
+  const FINGER_GAP = 0.62;   // écart minimal entre deux doigts voisins, en largeurs de touche
+  return { ux, isBlack, pairCost, assignFingerings, buildPlan, intervalName, enforceFingerOrder, FINGER_GAP };
 });

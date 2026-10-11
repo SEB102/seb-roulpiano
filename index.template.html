@@ -82,9 +82,9 @@
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="view3d.js?v=20261011zu"></script>
+<script src="view3d.js?v=20261011zv"></script>
 <script src="core.js?v=20261010d"></script>
-<script src="hands.js?v=20261017e"></script>
+<script src="hands.js?v=20261011zv"></script>
 <script src="hands_legacy.js?v=20261010g"></script>
 </head>
 <body>
@@ -1228,6 +1228,8 @@ function handGeometry(side, ev, G) { // positions des bouts de doigts, des bases
     if (handsMode === 'plain') return { x: X(f.x), y: yHover + ((yW + (yB - yW) * f.blk) - yHover) * f.depth - f.lift * hs * 0.35 + STAG[i] * hs, f };   // mains de la version archivée
     return { x: X(f.x), y: ((curlFingers && i > 0) ? yT0 : yHover + (yT0 - yHover) * p) + STAG[i] * hs, f };
   });
+  // Les doigts voisins (2 à 5) ne se croisent JAMAIS (hors pouce) : un doigt qui joue ou s'apprête à jouer reste en place, ses voisins s'écartent (même règle qu'en 3D)
+  { const xs = tip.map(t => t.x); PianoHands.enforceFingerOrder(xs, ev.fingers.map(f => !!f.pressed || (f.depth || 0) > 0.6 || (f.wN || 0) > 0.85), sg, PianoHands.FINGER_GAP * ww); xs.forEach((x, i) => { tip[i].x = x; }); }   // règle unique de non-croisement (hands.js)
   const rel = sg * (ev.fingers[0].x - ev.palm), under = Math.max(0, Math.min(1, (rel + 0.8) / 1.2)); // pouce passé sous la main : sa base se rapproche de la paume
   const mkBase = () => tip.map((t, i) => ({ x: px + sg * KOFF[i] * ww * (handsMode === 'plain' ? 1 : handScale) * (i ? 1 : 1 - 0.7 * under), y: yW + (STAG[i] + FLEN[i]) * hs - (i || handsMode === 'plain' ? fwd : 0) + (i ? 0 : hs * 0.3 * under) }));
   let base = mkBase();
