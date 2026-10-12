@@ -55,7 +55,7 @@ const View3D = (() => {
   const LOC = [[-(SP + 0.55) * 2 / 3, (PALM - 1.2) * 2 / 3, -0.1],   // 1.0 : distance P–1.0 réduite d'un tiers (≈ 2,15 touches)
      [-SP, PALM, 0], [0, PALM, 0], [SP, PALM, 0], [2 * SP, PALM, 0]];   // [latéral vers le 5, avant, haut] depuis P : 1.0, 2.0, 3.0, 4.0, 5.0
   // POUCE : 1.0 (base) : inclinaison +45° (haut) à −10° (bas), roulis 0, lacet 90° vers l'extérieur (côté opposé au 5) à 45° vers l'intérieur ; 1.1 : roulis 0, lacet 0, inclinaison 0 à 90° vers le bas ; longueurs fixes
-  const TL1 = 1.6, TL2 = 1.2, TPSI = [-45, 90], TINC = [-10, 45], TFLX = [0, 25];   // psi > 0 = vers l'extérieur ; repère local (l vers le 5, f vers l'avant, n normale de la paume)
+  const TL1 = 1.6, TL2 = 1.2, TPSI = [-15, 90], TINC = [-10, 45], TFLX = [0, 25];   // psi > 0 = vers l'extérieur ; repère local (l vers le 5, f vers l'avant, n normale de la paume)
   const thumbOff = (psi, inc, flx) => { const bt = psi * D2R, al = inc * D2R, fx = flx * D2R;
     // repère du pouce tourné de 90° par rapport à celui des doigts : son « lacet » (psi, de −45° à +90°) l'abaisse vers les touches (+) ou le relève (−) ; son « inclinaison » (inc, de −10° à +45°) l'écarte
     // de l'index dans le plan de la paume (+) ou le rapproche (−) ; 1.1 fléchit de flx° dans le plan de la paume, vers l'index (son « bas » est latéral), sans lacet ni roulis
