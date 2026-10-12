@@ -279,9 +279,13 @@ const View3D = (() => {
       // Les doigts n'ont aucun roulis propre : chacun fléchit dans le plan perpendiculaire à la paume qui contient sa direction.
       // Zone d'appui : un doigt n'a pas à frapper sa touche pile sur la ligne nominale ; il peut l'enfoncer n'importe où sur sa partie visible
       // (touche blanche : z de 0,7 à 2,9 ; touche noire : de −2,5 à 0,5). Candidats : de 1,1 en arrière à 0,9 en avant de la ligne nominale (pouce : 0,4 en avant), la ligne nominale étant préférée.
-      const zCands = i => { const bk = H.fingers[i].blkS, zt = (i === 0 ? 2.3 : 1.7) + (0.15 - (i === 0 ? 2.3 : 1.7)) * bk, lo = Math.max(zt - 1.1, 0.6 + (-2.5 - 0.6) * bk), hi = Math.min(zt + (i === 0 ? 0.4 : 0.9), 2.9 + (0.5 - 2.9) * bk);
+      // Passage sans touche noire (pour cette main : de 0,6 s avant à 2 s après l'instant courant) : la main recule pour que les doigts frappent les touches blanches, au plus loin, au niveau du bord avant des touches noires (z = 0,6) ; le pouce peut toucher le bord de sa touche
+      let nbT = 0; { let any = false, blackSeen = false; for (let i = st.lowerBoundSec(sp - 0.6); i < S.length && S[i].t0 <= sp + 2.0; i++) { const n = S[i]; if (n.t1 < sp - 0.6 || st.noteHand(n) !== h) continue; any = true; if (st.isBlack(n.midi)) { blackSeen = true; break; } } nbT = any && !blackSeen ? 1 : 0; }
+      H.nbS = (H.nbS === undefined || SNAP) ? nbT : H.nbS + (nbT - H.nbS) * AL * 0.5; const nb = H.nbS;
+      const zNom = (i, bk) => { const w = i === 0 ? 2.3 + 0.5 * nb : 1.7 + 0.2 * nb; return w + (0.15 - w) * bk; };   // ligne d'appui nominale (touche blanche : 1,7 ; pouce : 2,3 ; en passage sans touche noire : 1,9, et pouce 2,8 = bord de sa touche)
+      const zCands = i => { const bk = H.fingers[i].blkS, zt = zNom(i, bk), lo = Math.max(zt - 1.1, 0.6 + (-2.5 - 0.6) * bk), hi = Math.min(zt + (i === 0 ? 0.4 : 0.9), 2.95 + (0.5 - 2.95) * bk);
         return [zt, lo, (lo + zt) / 2, (zt + hi) / 2, hi].filter(z => z >= lo - 1e-9 && z <= hi + 1e-9).map(z => ({ z, p: 0.05 * Math.abs(z - zt) })); };
-      const tgt = i => { const bk = H.fingers[i].blkS; return [xs[i], (bk ? 0.52 : 0.08), (i === 0 ? 2.3 : 1.7) + (0.15 - (i === 0 ? 2.3 : 1.7)) * bk]; };
+      const tgt = i => { const bk = H.fingers[i].blkS; return [xs[i], (bk ? 0.52 : 0.08), zNom(i, bk)]; };
       const rotY = (v, b) => [v[0] * Math.cos(b) - v[2] * Math.sin(b), v[1], v[0] * Math.sin(b) + v[2] * Math.cos(b)];
       const fr = (bx, bz, py, th, rho, psi) => {
         const r = rho * D2R, t = th * D2R, b = sg * psi * D2R, cr = Math.cos(r), sr = Math.sin(r), ct = Math.cos(t), st2 = Math.sin(t);
@@ -315,11 +319,12 @@ const View3D = (() => {
       // hauteur préférée du poignet : bas quand un doigt tient une touche (les doigts reposent sur le clavier), moyenne quand un doigt s'apprête à jouer, haute au repos (la main flotte au-dessus du clavier)
       // hauteur des articulations 2.0–5.0 (les « jointures ») au-dessus des touches : la main en arche (≈ 2 touches de haut) quand un doigt tient une touche, un peu plus haute quand un doigt s'apprête à jouer, haute au repos (2,7)
       // hauteur préférée de la LIGNE des bases 2.0–5.0 : basse partout (la main ne remonte pas entre les notes) ; baisser la ligne étend les doigts (FLEXP)
-      const khT0 = eng.length ? 1.0 : 1.2; H.khS = (H.khS === undefined || SNAP) ? khT0 : H.khS + (khT0 - H.khS) * AL; const khT = H.khS;
-      const pref = q => 0.004 * Math.abs(q.dx) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.06 * Math.abs(q.bz - 3) : 0.01 * Math.abs(q.bz - 2.2)) + 1.2 * Math.abs(q.py - khT) + 0.004 * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5));
+      // en passage sans touche noire, la main se lève en reculant : les doigts se plient par la pesanteur et leurs points de chute reviennent vers le bord des touches blanches, le bout de l'index s'alignant avec celui du pouce
+      const khT0 = (eng.length ? 1.0 : 1.2) + 0.6 * nb; H.khS = (H.khS === undefined || SNAP) ? khT0 : H.khS + (khT0 - H.khS) * AL; const khT = H.khS;
+      const pref = q => 0.004 * Math.abs(q.dx) + (1 - nb) * (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.06 * Math.abs(q.bz - 3) : 0.01 * Math.abs(q.bz - 2.2)) + nb * 0.6 * Math.abs(q.bz - BASE_ZMAX) + 1.2 * Math.abs(q.py - khT) + 0.004 * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5));
       const scoreQ = q => (stats.ev = (stats.ev || 0) + 1, stats.evF = stats.evF || 0, evalPose)(px0 + q.dx, q.bz, q.py, q.th, q.rho, q.psi) + pref(q);
       let pose = H.pose || { dx: 0, bz: 2.2, py: 1.8, th: 10, rho: 0, psi: 5 };   // lacet de P par défaut : 5° vers l'extérieur
-      if (!eng.length) pose = { dx: 0, bz: 2.8, py: 1.2, th: 5, rho: 0, psi: 5 };   // au repos (entre deux notes) : la main reste près du clavier, sans remonter
+      if (!eng.length) pose = { dx: 0, bz: 2.8 + (BASE_ZMAX - 2.8) * nb, py: 1.2 + 0.6 * nb, th: 5, rho: 0, psi: 5 };   // au repos (entre deux notes) : la main reste près du clavier, sans remonter
       if (eng.length) {
         // recherche en deux temps : (1) départ = pose de l'image précédente (ou grille grossière si elle est mauvaise, si les doigts engagés ont changé, ou toutes les 10 images) ;
         // (2) affinage par pas décroissants, une coordonnée à la fois
@@ -348,7 +353,7 @@ const View3D = (() => {
       H.fingers.forEach(F => {
         const f = a.fingers[F.f - 1], fx = xs[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
         const K = V(...FR.w(LOC[F.f - 1])), TOT = REACHF[F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
-        const blk = F.blkS, zt = (thumb ? 2.3 : 1.7) + (0.15 - (thumb ? 2.3 : 1.7)) * blk, yk = blk ? 0.55 : 0.1;
+        const blk = F.blkS, zt = zNom(thumb ? 0 : 1, blk), yk = blk ? 0.55 : 0.1;
         const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? 0.08 + 0.44 * blk : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
         const T = V(fx, tipY, f.pressed ? zt : zt + (1 - f.depth) * (0.5 + 0.8 * (1 - blk)) - 0.45 * prep);
