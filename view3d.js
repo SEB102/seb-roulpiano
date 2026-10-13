@@ -37,13 +37,15 @@ const View3D = (() => {
   // erreur minimale entre le bout visé (tu horizontal, ty vertical depuis la base du doigt) et l'ensemble des poses anatomiquement possibles d'un doigt de longueur totale TOT
   // lv : niveau de hauteur de la ligne des bases (0 bas, 1 moyen, 2 haut) ; flexion préférée : bas → doigts presque à plat (5° / 10°), haut → flexion naturelle (25° / 45°)
   const FLEXP = [[5, 10], [12, 28], [25, 45]], lvOf = h => h < 0.9 ? 0 : h < 1.5 ? 1 : 2;
+  // x.2 (dernier segment) : sa flexion vaut de 0,15 à 0,45 fois celle de x.1 (tolérance) ; il ne dépasse pas −100° (la verticale, 10° de tolérance)
+  const RR3 = [0.45, 0.3, 0.15], A3MIN = -100;
   function chainErr(TOT, tu, ty, th, lv) {
     const La = TOT * 0.37, Lb = TOT * 0.32, Lc = TOT * 0.31, R = Math.PI / 180; let m = Infinity;
-    for (let dz = 0; dz <= 0; dz += 1) for (let d1 = -10; d1 <= 70; d1 += 5) for (let f2 = 0; f2 <= 90; f2 += 10) {   // d1 : flexion de la 1re articulation par rapport à la paume (0 = plat dans son prolongement)
-      const a1 = (th - d1) * R, a2 = a1 - f2 * R, a3 = a2 - 0.45 * f2 * R;
-      if (a2 < -90 * R || a3 < -90 * R) continue;   // RÈGLE : aucun segment ne pointe vers l'arrière (angle absolu ≥ −90° : jamais au-delà de la verticale) ; tolérance au repliement arrière : 0
+    for (let dz = 0; dz <= 0; dz += 1) for (let d1 = -10; d1 <= 70; d1 += 5) for (let f2 = 0; f2 <= 90; f2 += 10) for (const rr of RR3) {   // d1 : flexion de la 1re articulation par rapport à la paume (0 = plat dans son prolongement)
+      const a1 = (th - d1) * R, a2 = a1 - f2 * R, a3 = a2 - rr * f2 * R;
+      if (a2 < -90 * R || a3 < A3MIN * R) continue;   // RÈGLE : aucun segment ne pointe vers l'arrière (angle absolu ≥ −90° : jamais au-delà de la verticale) ; tolérance au repliement arrière : 0
       const u = La * Math.cos(a1) + Lb * Math.cos(a2) + Lc * Math.cos(a3), y = La * Math.sin(a1) + Lb * Math.sin(a2) + Lc * Math.sin(a3);
-      const err = Math.hypot(u + dz - tu, y - ty) + 0.005 * Math.abs(d1 - FLEXP[lv][0]) + 0.003 * Math.abs(f2 - FLEXP[lv][1]) + 0.03 * Math.abs(dz); if (err < m) m = err;
+      const err = Math.hypot(u + dz - tu, y - ty) + 0.005 * Math.abs(d1 - FLEXP[lv][0]) + 0.003 * Math.abs(f2 - FLEXP[lv][1]) + 0.002 * Math.abs(rr - 0.45) * f2 + 0.03 * Math.abs(dz); if (err < m) m = err;
     }
     return m;
   }
@@ -410,19 +412,19 @@ const View3D = (() => {
           const dd = [0, 1, 2].map(k => Math.cos(ang) * FR.F[k] + Math.sin(ang) * FR.L[k]), NN = FR.N, cT = Math.cos(th * D2R), sT = Math.sin(th * D2R);
           const u0 = Math.max(0.2, dot(v0, dd)), tu = u0 * cT - nv0 * sT, ty = u0 * sT + nv0 * cT;   // passage au repère « paume inclinée de th » utilisé par la recherche de pose
           let best = null; const R2D = Math.PI / 180;
-          for (let dz = 0; dz <= 0; dz += 1) for (let e1 = th - 70; e1 <= th + 10; e1 += 3) for (let f2 = 0; f2 <= 90; f2 += 3) {
-            const a1 = e1 * R2D, a2 = a1 - f2 * R2D, a3 = a2 - 0.45 * f2 * R2D;
-            if (a2 < -90 * R2D || a3 < -90 * R2D) continue;   // même règle que dans la recherche de pose (chainErr) : aucun segment au-delà de la verticale ; les deux doivent rester identiques
+          for (let dz = 0; dz <= 0; dz += 1) for (let e1 = th - 70; e1 <= th + 10; e1 += 3) for (let f2 = 0; f2 <= 90; f2 += 3) for (const rr of RR3) {
+            const a1 = e1 * R2D, a2 = a1 - f2 * R2D, a3 = a2 - rr * f2 * R2D;
+            if (a2 < -90 * R2D || a3 < A3MIN * R2D) continue;   // même règle que dans la recherche de pose (chainErr) : aucun segment au-delà de la verticale ; les deux doivent rester identiques
             const mu = La * Math.cos(a1), my = La * Math.sin(a1), du = mu + Lb * Math.cos(a2), dy = my + Lb * Math.sin(a2), tu2 = du + Lc * Math.cos(a3), ty2 = dy + Lc * Math.sin(a3);
-            const err = Math.hypot(tu2 + dz - tu, ty2 - ty) + 0.005 * Math.abs((th - e1) - FLEXP[lvOf(hy)][0]) + 0.003 * Math.abs(f2 - FLEXP[lvOf(hy)][1]) + 0.03 * Math.abs(dz);
-            if (!best || err < best.err) best = { err, e1, f2, dz, mu, my, du, dy, tu2, ty2 };
+            const err = Math.hypot(tu2 + dz - tu, ty2 - ty) + 0.005 * Math.abs((th - e1) - FLEXP[lvOf(hy)][0]) + 0.003 * Math.abs(f2 - FLEXP[lvOf(hy)][1]) + 0.002 * Math.abs(rr - 0.45) * f2 + 0.03 * Math.abs(dz);
+            if (!best || err < best.err) best = { err, e1, f2, rr, dz, mu, my, du, dy, tu2, ty2 };
           }
           // lissage temporel : les angles retenus sont filtrés (≈ 70 ms) pour que les doigts ne « tremblent » pas quand la meilleure pose change d'une image à l'autre
-          { const sn = F.f2S === undefined || SNAP; F.e1S = sn ? best.e1 : F.e1S + (best.e1 - F.e1S) * AL; F.f2S = sn ? best.f2 : F.f2S + (best.f2 - F.f2S) * AL; F.dzS = sn ? best.dz : F.dzS + (best.dz - F.dzS) * AL;
-            const a1 = F.e1S * R2D, a2 = a1 - F.f2S * R2D, a3 = a2 - 0.45 * F.f2S * R2D;
+          { const sn = F.f2S === undefined || SNAP; F.e1S = sn ? best.e1 : F.e1S + (best.e1 - F.e1S) * AL; F.f2S = sn ? best.f2 : F.f2S + (best.f2 - F.f2S) * AL; F.dzS = sn ? best.dz : F.dzS + (best.dz - F.dzS) * AL; F.rS = (sn || F.rS === undefined) ? best.rr : F.rS + (best.rr - F.rS) * AL;
+            const a1 = F.e1S * R2D, a2 = a1 - F.f2S * R2D, a3 = a2 - F.rS * F.f2S * R2D;
             best.mu = La * Math.cos(a1); best.my = La * Math.sin(a1); best.du = best.mu + Lb * Math.cos(a2); best.dy = best.my + Lb * Math.sin(a2); best.tu2 = best.du + Lc * Math.cos(a3); best.ty2 = best.dy + Lc * Math.sin(a3); }
-          { const A1 = F.e1S, A2 = A1 - F.f2S, A3 = A2 - 0.45 * F.f2S, v = stats.val = stats.val || { n: 0, mcp: 0, pip: 0, dip: 0, back: 0 };
-            v.n++; if (A1 < th - 71 || A1 > th + 11) v.mcp++; if (F.f2S < -0.5 || F.f2S > 91) v.pip++; if (0.45 * F.f2S > 41 || 0.45 * F.f2S < -0.5) v.dip++; if (A2 < -91 || A3 < -91 || Math.cos(A2 * R2D) < -0.02 || Math.cos(A3 * R2D) < -0.02) v.back++; }
+          { const A1 = F.e1S, A2 = A1 - F.f2S, A3 = A2 - (F.rS === undefined ? 0.45 : F.rS) * F.f2S, v = stats.val = stats.val || { n: 0, mcp: 0, pip: 0, dip: 0, back: 0 };
+            v.n++; if (A1 < th - 71 || A1 > th + 11) v.mcp++; if (F.f2S < -0.5 || F.f2S > 91) v.pip++; if (0.45 * F.f2S > 41 || 0.45 * F.f2S < -0.5) v.dip++; if (A2 < -91 || A3 < A3MIN - 1 || Math.cos(A2 * R2D) < -0.02 || Math.cos(A3 * R2D) < -0.2) v.back++; }
           const dzS = F.dzS;   // la base du doigt (articulation métacarpo-phalangienne) glisse de ±0,8 touche le long du métacarpien : les doigts s'adaptent à des touches proches ou éloignées
           const at = (X, Y) => { const u = X * cT + Y * sT + dzS, y = -X * sT + Y * cT; return V(K.x + u * dd[0] + y * NN[0], K.y + u * dd[1] + y * NN[1], K.z + u * dd[2] + y * NN[2]); };
           K0 = at(0, 0);
