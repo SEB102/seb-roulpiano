@@ -15,8 +15,11 @@
 
   // ---------- Doigtés automatiques (programmation dynamique, coût inspiré de Parncutt) ----------
   // Tout est ramené à la main droite : q = hauteur (main droite) ou son opposé (main gauche), si bien que « plus aigu » = « doigt de numéro plus grand ».
+  const WSKIP = 1.5, WPOS_SAUT = 0.3;   // doigt sauté (sans contrainte d'empan, on prend les doigts consécutifs) ; décalage de position toléré quand les deux notes ne sont pas voisines
   const WPOS = 2.0, WCROIS = 0.6;   // poids du décalage de position de la main (doigts conjoints, main immobile quand l'empan tient dans la main) ; poids, plafonné, du passage du pouce
-  function pairCost(f1, q1, f2, q2) {
+  // Parncutt : un 3 suivi d'un 4 est une paire peu naturelle (« three-to-four »)
+  function pairCost(f1, q1, f2, q2) { return pairCost0(f1, q1, f2, q2) + (f1 === 3 && f2 === 4 ? 0.5 : 0); }
+  function pairCost0(f1, q1, f2, q2) {
     const dq = q2 - q1, df = f2 - f1, a = Math.abs(dq), m = Math.abs(df);
     if (dq === 0) return f1 === f2 ? 0 : 1;                 // même touche : changer de doigt coûte un peu
     if (df === 0) return 1 + 0.4 * a;                       // même doigt sur une autre touche : saut
@@ -54,6 +57,19 @@
       } else i++;
     }
     const imposed = n => n.finger || n._arp || 0;
+    // Début de phrase : après un silence assez long (≥ 0,45 s) la main a le temps de se déplacer puis de se remettre dans sa position naturelle : la première note se joue au doigt « de départ »
+    // (main droite : 1 si la phrase monte, 5 si elle descend ; main gauche : l'inverse), sans rapport avec le doigt de la note d'avant.
+    const SILENCE = 0.45, NATSTART = 0.5, endOf = x => Math.max.apply(null, x.all.map(n => n.t1));
+    ev.forEach((e, i) => {
+      // début de phrase : un vrai silence, ou un silence plus court mais suivi d'un saut hors de portée de la main (la main est obligée de se déplacer)
+      const gap0 = i ? e.t - endOf(ev[i - 1]) : 0, dist = i ? Math.min.apply(null, e.all.map(n => Math.min.apply(null, ev[i - 1].all.map(m => Math.abs(ux(n.midi) - ux(m.midi)))))) : 0;
+      e.start = i === 0 || gap0 >= SILENCE || (gap0 >= 0.2 && dist > 4.01);
+      if (!e.start) return;
+      let j = i; while (j + 1 < ev.length && ev[j + 1].t - endOf(ev[j]) < 0.2 + 0 && j - i < 8) j++;
+      const hi = x => Math.max.apply(null, x.all.map(q)), lo = x => Math.min.apply(null, x.all.map(q)); let up = 0, down = 0;
+      for (let k = i + 1; k <= j; k++) { up = Math.max(up, hi(ev[k]) - hi(e)); down = Math.max(down, lo(e) - lo(ev[k])); }
+      e.dir = up > down ? 1 : down > up ? -1 : 0;
+    });
     ev.forEach(e => {
       e.all.sort((a, b) => q(a) - q(b));
       e.ns = e.all.slice(0, 5);                              // au-delà de 5 notes simultanées, les autres restent sans doigt
@@ -68,16 +84,20 @@
           const f = S[i]; if (!f) return;
           if (isBlack(n.midi)) c += f === 1 ? 1.0 : f === 5 ? 0.25 : 0; // pouce sur touche noire : court et en retrait, nettement moins confortable
           if (!n.finger) c += f === 4 ? 0.2 : f === 5 ? 0.15 : 0;
+          if (e.start && e.ns.length === 1 && !n.finger) c += NATSTART * (e.dir > 0 ? f - 1 : e.dir < 0 ? 5 - f : 0);
           if (i && S[i - 1]) c += pairCost(S[i - 1], q(e.ns[i - 1]), f, q(n));
           for (let j = 0; j < i; j++) { const fj = S[j]; if (!fj || !f) continue; const df = Math.abs(f - fj), span = Math.abs(q(n) - q(e.ns[j])), mx = [0, 5, 7, 9, 12][Math.min(4, df)] + 0.5; if (span > mx) c += 8 * (span - mx); }   // écart maximal confortable entre deux doigts qui jouent ensemble (demi-tons) : une octave se joue 1-5, jamais 3-5
         });
         return c;
       });
     });
+    // Les notes voisines (trois événements de chaque côté) tiennent-elles dans l'empan de la main (cinq touches blanches) ? Si oui, la main reste immobile : un doigt par touche, quoi qu'il arrive.
+    // Sinon, la main doit se déplacer et on choisit des doigts consécutifs même pour une tierce.
+    ev.forEach((e, i) => { let lo = Infinity, hi = -Infinity; for (let j = Math.max(0, i - 3); j <= Math.min(ev.length - 1, i + 3); j++) ev[j].all.forEach(n => { lo = Math.min(lo, ux(n.midi)); hi = Math.max(hi, ux(n.midi)); }); e.fit = hi - lo <= 4.01; });
     if (!ev.length) return;
     let cost = ev[0].own.slice(), back = [];
     for (let i = 1; i < ev.length; i++) {
-      const p = ev[i - 1], e = ev[i], gap = e.t - p.t1, scale = gap > 0.6 ? 0.25 : 1, nc = [], bk = [];
+      const p = ev[i - 1], e = ev[i], gap = e.t - p.t1, scale = e.start ? 0 : gap > 0.6 ? 0.25 : 1, nc = [], bk = [];
       e.st.forEach((SB, bi) => {
         let best = Infinity, arg = 0;
         p.st.forEach((SA, ai) => {
@@ -92,7 +112,11 @@
             if (e.ns.length === 1) {   // (avant le cas particulier des accords ci-dessous, qui sortirait de la boucle)
               const pa = p.ns[near0], fa0 = SA[near0]; if (pa && fa0) {
                 const dP = (sgn * (ux(n.midi) - ux(pa.midi))) - (fb - fa0), croise = fa0 !== fb && (fa0 === 1 || fb === 1) && (fb - fa0) * (q(n) - q(pa)) < 0;
-                c += scale * (croise ? WCROIS * Math.min(Math.abs(dP), 2) : WPOS * Math.abs(dP));
+                const dxk = Math.abs(ux(n.midi) - ux(pa.midi));   // écart sur le clavier, en touches blanches
+                c += scale * (croise ? WCROIS * Math.min(Math.abs(dP), 2) : (!e.fit && dxk >= 1.9 && dxk > Math.abs(fb - fa0) && Math.abs(q(n) - q(pa)) <= 5 ? WPOS_SAUT : WPOS) * Math.abs(dP));
+                // Aucune contrainte d'empan : les doigts se suivent dans l'ordre (main droite 1 2 3 4 5 en montant et 5 4 3 2 1 en descendant ; main gauche l'inverse) ;
+                // sauter un doigt (1 puis 3 pour une tierce) ne se fait que si l'empan l'impose (les grands intervalles gardent leurs doigtés habituels : 5 puis 1 pour une quarte en descendant)
+                if (!croise && !e.fit && Math.abs(fb - fa0) === 2 && (fb - fa0) * (q(n) - q(pa)) > 0 && Math.abs(q(n) - q(pa)) <= 4) c += scale * WSKIP;   // tierce (4 demi-tons au plus) jouée en sautant un doigt
               }
             }
             if (p.ns.length > 1 || e.ns.length > 1) { const same = SA.findIndex(f => f === fb); if (same >= 0) near = same; else { c += scale * 0.1 * nd; return; } }   // accord : on compare avec la note que CE doigt vient de jouer (la main se déplace d'un bloc) ; un doigt qui n'a pas joué ne « croise » rien : seul le déplacement de la main compte
@@ -101,7 +125,7 @@
             c += scale * (blocs ? 0.15 * Math.abs(q(n) - q(p.ns[near])) : pairCost(fa, q(p.ns[near]), fb, q(n)));
 
             if (fb === 1 && fa !== 1 && isBlack(n.midi)) c += scale * ((fa - fb) * (q(n) - q(p.ns[near])) < 0 ? 1.5 : 0.5); // le pouce qui ARRIVE sur une touche noire (surtout en passant sous la main, en montant) est difficile
-            if (fa === fb && q(p.ns[near]) !== q(n) && !blocs) { const dd = Math.abs(q(n) - q(p.ns[near])); c += gap < 0.15 ? 3 + 0.5 * dd : gap < 1.5 ? 2 + 0.3 * dd : 0; } // même doigt sur une autre touche : saut sans le temps de s'y rendre ; la pénalité reste sensible après une courte pause (jusqu'à 1,5 s) au lieu de s'effacer dès 0,15 s
+            if (fa === fb && q(p.ns[near]) !== q(n) && !blocs) { const dd = Math.abs(q(n) - q(p.ns[near])); c += e.start ? 0 : gap < 0.15 ? 3 + 0.5 * dd : gap < 1.5 ? 2 + 0.3 * dd : 0; } // même doigt sur une autre touche : saut sans le temps de s'y rendre ; la pénalité reste sensible après une courte pause (jusqu'à 1,5 s) au lieu de s'effacer dès 0,15 s
           });
           if (c < best) { best = c; arg = ai; }
         });

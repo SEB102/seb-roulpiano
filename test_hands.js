@@ -254,5 +254,17 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     const f = ns.map(n => n.finger || n.af);
     assert.deepStrictEqual(f.slice(1), [4, 3, 2, 1, 2, 1, 2, 3, 2], 'la si do ré do si la sol la : ' + f.join(' '));
   });
+  await t('Aucune contrainte d\'empan : doigts consécutifs même pour une tierce (la do mi la si, main droite : do 1, mi 2) ; quand tout tient dans la main, un doigt par touche (mi do = 3 1)', () => {
+    const free = mk([69, 60, 64, 69, 71], 0.5); H.assignFingerings(free, 'R');
+    assert.strictEqual(free[1].af, 1, 'do au pouce'); assert.strictEqual(free[2].af, 2, 'mi au 2');
+    const fixed = mk([64, 64, 60, 62, 64, 60], 0.4); H.assignFingerings(fixed, 'R');
+    assert.deepStrictEqual(fixed.map(n => n.af), [3, 3, 1, 2, 3, 1], 'mi mi do ré mi do : la main ne bouge pas');
+  });
+  await t('Début de phrase après un silence : la main se déplace puis reprend sa position naturelle (main droite, phrase qui monte : premier doigt au pouce) — Élise mesure 2 : do 1, mi 2', () => {
+    const N = (m, t0, t1) => ({ midi: m, t0, t1 }), ns = [N(72, 1.75, 2), N(69, 2, 2.5), N(60, 2.75, 3), N(64, 3, 3.25), N(69, 3.25, 3.5), N(71, 3.5, 4)];
+    H.assignFingerings(ns, 'R');
+    assert.strictEqual(ns[2].af, 1, 'do (début de phrase qui monte) au pouce'); assert.strictEqual(ns[3].af, 2, 'mi au 2');
+    const lh = [N(55, 0, 0.5), N(57, 0.5, 1)]; H.assignFingerings(lh, 'L'); assert.strictEqual(lh[0].af, 5, 'main gauche, phrase qui monte : départ au 5');
+  });
   console.log(`\n${n} tests passés`);
 })();
