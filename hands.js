@@ -18,7 +18,9 @@
   const WSKIP = 1.5, WPOS_SAUT = 0.3;   // doigt sauté (sans contrainte d'empan, on prend les doigts consécutifs) ; décalage de position toléré quand les deux notes ne sont pas voisines
   const WPOS = 2.0, WCROIS = 0.6;   // poids du décalage de position de la main (doigts conjoints, main immobile quand l'empan tient dans la main) ; poids, plafonné, du passage du pouce
   // Parncutt : un 3 suivi d'un 4 est une paire peu naturelle (« three-to-four »)
-  function pairCost(f1, q1, f2, q2) { return pairCost0(f1, q1, f2, q2) + (f1 === 3 && f2 === 4 ? 0.5 : 0); }
+  // Le 2 et le 3 (index et majeur) sont physiologiquement liés : un écart de notes non conjointes (3 demi-tons ou plus) entre eux est coûteux ; le 2 et le 4 sont à l'aise sur cet écart.
+  function pairCost(f1, q1, f2, q2) { return pairCost0(f1, q1, f2, q2) + (f1 === 3 && f2 === 4 ? 0.5 : 0) + (((f1 === 2 && f2 === 3) || (f1 === 3 && f2 === 2)) && Math.abs(q2 - q1) >= 3 ? WDEUXTROIS : 0); }
+  const WDEUXTROIS = 1.2;
   function pairCost0(f1, q1, f2, q2) {
     const dq = q2 - q1, df = f2 - f1, a = Math.abs(dq), m = Math.abs(df);
     if (dq === 0) return f1 === f2 ? 0 : 1;                 // même touche : changer de doigt coûte un peu
@@ -70,6 +72,17 @@
       for (let k = i + 1; k <= j; k++) { up = Math.max(up, hi(ev[k]) - hi(e)); down = Math.max(down, lo(e) - lo(ev[k])); }
       e.dir = up > down ? 1 : down > up ? -1 : 0;
     });
+    // Utiliser tout l'empan de la main : une montée (ou descente) de trois notes ou plus, qui dépasse la position fixe (5 touches blanches) mais tient dans la main (au plus 9 demi-tons),
+    // commence par le premier doigt « naturel » et finit par le dernier (main droite en montant : 1 … 5 ; en descendant : 5 … 1 ; main gauche : l'inverse).
+    const SPANW = 2.0;
+    for (let i = 0; i < ev.length; ) {
+      if (ev[i].all.length !== 1) { i++; continue; }
+      let j = i, d = 0;
+      while (j + 1 < ev.length && ev[j + 1].all.length === 1 && ev[j + 1].t - endOf(ev[j]) < SILENCE) { const dd = Math.sign(q(ev[j + 1].all[0]) - q(ev[j].all[0])); if (!dd || (d && dd !== d)) break; d = dd; j++; }
+      const sp = Math.abs(q(ev[j].all[0]) - q(ev[i].all[0]));
+      if (j - i >= 2 && sp >= 5 && sp <= 9 && Math.abs(ux(ev[j].all[0].midi) - ux(ev[i].all[0].midi)) > 4.01) { ev[i].runFirst = d; ev[j].runLast = d; for (let k = i; k <= j; k++) { ev[k].span = true; ev[k].runK = k - i; ev[k].runM = j - i; } }
+      i = j > i ? j : i + 1;
+    }
     ev.forEach(e => {
       e.all.sort((a, b) => q(a) - q(b));
       e.ns = e.all.slice(0, 5);                              // au-delà de 5 notes simultanées, les autres restent sans doigt
@@ -84,6 +97,7 @@
           const f = S[i]; if (!f) return;
           if (isBlack(n.midi)) c += f === 1 ? 1.0 : f === 5 ? 0.25 : 0; // pouce sur touche noire : court et en retrait, nettement moins confortable
           if (!n.finger) c += f === 4 ? 0.2 : f === 5 ? 0.15 : 0;
+          if (e.ns.length === 1 && !n.finger) { if (e.runFirst) c += SPANW * (e.runFirst > 0 ? f - 1 : 5 - f); if (e.runLast) c += SPANW * (e.runLast > 0 ? 5 - f : f - 1); }
           if (e.start && e.ns.length === 1 && !n.finger) c += NATSTART * (e.dir > 0 ? f - 1 : e.dir < 0 ? 5 - f : 0);
           if (i && S[i - 1]) c += pairCost(S[i - 1], q(e.ns[i - 1]), f, q(n));
           for (let j = 0; j < i; j++) { const fj = S[j]; if (!fj || !f) continue; const df = Math.abs(f - fj), span = Math.abs(q(n) - q(e.ns[j])), mx = [0, 5, 7, 9, 12][Math.min(4, df)] + 0.5; if (span > mx) c += 8 * (span - mx); }   // écart maximal confortable entre deux doigts qui jouent ensemble (demi-tons) : une octave se joue 1-5, jamais 3-5
@@ -116,7 +130,9 @@
                 c += scale * (croise ? WCROIS * Math.min(Math.abs(dP), 2) : (!e.fit && dxk >= 1.9 && dxk > Math.abs(fb - fa0) && Math.abs(q(n) - q(pa)) <= 5 ? WPOS_SAUT : WPOS) * Math.abs(dP));
                 // Aucune contrainte d'empan : les doigts se suivent dans l'ordre (main droite 1 2 3 4 5 en montant et 5 4 3 2 1 en descendant ; main gauche l'inverse) ;
                 // sauter un doigt (1 puis 3 pour une tierce) ne se fait que si l'empan l'impose (les grands intervalles gardent leurs doigtés habituels : 5 puis 1 pour une quarte en descendant)
-                if (!croise && !e.fit && Math.abs(fb - fa0) === 2 && (fb - fa0) * (q(n) - q(pa)) > 0 && Math.abs(q(n) - q(pa)) <= 4) c += scale * WSKIP;   // tierce (4 demi-tons au plus) jouée en sautant un doigt
+                // dans une montée qui utilise tout l'empan, un doigt doit être sauté quelque part : jamais sur un demi-ton ou un ton, plutôt sur l'intervalle le plus étroit (tierce mineure avant tierce majeure)
+                if (!croise && e.span && Math.abs(fb - fa0) === 2 && (fb - fa0) * (q(n) - q(pa)) > 0) { const aa = Math.abs(q(n) - q(pa)); c += scale * (aa <= 2 ? 3.0 : 0.3 * aa + 0.5 * (e.runM - e.runK)); }   // jamais de doigt sauté sur un demi-ton ou un ton ; les doigts conjoints d'abord, le doigt sauté le plus tard possible (1 2 4 5 plutôt que 1 3 4 5)
+                if (!croise && !e.fit && !e.span && Math.abs(fb - fa0) === 2 && (fb - fa0) * (q(n) - q(pa)) > 0 && Math.abs(q(n) - q(pa)) <= 4) c += scale * WSKIP;   // tierce (4 demi-tons au plus) jouée en sautant un doigt
               }
             }
             if (p.ns.length > 1 || e.ns.length > 1) { const same = SA.findIndex(f => f === fb); if (same >= 0) near = same; else { c += scale * 0.1 * nd; return; } }   // accord : on compare avec la note que CE doigt vient de jouer (la main se déplace d'un bloc) ; un doigt qui n'a pas joué ne « croise » rien : seul le déplacement de la main compte

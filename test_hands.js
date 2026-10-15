@@ -266,5 +266,10 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     assert.strictEqual(ns[2].af, 1, 'do (début de phrase qui monte) au pouce'); assert.strictEqual(ns[3].af, 2, 'mi au 2');
     const lh = [N(55, 0, 0.5), N(57, 0.5, 1)]; H.assignFingerings(lh, 'L'); assert.strictEqual(lh[0].af, 5, 'main gauche, phrase qui monte : départ au 5');
   });
+  await t('Utiliser tout l\'empan de la main : mi sol♯ si do (montée de 8 demi-tons, main droite) = 1 2 4 5, le doigt sauté l\'étant sur la tierce mineure, jamais sur le demi-ton', () => {
+    const N = (m, t0, t1) => ({ midi: m, t0, t1 }), ns = [N(71, 3.5, 4), N(64, 4.25, 4.5), N(68, 4.5, 4.75), N(71, 4.75, 5), N(72, 5, 5.5), N(76, 6, 6.25)];
+    H.assignFingerings(ns, 'R');
+    assert.deepStrictEqual(ns.slice(1, 5).map(n => n.af), [1, 2, 4, 5], 'mi sol♯ si do : ' + ns.map(n => n.af).join(' '));
+  });
   console.log(`\n${n} tests passés`);
 })();
