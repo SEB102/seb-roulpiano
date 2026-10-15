@@ -271,8 +271,9 @@ const View3D = (() => {
       P.forEach(q => { const l = gs[gs.length - 1]; if (l && q.a - l.a < 0.03) l.ps.push(q); else gs.push({ a: q.a, ps: [q] }); });
       const med = v => { const w = v.slice().sort((x, y) => x - y); return w[w.length >> 1]; }, anc = g => med(g.ps.map(q => q.u - sg * (q.f - 1)));
       const seg = [];
-      gs.forEach(g => { const A = anc(g), l = seg[seg.length - 1]; if (l && Math.abs(A - med(l.As)) <= 0.9) { l.As.push(A); l.t1 = Math.max(l.t1, ...g.ps.map(q => q.b)); l.last = g; l.gs.push(g); } else seg.push({ As: [A], t0: g.a, t1: Math.max(...g.ps.map(q => q.b)), first: g, last: g, gs: [g] }); });
-      seg.forEach((q, i) => { q.A = med(q.As); q.nat = null; if (i) { const pp = seg[i - 1].last.ps, pf = q.first.ps; const th1 = pf.find(r => r.f === 1), th0 = pp.find(r => r.f === 1); q.pivotX = th1 ? th1.u : th0 ? th0.u : null; q.pivotMode = th1 ? 'after' : th0 ? 'before' : null; q.thA = th0 ? th0.a : 0; q.prevPr = pp.find(r => r.f > 1); } });   // pivotX : abscisse du pouce autour duquel la main bascule (passage du pouce) ; null : simple déplacement
+      gs.forEach(g => { const A = anc(g), l = seg[seg.length - 1]; if (l && Math.abs(A - med(l.As)) <= 1.6) { l.As.push(A); l.t1 = Math.max(l.t1, ...g.ps.map(q => q.b)); l.last = g; l.gs.push(g); } else seg.push({ As: [A], t0: g.a, t1: Math.max(...g.ps.map(q => q.b)), first: g, last: g, gs: [g] }); });
+      // une vraie bascule autour du pouce (pivotX) ne se fait que pour un passage d'au moins 2,5 touches ; en dessous, la main glisse simplement
+      seg.forEach((q, i) => { q.A = med(q.As); q.nat = null; if (i) { const pp = seg[i - 1].last.ps, pf = q.first.ps; const th1 = pf.find(r => r.f === 1), th0 = pp.find(r => r.f === 1); q.pivotX = Math.abs(q.A - seg[i - 1].A) < 2.5 ? null : th1 ? th1.u : th0 ? th0.u : null; q.pivotMode = th1 ? 'after' : th0 ? 'before' : null; q.thA = th0 ? th0.a : 0; q.prevPr = pp.find(r => r.f > 1); } });   // pivotX : abscisse du pouce autour duquel la main bascule (passage du pouce) ; null : simple déplacement
       const KF = { pl, seg };
       KF.at = k => { if (k < 0 || k >= seg.length) return null; const q = seg[k]; if (!q.nat) q.nat = handBody(h, 0.5 * (q.t0 + q.t1), true, true, false, {}, KF, { A: q.A }); return q.nat; };
       return (Hh.kf = KF);
@@ -410,7 +411,7 @@ const View3D = (() => {
             else if (el < 0.3) { const dD = memo(cur, 'dD', () => reach(Kp, xT, cur.first.ps.find(r => r.f > 1))); base = lp(rotA(Kp, dD, xT, zT), Kc, sm(el / 0.3)); }
           }
           if (!nxt) base = lp(base, restP, sm((sp - relax) / 0.5));
-          else if (nxt.t0 - relax < 1.2) {
+          else if (nxt.t0 - relax < 3.0) {
             if (nxt.pivotX === null) { const tr = Math.max(0.08, Math.min(0.3, 0.8 * (nxt.t0 - cur.t0))); base = lp(base, Kn, sm((sp - (nxt.t0 - tr)) / tr)); }   // saut sans passage du pouce : la main glisse vers la position suivante avant la note
             else if (nxt.pivotMode === 'after') { const dA = memo(nxt, 'dA', () => reach(Kn, nxt.pivotX, nxt.prevPr)), tA = cur.last.a, dur = nxt.t0 - tA; base = lp(base, rotA(Kn, dA, nxt.pivotX, zT), sm((sp - (tA + 0.05)) / (0.85 * dur))); }
             else if (nxt.pivotMode === 'before' && sp >= nxt.thA) { const dD = memo(nxt, 'dD', () => reach(Kc, nxt.pivotX, nxt.first.ps.find(r => r.f > 1))), dur = nxt.t0 - nxt.thA; base = rotA(Kc, dD * sm((sp - nxt.thA) / (0.8 * dur)), nxt.pivotX, zT); }
