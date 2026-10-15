@@ -15,6 +15,7 @@
 
   // ---------- Doigtés automatiques (programmation dynamique, coût inspiré de Parncutt) ----------
   // Tout est ramené à la main droite : q = hauteur (main droite) ou son opposé (main gauche), si bien que « plus aigu » = « doigt de numéro plus grand ».
+  const WPOS = 2.0, WCROIS = 0.6;   // poids du décalage de position de la main (doigts conjoints, main immobile quand l'empan tient dans la main) ; poids, plafonné, du passage du pouce
   function pairCost(f1, q1, f2, q2) {
     const dq = q2 - q1, df = f2 - f1, a = Math.abs(dq), m = Math.abs(df);
     if (dq === 0) return f1 === f2 ? 0 : 1;                 // même touche : changer de doigt coûte un peu
@@ -84,10 +85,21 @@
           e.ns.forEach((n, j) => {
             const fb = SB[j]; if (!fb) return;
             let near = 0, nd = Infinity; p.ns.forEach((m, x) => { const d = Math.abs(q(m) - q(n)); if (d < nd) { nd = d; near = x; } });
+            const near0 = near;   // note la plus proche de l'événement précédent : sert de repère de position de la main même quand l'événement précédent est un accord
+            // Position de la main : la main ne bouge pas tant que les doigts « suivent » les touches (un pas conjoint sur le clavier = un doigt conjoint). Le décalage de position
+            // est l'écart entre le déplacement sur le clavier (en touches blanches) et le changement de doigt ; il vaut 0 pour 1-2-3-4-5 sur cinq touches voisines. Le passage du pouce
+            // (sous la main ou par-dessus) déplace la position d'un coup : son coût est plafonné, il n'est payé qu'une fois, puis la règle des doigts conjoints reprend.
+            if (e.ns.length === 1) {   // (avant le cas particulier des accords ci-dessous, qui sortirait de la boucle)
+              const pa = p.ns[near0], fa0 = SA[near0]; if (pa && fa0) {
+                const dP = (sgn * (ux(n.midi) - ux(pa.midi))) - (fb - fa0), croise = fa0 !== fb && (fa0 === 1 || fb === 1) && (fb - fa0) * (q(n) - q(pa)) < 0;
+                c += scale * (croise ? WCROIS * Math.min(Math.abs(dP), 2) : WPOS * Math.abs(dP));
+              }
+            }
             if (p.ns.length > 1 || e.ns.length > 1) { const same = SA.findIndex(f => f === fb); if (same >= 0) near = same; else { c += scale * 0.1 * nd; return; } }   // accord : on compare avec la note que CE doigt vient de jouer (la main se déplace d'un bloc) ; un doigt qui n'a pas joué ne « croise » rien : seul le déplacement de la main compte
             const fa = SA[near]; if (!fa) return;
             const blocs = p.ns.length > 1 && e.ns.length > 1 && fa === fb;   // accord → accord avec le même doigt : toute la main se déplace d'un bloc, ce n'est pas un saut de doigt isolé
             c += scale * (blocs ? 0.15 * Math.abs(q(n) - q(p.ns[near])) : pairCost(fa, q(p.ns[near]), fb, q(n)));
+
             if (fb === 1 && fa !== 1 && isBlack(n.midi)) c += scale * ((fa - fb) * (q(n) - q(p.ns[near])) < 0 ? 1.5 : 0.5); // le pouce qui ARRIVE sur une touche noire (surtout en passant sous la main, en montant) est difficile
             if (fa === fb && q(p.ns[near]) !== q(n) && !blocs) { const dd = Math.abs(q(n) - q(p.ns[near])); c += gap < 0.15 ? 3 + 0.5 * dd : gap < 1.5 ? 2 + 0.3 * dd : 0; } // même doigt sur une autre touche : saut sans le temps de s'y rendre ; la pénalité reste sensible après une courte pause (jusqu'à 1,5 s) au lieu de s'effacer dès 0,15 s
           });

@@ -229,5 +229,30 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     assert.ok(g.includes('PianoHands.enforceFingerOrder'), 'handGeometry (2D) doit appeler PianoHands.enforceFingerOrder');
     assert.ok(v3.includes('PianoHands.enforceFingerOrder'), 'view3d.js doit appeler PianoHands.enforceFingerOrder');
   });
+  await t('Doigtés conjoints, main immobile : do ré mi fa sol (main droite) = 1 2 3 4 5, quel que soit l\'ordre des notes ; sol → fa = 5 → 4', () => {
+    const seq = [67, 65, 64, 62, 60, 62, 64, 65, 67, 67, 65, 64, 60];   // sol fa mi ré do ré mi fa sol sol fa mi do : l'empan (do–sol) tient dans la main
+    const ns = mk(seq, 0.4); H.assignFingerings(ns, 'R');
+    const want = { 60: 1, 62: 2, 64: 3, 65: 4, 67: 5 };
+    ns.forEach(n => assert.strictEqual(n.af, want[n.midi], 'midi ' + n.midi + ' doit être au doigt ' + want[n.midi] + ', obtenu ' + n.af));
+    const withImposed = mk([64, 62, 64, 65, 67], 0.4); withImposed[0].finger = 3; withImposed[4].finger = 5; H.assignFingerings(withImposed, 'R');
+    assert.deepStrictEqual(withImposed.map(n => n.finger || n.af), [3, 2, 3, 4, 5], 'mi[3] ré mi fa sol[5] : la main ne bouge pas');
+  });
+  await t('Doigtés conjoints, main gauche : sol la si do ré = 5 4 3 2 1 ; et début de la Lettre à Élise = 5 4 5 4 5 1 3 2 1', () => {
+    const lh = mk([55, 57, 59, 60, 62], 0.4); H.assignFingerings(lh, 'L');
+    assert.deepStrictEqual(lh.map(n => n.af), [5, 4, 3, 2, 1]);
+    const el = mk([76, 75, 76, 75, 76, 71, 74, 72, 69], 0.25); H.assignFingerings(el, 'R');
+    assert.deepStrictEqual(el.slice(0, 5).map(n => n.af), [5, 4, 5, 4, 5], 'mi ré♯ mi ré♯ mi aux doigts 5 4 5 4 5');
+  });
+  await t('Passage du pouce : une gamme de do majeur montante (main droite) passe le pouce après le 3 (1 2 3 1 2 3 4 5), puis les doigts redeviennent conjoints', () => {
+    const sc = mk([60, 62, 64, 65, 67, 69, 71, 72], 0.3); H.assignFingerings(sc, 'R');
+    assert.deepStrictEqual(sc.map(n => n.af), [1, 2, 3, 1, 2, 3, 4, 5]);
+  });
+  await t('Goldberg (exemple), main gauche mesure 1 : 5 4 3 2 (4+1) 2 1 2 3 2 — sol la si do, puis fa♯[4] tenu + ré au pouce, do 2, si 1, la 2, sol 3, la 2', async () => {
+    const s = await C.loadSong('g.musicxml', fs.readFileSync(__dirname + '/exemple-goldberg.musicxml'));
+    ['L', 'R'].forEach(h => H.assignFingerings(s.notes.filter(n => (n.hand || 'R') === h), h));
+    const m = s.measures.find(x => x.label === '1'), ns = s.notes.filter(n => (n.fh || n.hand || 'R') === 'L' && n.voice === 5 && n.tick >= m.startTick && n.tick < m.startTick + m.lenTick).sort((a, b) => a.tick - b.tick);
+    const f = ns.map(n => n.finger || n.af);
+    assert.deepStrictEqual(f.slice(1), [4, 3, 2, 1, 2, 1, 2, 3, 2], 'la si do ré do si la sol la : ' + f.join(' '));
+  });
   console.log(`\n${n} tests passés`);
 })();
