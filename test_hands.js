@@ -271,5 +271,12 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     H.assignFingerings(ns, 'R');
     assert.deepStrictEqual(ns.slice(1, 5).map(n => n.af), [1, 2, 4, 5], 'mi sol♯ si do : ' + ns.map(n => n.af).join(' '));
   });
+  await t('Notes répétées : le même doigt est interdit sur une suite en valeurs courtes, permis en valeurs longues ; do ré do : les deux do au même doigt', () => {
+    const mk2 = (ms, step, dur) => ms.map((m, i) => ({ midi: m, t0: i * step, t1: i * step + dur }));
+    const fast = mk2([60, 60, 60, 60], 0.15, 0.1); H.assignFingerings(fast, 'R');
+    for (let i = 1; i < fast.length; i++) assert.notStrictEqual(fast[i].af, fast[i - 1].af, 'do répétés vite : changer de doigt à chaque note');
+    const slow = mk2([60, 60], 1, 0.9); H.assignFingerings(slow, 'R'); assert.strictEqual(slow[0].af, slow[1].af, 'do do lents : le même doigt');
+    const back = mk2([60, 62, 60], 0.5, 0.4); H.assignFingerings(back, 'R'); assert.strictEqual(back[0].af, back[2].af, 'do ré do : les deux do au même doigt');
+  });
   console.log(`\n${n} tests passés`);
 })();
