@@ -26,7 +26,7 @@
     if (dq === 0) return f1 === f2 ? 0 : 1;                 // même touche : changer de doigt coûte un peu
     if (df === 0) return 1 + 0.4 * a;                       // même doigt sur une autre touche : saut
     if (df * dq > 0) { const lo = m, hi = 2.2 * m + 1; return a < lo ? (lo - a) * 0.5 : a > hi ? (a - hi) * 0.9 : 0; } // sens naturel : écart confortable
-    const far = a > 5 ? (a - 5) * 0.6 : 0;
+    const far = a > 8 ? 40 : a > 5 ? (a - 5) * 0.6 : 0;   // passage du pouce : au-delà de huit demi-tons, c'est impossible (le pouce passe sous la main par pas conjoints)
     if (f2 === 1) return ({ 2: 1.6, 3: 0.3, 4: 0.8, 5: 2.5 }[f1] || 3) + far; // le pouce passe sous la main
     if (f1 === 1) return ({ 2: 1.2, 3: 0.3, 4: 0.8, 5: 2.8 }[f2] || 3) + far; // un doigt passe par-dessus le pouce
     return 40 + a * 0.2;                                    // croisement sans le pouce : pratiquement interdit (seul le pouce passe sous / par-dessus)
