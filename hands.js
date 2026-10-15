@@ -21,11 +21,15 @@
   // Le 2 et le 3 (index et majeur) sont physiologiquement liés : un écart de notes non conjointes (3 demi-tons ou plus) entre eux est coûteux ; le 2 et le 4 sont à l'aise sur cet écart.
   function pairCost(f1, q1, f2, q2) { return pairCost0(f1, q1, f2, q2) + (f1 === 3 && f2 === 4 ? 0.5 : 0) + (((f1 === 2 && f2 === 3) || (f1 === 3 && f2 === 2)) && Math.abs(q2 - q1) >= 3 ? WDEUXTROIS : 0); }
   const WDEUXTROIS = 1.2;
+  // Règles de Parncutt et al. 1997 : nombre de changements de position (un point fixe par déplacement de la main, quelle que soit sa taille) et « 3-4-5 » (trois notes de suite jouées par les doigts 3, 4 et 5 : les trois doigts les moins indépendants)
+  const WCOUNT = 0.1, W345 = 0.3;   // poids volontairement faibles : plus forts, ils défont des doigtés validés (gamme de do 1 2 3 1 2 3 4 5 contient un 3-4-5 ; mi sol♯ si do = 1 2 4 5)
+  // Taille de la main : les écarts confortables entre deux doigts sont multipliés par ce facteur (petite 0,85 ; moyenne 1 ; grande 1,15)
+  let HS = 1; function setHandSize(v) { HS = clamp(+v || 1, 0.7, 1.3); } function getHandSize() { return HS; }
   function pairCost0(f1, q1, f2, q2) {
     const dq = q2 - q1, df = f2 - f1, a = Math.abs(dq), m = Math.abs(df);
     if (dq === 0) return f1 === f2 ? 0 : 1;                 // même touche : changer de doigt coûte un peu
     if (df === 0) return 1 + 0.4 * a;                       // même doigt sur une autre touche : saut
-    if (df * dq > 0) { const lo = m, hi = 2.2 * m + 1; return a < lo ? (lo - a) * 0.5 : a > hi ? (a - hi) * 0.9 : 0; } // sens naturel : écart confortable
+    if (df * dq > 0) { const lo = m, hi = (2.2 * m + 1) * HS; return a < lo ? (lo - a) * 0.5 : a > hi ? (a - hi) * 0.9 : 0; } // sens naturel : écart confortable
     const far = a > 8 ? 40 : a > 5 ? (a - 5) * 0.6 : 0;   // passage du pouce : au-delà de huit demi-tons, c'est impossible (le pouce passe sous la main par pas conjoints)
     if (f2 === 1) return ({ 2: 1.6, 3: 0.3, 4: 0.8, 5: 2.5 }[f1] || 3) + far; // le pouce passe sous la main
     if (f1 === 1) return ({ 2: 1.2, 3: 0.3, 4: 0.8, 5: 2.8 }[f2] || 3) + far; // un doigt passe par-dessus le pouce
@@ -100,7 +104,7 @@
           if (e.ns.length === 1 && !n.finger) { if (e.runFirst) c += SPANW * (e.runFirst > 0 ? f - 1 : 5 - f); if (e.runLast) c += SPANW * (e.runLast > 0 ? 5 - f : f - 1); }
           if (e.start && e.ns.length === 1 && !n.finger) c += NATSTART * (e.dir > 0 ? f - 1 : e.dir < 0 ? 5 - f : 0);
           if (i && S[i - 1]) c += pairCost(S[i - 1], q(e.ns[i - 1]), f, q(n));
-          for (let j = 0; j < i; j++) { const fj = S[j]; if (!fj || !f) continue; const df = Math.abs(f - fj), span = Math.abs(q(n) - q(e.ns[j])), mx = [0, 5, 7, 9, 12][Math.min(4, df)] + 0.5; if (span > mx) c += 8 * (span - mx); }   // écart maximal confortable entre deux doigts qui jouent ensemble (demi-tons) : une octave se joue 1-5, jamais 3-5
+          for (let j = 0; j < i; j++) { const fj = S[j]; if (!fj || !f) continue; const df = Math.abs(f - fj), span = Math.abs(q(n) - q(e.ns[j])), mx = [0, 5, 7, 9, 12][Math.min(4, df)] * HS + 0.5; if (span > mx) c += 8 * (span - mx); }   // écart maximal confortable entre deux doigts qui jouent ensemble (demi-tons) : une octave se joue 1-5, jamais 3-5
         });
         return c;
       });
@@ -131,6 +135,7 @@
                 const dP = (sgn * (ux(n.midi) - ux(pa.midi))) - (fb - fa0), croise = fa0 !== fb && (fa0 === 1 || fb === 1) && (fb - fa0) * (q(n) - q(pa)) < 0;
                 const dxk = Math.abs(ux(n.midi) - ux(pa.midi));   // écart sur le clavier, en touches blanches
                 c += scale * (croise ? WCROIS * Math.min(Math.abs(dP), 2) : (!e.fit && dxk >= 1.9 && dxk > Math.abs(fb - fa0) && Math.abs(q(n) - q(pa)) <= 5 ? WPOS_SAUT : WPOS) * Math.abs(dP));
+                if (Math.abs(dP) >= 0.9) c += scale * WCOUNT;   // nombre de changements de position (Parncutt) : chaque déplacement de la main coûte un point fixe, en plus de sa taille
                 // Aucune contrainte d'empan : les doigts se suivent dans l'ordre (main droite 1 2 3 4 5 en montant et 5 4 3 2 1 en descendant ; main gauche l'inverse) ;
                 // sauter un doigt (1 puis 3 pour une tierce) ne se fait que si l'empan l'impose (les grands intervalles gardent leurs doigtés habituels : 5 puis 1 pour une quarte en descendant)
                 // dans une montée qui utilise tout l'empan, un doigt doit être sauté quelque part : jamais sur un demi-ton ou un ton, plutôt sur l'intervalle le plus étroit (tierce mineure avant tierce majeure)
@@ -146,6 +151,9 @@
             if (fb === 1 && fa !== 1 && isBlack(n.midi)) c += scale * ((fa - fb) * (q(n) - q(p.ns[near])) < 0 ? 1.5 : 0.5); // le pouce qui ARRIVE sur une touche noire (surtout en passant sous la main, en montant) est difficile
             if (fa === fb && q(p.ns[near]) !== q(n) && !blocs) { const dd = Math.abs(q(n) - q(p.ns[near])); c += e.start ? 0 : gap < 0.15 ? 3 + 0.5 * dd : gap < 1.5 ? 2 + 0.3 * dd : 0; } // même doigt sur une autre touche : saut sans le temps de s'y rendre ; la pénalité reste sensible après une courte pause (jusqu'à 1,5 s) au lieu de s'effacer dès 0,15 s
           });
+          if (i >= 2 && e.ns.length === 1 && p.ns.length === 1 && ev[i - 2].ns.length === 1 && SB[0] && SA[0]) {   // 3-4-5 (Parncutt) : trois notes de suite jouées par les doigts 3, 4 et 5, dans un ordre quelconque ; le doigt de l'événement d'avant est celui du meilleur chemin qui arrive à SA
+            const fAA = ev[i - 2].st[back[i - 2][ai]][0]; if (fAA && fAA !== SA[0] && SA[0] !== SB[0] && fAA !== SB[0] && fAA >= 3 && SA[0] >= 3 && SB[0] >= 3) c += scale * W345;
+          }
           if (c < best) { best = c; arg = ai; }
         });
         nc.push(best + e.own[bi]); bk.push(arg);
@@ -392,5 +400,5 @@
     return { pairs, copied: k, total: S.length, stop: T.length < S.length ? 'plus assez de notes à la destination' : null, fromHand, toHand };
   }
   const FINGER_GAP = 0.62;   // écart minimal entre deux doigts voisins, en largeurs de touche
-  return { pasteFingerings, ux, isBlack, pairCost, assignFingerings, buildPlan, intervalName, enforceFingerOrder, FINGER_GAP };
+  return { pasteFingerings, ux, isBlack, pairCost, assignFingerings, setHandSize, getHandSize, buildPlan, intervalName, enforceFingerOrder, FINGER_GAP };
 });

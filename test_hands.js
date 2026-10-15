@@ -278,5 +278,11 @@ const near = (a, b, e = 1e-6) => assert.ok(Math.abs(a - b) < e, a + ' ≠ ' + b)
     const slow = mk2([60, 60], 1, 0.9); H.assignFingerings(slow, 'R'); assert.strictEqual(slow[0].af, slow[1].af, 'do do lents : le même doigt');
     const back = mk2([60, 62, 60], 0.5, 0.4); H.assignFingerings(back, 'R'); assert.strictEqual(back[0].af, back[2].af, 'do ré do : les deux do au même doigt');
   });
+  await t('Taille de la main (Parncutt) : un écart de 7 demi-tons entre le pouce et le 3 coûte plus à une petite main qu\'à une grande ; la main moyenne est la valeur par défaut', () => {
+    const c = () => H.pairCost(1, 60, 3, 67);
+    assert.strictEqual(H.getHandSize(), 1); const moy = c();
+    H.setHandSize(0.85); const pet = c(); H.setHandSize(1.15); const gde = c(); H.setHandSize(1);
+    assert.ok(pet > moy && moy > gde, 'petite ' + pet + ' > moyenne ' + moy + ' > grande ' + gde);
+  });
   console.log(`\n${n} tests passés`);
 })();

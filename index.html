@@ -90,7 +90,7 @@
 <script src="piano-samples.js?v=7c866312"></script>   <!-- échantillons du piano (Salamander, CC BY 3.0) intégrés : aucun téléchargement -->
 <script src="view3d.js?v=a87506f0"></script>
 <script src="core.js?v=781c2873"></script>
-<script src="hands.js?v=06e5a07e"></script>
+<script src="hands.js?v=7bb22c2b"></script>
 <script src="hands_legacy.js?v=f03dbe32"></script>
 </head>
 <body>
@@ -176,6 +176,7 @@
     <div class="grp"><div id="fingMode" class="seg" role="group" aria-label="Affichage des doigtés" title="Pour saisir un doigté : cliquer sur une note."><span class="seglab">🖐</span><button data-m="off">Masquer les doigtés</button><button data-m="simple">Doigtés simples</button><button data-m="illus">Doigtés illustrés</button></div><button id="fingExp" title="Exporter la partition avec vos doigtés (fichier MusicXML : s'ouvre dans MuseScore, qui peut l'enregistrer en .mscz). Disponible pour les fichiers MusicXML / .mxl">⤓ partition</button><button id="fingImp" title="Importer des doigtés depuis un fichier (remplace les actuels)">⤒</button><input id="fingFile" type="file" accept=".json,application/json"></div>
     <button id="hands" class="pressed" style="display:none" title="Afficher les mains virtuelles sur le clavier : on voit les doigts jouer, le pouce passer sous la main, les mains se croiser">🖐 Mains virtuelles</button>
     <label class="chk" title="Pour les notes sans doigté, l'application propose un doigté plausible (utilisé pour animer les mains ; vos doigtés saisis ou ceux du fichier sont toujours respectés)"><input type="checkbox" id="autoFing" checked> doigtés auto</label>
+    <label class="chk" title="Taille de la main : adapte les écarts confortables entre doigts utilisés pour calculer les doigtés (petite main = écarts plus courts)">main <select id="handSize"><option value="0.85">petite</option><option value="1" selected>moyenne</option><option value="1.15">grande</option></select></label>
     <span class="legend" title="La couleur suit la main du doigté (modifiable note par note) : bleu = main gauche, orange = main droite"><span class="sw" style="background:var(--L)"></span>M.G.
       <span class="sw" style="background:var(--R);margin-left:10px"></span>M.D.</span>
   </div>
@@ -519,6 +520,7 @@ $('speed1').onclick = () => setSpeed(1);
 $('speedq').onclick = () => setSpeed(0.25); $('speedh').onclick = () => setSpeed(0.5);
 $('hands').onclick = () => { showHands = !showHands; $('hands').classList.toggle('pressed', showHands); };
 $('autoFing').onchange = e => { autoFing = e.target.checked; markPlan(); };
+$('handSize').onchange = e => { PianoHands.setHandSize(e.target.value); markPlan(); };
 // ---------- Doigtés ----------
 // Source : doigtés inscrits dans le MusicXML (n.fileFinger) + saisie manuelle (song.manual, mémorisée par morceau dans le navigateur).
 let fingMode = 'simple', lastOn = 'simple', showFing = true, fingIllus = false, selNote = null; const hit = [];

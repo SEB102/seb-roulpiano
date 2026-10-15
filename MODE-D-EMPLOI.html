@@ -298,6 +298,7 @@
 <p>On choisit sur toute la phrase, pas note après note : le calcul compare tous les doigtés possibles d'un passage et garde celui dont le coût total est le plus bas, au lieu de décider note par note. Si une montée commence au doigt numéro 3 de la main droite, le calcul sait qu'il lui faudra le pouce plus haut, et le prévoit à l'avance.</p>
 <p>Les règles sont classées de la plus importante à la moins importante. Les premières sont des contraintes : elles écartent d'office certains doigtés. Les suivantes sont des coûts : chaque doigté reçoit des points de difficulté, qui s'additionnent sur toute la phrase, et le doigté qui en a le moins est retenu.</p>
 <p>L'échelle des poids : 0 point ne coûte rien (le doigté est naturel). Autour de 0,1 à 0,5 point, c'est un détail (un doigt faible, un écart un peu grand). Autour de 1 à 2 points, c'est franchement gênant (un doigt sauté, un décalage de la main d'une ou deux touches). À partir de 3 points, le doigté est mauvais. 40 points, c'est pratiquement interdit. Ces points n'ont pas d'unité : seuls comptent leurs rapports. Le doigté retenu est celui dont le total est le plus bas, une règle de 2 points compte donc autant que quatre règles de 0,5 point.</p>
+<p>La taille de la main se règle dans la barre d'outils (petite, moyenne, grande) : elle multiplie les écarts jugés confortables entre deux doigts (règles 15 et 19) par 0,85, 1 ou 1,15. Une petite main évite les grands écarts, une grande main les tolère.</p>
 <table>
 <tr><th>N°</th><th>Règle</th><th>Poids</th><th>Exemples</th></tr>
 <tr><td>1</td><td>Le doigté écrit passe avant tout</td><td>contrainte absolue</td><td>Dans le Goldberg, la partition n'écrit que quelques doigtés (le 5 du premier sol, le 1 du si) : les autres sont déduits autour d'eux.</td></tr>
@@ -316,7 +317,9 @@
 <tr><td>14</td><td>Passage du pouce</td><td>0,3 à 2,8 ; position plafonnée à 1,2</td><td>Gamme de do majeur, main droite : 1 2 3 puis le pouce sur le fa, 1 2 3 4 5. Goldberg, main gauche : ré (1) do (2), le pouce repasse sous le 2 sur le si, et le la qui suit est joué par le 2.</td></tr>
 <tr><td>15</td><td>Écart confortable entre deux doigts</td><td>0,5 à 0,9 par demi-ton hors zone</td><td>Do et la (9 demi-tons) : pouce et 4, ou 2 et 5, mais pas 2 et 3.</td></tr>
 <tr><td>16</td><td>Doigts faibles et touches noires</td><td>0,15 à 1,5</td><td>Si bémol à la main droite : plutôt 2, 3 ou 4 que le pouce.</td></tr>
-<tr><td>17</td><td>Accords</td><td>écart maximal 5, 7, 9 et 12 demi-tons</td><td>Accord de trois notes à la main gauche : 5 3 1 ou 5 2 1 de la plus grave à la plus aiguë.</td></tr>
+<tr><td>17</td><td>Trois doigts faibles de suite (3-4-5)</td><td>0,3</td><td>Trois notes de suite jouées par les doigts 3, 4 et 5, dans un ordre quelconque, sont évitées quand une autre solution existe. Le poids est faible : la gamme de do majeur (1 2 3 1 2 3 4 5) en contient un et reste le doigté normal.</td></tr>
+<tr><td>18</td><td>Nombre de changements de position</td><td>0,1 par déplacement de la main</td><td>Chaque déplacement de la main coûte un petit point fixe, en plus de la taille du déplacement (règle 8) : deux petits déplacements valent mieux qu'un seul, mais à peine plus qu'un grand.</td></tr>
+<tr><td>19</td><td>Accords</td><td>écart maximal 5, 7, 9 et 12 demi-tons</td><td>Accord de trois notes à la main gauche : 5 3 1 ou 5 2 1 de la plus grave à la plus aiguë.</td></tr>
 </table>
 <p>Références. Les règles « de la littérature » viennent de la modélisation du doigté au clavier :</p>
 <ul>
