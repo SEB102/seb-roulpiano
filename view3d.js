@@ -253,50 +253,16 @@ const View3D = (() => {
     stats.n++;
     // pas de temps pour le lissage (le mouvement est filtré sur ≈ 70 ms ; un saut dans le morceau recale tout d'un coup)
     stats.frameErr = 0;
-    const nowT = performance.now(), dtS = Math.max(0.004, Math.min(0.1, (nowT - (render.lastT || nowT)) / 1000)), JUMP = Math.abs(sp - (render.lastSp === undefined ? sp : render.lastSp)) > 0.4 || !render.lastT || (nowT - render.lastT) > 400, SNAP0 = stats.noSmooth || JUMP, fwdSp = sp >= (render.lastSp === undefined ? sp : render.lastSp), rateSp = Math.abs(sp - (render.lastSp === undefined ? sp : render.lastSp)) / dtS, tau = rateSp < 0.02 ? 0.17 : Math.max(0.17, Math.min(0.6, 0.17 / Math.min(1, Math.max(rateSp, 0.17)))), AL = 1 - Math.exp(-dtS / tau); render.lastT = nowT; render.lastSp = sp;   // lissage ≈ 70 ms à vitesse normale, jusqu'à 0,4 s à basse vitesse : le retard reste ≈ 70 ms de musique et les paliers du choix de pose ne se voient plus
+    const nowT = performance.now(), dtS = Math.max(0.004, Math.min(0.1, (nowT - (render.lastT || nowT)) / 1000)), JUMP = Math.abs(sp - (render.lastSp === undefined ? sp : render.lastSp)) > 0.4 || !render.lastT || (nowT - render.lastT) > 400, SNAP = stats.noSmooth || JUMP, fwdSp = sp >= (render.lastSp === undefined ? sp : render.lastSp), rateSp = Math.abs(sp - (render.lastSp === undefined ? sp : render.lastSp)) / dtS, tau = rateSp < 0.02 ? 0.17 : Math.max(0.17, Math.min(0.6, 0.17 / Math.min(1, Math.max(rateSp, 0.17)))), AL = 1 - Math.exp(-dtS / tau); render.lastT = nowT; render.lastSp = sp;   // lissage ≈ 70 ms à vitesse normale, jusqu'à 0,4 s à basse vitesse : le retard reste ≈ 70 ms de musique et les paliers du choix de pose ne se voient plus
     // mains
-    // ===== Pose de la main par ÉVÉNEMENT (une frappe, ou des frappes simultanées) : elle est calculée à fond UNE fois, au moment de la frappe, puis la main GLISSE d'une pose retenue à la suivante.
-    // Aucune étape de la recherche n'est jamais dessinée : seule la pose finale produit du mouvement.
-    const e01 = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
-    const isCross = (E, k, sg) => { const e = E[k], q = E[k - 1]; return !!(e && q && e.ps.length === 1 && q.ps.length === 1 && e.ps[0].f === 1 && q.ps[0].f >= 2 && sg * (e.ps[0].u - q.ps[0].u) > 0); };
-    const getKF = (h, pl, k) => {
-      const H = hands[h]; if (!H.kf || H.kf.plan !== pl) H.kf = { plan: pl, list: [] };
-      const L = H.kf.list;
-      for (let m = L.length; m <= k; m++) { let prev = null; for (let q = m - 1; q >= 0 && !prev; q--) if (L[q].pose) prev = L[q]; L[m] = solveKF(h, pl, m, prev); }
-      return L[k];
-    };
-    // pose de l'événement k, calculée à fond une seule fois ; la pose précédente sert de repère : tant qu'elle convient (les touches tombent sous les doigts), la main NE BOUGE PAS
-    const solveKF = (h, pl, k, prev) => {
-      const H = hands[h], E = pl.events, e = E[k];
-      const keep = H.kf, snapH = Object.assign({}, H), snapF = H.fingers.map(F => Object.assign({}, F)), holdC = H.hold ? H.hold.slice() : null;
-      H.pose = null; H.kfPrev = prev; H.engKey = null; H.lockQ = null; H.hold = [null, null, null, null, null]; H.lastX = undefined; H.poseS = null;
-      const r = doHand(h, e.t + 0.01, true);
-      Object.assign(H, snapH); H.fingers.forEach((F, i) => Object.assign(F, snapF[i])); H.hold = holdC; H.kf = keep; H.kfPrev = null;
-      return { t: e.t, rel: Math.min(...e.ps.map(q => q.b)), pose: r && r.eng ? r.pose : null, bx: r && r.eng ? r.bx : 0 };
-    };
-    const kfPose = (h, pl, sp, px0) => {   // la pose retenue est ABSOLUE (position de la base sur le clavier) : la main reste en place pendant la tenue, quoi que fasse la paume du plan
-      const out = (P, bx) => Object.assign({}, P, { dx: bx - px0 });
-      const E = pl.events; if (!E || !E.length) return null;
-      let j = 0; while (j < E.length && E[j].t <= sp + 1e-6) j++;
-      const i = j - 1, A = i >= 0 ? getKF(h, pl, i) : null, B = j < E.length ? getKF(h, pl, j) : null;
-      if (!A) return B && B.pose ? out(B.pose, B.bx) : null;
-      if (!A.pose) return null;
-      if (!B || !B.pose) return out(A.pose, A.bx);
-      const w0 = Math.max(A.t + 0.02, A.rel), w1 = Math.max(B.t - 0.01, w0 + 0.02), s = e01((sp - w0) / Math.max(1e-3, w1 - w0)), q = {};
-      for (const k in A.pose) q[k] = A.pose[k] + (B.pose[k] - A.pose[k]) * s;
-      return out(q, A.bx + (B.bx - A.bx) * s);
-    };
-    const doHand = (h, sp, dry) => {
-      const SNAP = dry || SNAP0;
+    ['L', 'R'].forEach(h => {
       const H = hands[h], pl = st.plan && st.plan[h], show = vis.includes(h) && pl && !pl.empty && st.handsMode !== 'off'; H.g.visible = !!show; if (!show) return;
       const spH = sp + (fwdSp && !SNAP ? Math.min(0.12, rateSp * tau) : 0), a = pl.at(spH), sg = h === 'L' ? -1 : 1, col = h === 'R' ? CR : CL;
       // Doigt en contact avec une touche : il ne glisse plus dessus tant qu'il la tient (H.hold[i] = point de contact retenu à l'appui) ; relâché, ou autre touche, ou saut dans le morceau : libre
       H.hold = H.hold || [null, null, null, null, null];
       a.fingers.forEach((f, i) => { if (!f.pressed || JUMP || (H.hold[i] && Math.abs(H.hold[i].x - f.x) > 0.3)) H.hold[i] = null; });
       const xs = a.fingers.map(f => f.x), pin = a.fingers.map(f => !!f.pressed || (f.depth || 0) > 0.6 || (f.wN || 0) > 0.85);
-      const px0 = a.palm;
-      const kp = dry && H.kfPrev && H.kfPrev.pose ? H.kfPrev : null;   // calcul d'événement : repère = pose de l'événement précédent
-      if (kp) H.pose = Object.assign({}, kp.pose, { dx: kp.bx - px0 });   // position horizontale de la base 3.0 donnée par le plan (sans limite) ; la recherche l'ajuste de ±2 touches
+      const px0 = a.palm;   // position horizontale de la base 3.0 donnée par le plan (sans limite) ; la recherche l'ajuste de ±2 touches
       enforceOrder(xs, pin, sg);
       // Règle d'enchaînement : un doigt voisin qui vient de jouer (ou de quitter sa touche) doit se replier AVANT que l'autre ne s'étende, sinon les deux doigts se croisent.
       const kws = a.fingers.map(f => Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0, 0.7 * (f.wP || 0)));
@@ -334,8 +300,6 @@ const View3D = (() => {
         return { P, F, L, N, w: l => [P[0] + L[0] * l[0] + F[0] * l[1] + N[0] * l[2], P[1] + L[1] * l[0] + F[1] * l[1] + N[1] * l[2], P[2] + L[2] * l[0] + F[2] * l[1] + N[2] * l[2]] };
       };
       const dot = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-      // calcul d'événement (fait une seule fois, jamais affiché étape par étape) : le doigt qui frappe doit tomber sur sa touche ; le confort de la main et les doigts qui se préparent ne servent qu'à départager
-      const dk = dry && eng.some(o => o.f.pressed) ? 0.15 : 1;
       const evalPose = (bx, bz, py, th, rho, psi) => {
         if (eng.length && py > YCAP) return Infinity;   // un doigt joue ou s'apprête à jouer : la ligne des bases reste près du clavier
         const F = fr(bx, bz, py, th, rho, psi);
@@ -355,7 +319,7 @@ const View3D = (() => {
           }
           // un doigt qui tient une touche (pouce compris) ne la quitte jamais au profit des suivants (poids plein) ; un doigt qui s'apprête à jouer pèse moins, le pouce encore moins
           const hold = !!fe.pressed, held = hold && H.hold[i], w = hold ? 1 : i === 0 ? 0.25 : 0.6; if (held) er *= 4;
-          const pri = hold ? 1 : dk * (1 - 0.7 * eng.reduce((m, o) => o.i === i ? m : Math.max(m, o.f.pressed ? 1 : (o.f.depth || 0) * (o.f.wN || 0)), 0));   // un doigt qui frappe (ou va frapper dans l'instant) passe avant les autres, de façon continue (pas de saut : la main ne tremble pas)   // un doigt qui tient une touche garde sa position sur elle : son écart pèse 4 fois plus que celui du doigt suivant qui s'apprête
+          const pri = hold ? 1 : 1 - 0.7 * eng.reduce((m, o) => o.i === i ? m : Math.max(m, o.f.pressed ? 1 : (o.f.depth || 0) * (o.f.wN || 0)), 0);   // un doigt qui frappe (ou va frapper dans l'instant) passe avant les autres, de façon continue (pas de saut : la main ne tremble pas)   // un doigt qui tient une touche garde sa position sur elle : son écart pèse 4 fois plus que celui du doigt suivant qui s'apprête
           if (hold || i !== 0) worst = Math.max(worst, hold ? er : 0.7 * pri * er); tot += w * pri * er * er; if (i === 0) latPen *= pri;
         }
         return worst + 0.5 * tot / Math.max(1, eng.length) + latPen;
@@ -369,14 +333,10 @@ const View3D = (() => {
       H.mvS = (H.mvS === undefined || SNAP) ? 0 : H.mvS + ((eng.length ? 0 : Math.min(1, spd / 1.5)) - H.mvS) * AL; const mv = H.mvS;
       const khT0 = (eng.length ? 1.0 : 1.2) + 0.6 * nb; H.khS = (H.khS === undefined || SNAP) ? khT0 : H.khS + (khT0 - H.khS) * AL; const khT = H.khS;
       const pref = q => 0.004 * Math.abs(q.dx) + (1 - nb) * (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.06 * Math.abs(q.bz - 3) : 0.01 * Math.abs(q.bz - 2.2)) + nb * 0.6 * Math.abs(q.bz - BASE_ZMAX) + 1.2 * Math.abs(q.py - khT) + 0.004 * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5));
-      const scoreQ = q => (stats.ev = (stats.ev || 0) + 1, stats.evF = stats.evF || 0, evalPose)(px0 + q.dx, q.bz, q.py, q.th, q.rho, q.psi) + (dry ? prefNat(q) : pref(q) * (dk < 1 ? 0.25 : 1)) + (kp ? 0.03 * (Math.abs(q.th - kp.pose.th) + Math.abs(q.rho - kp.pose.rho) + Math.abs(q.psi - kp.pose.psi)) + 0.4 * Math.abs(px0 + q.dx - kp.bx) + 1.0 * (Math.abs(q.bz - kp.pose.bz) + Math.abs(q.py - kp.pose.py)) : 0);   // tant que la pose précédente convient, la main ne bouge pas
-      // pose d'événement : la main se met en position NATURELLE (ligne des bases 2.0–5.0 parallèle au clavier, lacet nul, en face de ses touches) ; elle ne s'en écarte que si la touche l'exige
-      const prefNat = q => 0.25 * (pref(q) - (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5))) + 0.07 * Math.abs(q.psi) + 0.12 * Math.abs(q.dx) + 0.06 * Math.abs(q.rho) + 0.02 * Math.abs(q.th - 5);
+      const scoreQ = q => (stats.ev = (stats.ev || 0) + 1, stats.evF = stats.evF || 0, evalPose)(px0 + q.dx, q.bz, q.py, q.th, q.rho, q.psi) + pref(q);
       let pose = H.pose || { dx: 0, bz: 2.2, py: 1.8, th: 10, rho: 0, psi: 5 };   // lacet de P par défaut : 5° vers l'extérieur
       if (!eng.length) pose = { dx: 0, bz: 2.8 + (BASE_ZMAX - 2.8) * nb, py: 1.2 + 0.6 * nb + 0.9 * mv, th: 5, rho: 0, psi: 5 };   // au repos (entre deux notes) : la main reste près du clavier, sans remonter
       if (eng.length) {
-        const kfp = dry ? null : kfPose(h, pl, spH, px0);
-        if (kfp) pose = kfp; else {
         // recherche en deux temps : (1) départ = pose de l'image précédente (ou grille grossière si elle est mauvaise, si les doigts engagés ont changé, ou toutes les 10 images) ;
         // (2) affinage par pas décroissants, une coordonnée à la fois
         const key = eng.map(o => o.i).join(''), lim = { th: [-15, 40], rho: [-10, 70], psi: [-20, 20], py: [0, YMAX], bz: [0.2, BASE_ZMAX], dx: [-2.5, 2.5] };
@@ -398,12 +358,9 @@ const View3D = (() => {
           if (!moved) break;
         }
         stats.selW = Math.max(stats.selW || 0, evalPose(px0 + pose.dx, pose.bz, pose.py, pose.th, pose.rho, pose.psi));
-        }
       }
-      if (dry) return { pose: Object.assign({}, pose), bx: px0 + pose.dx, eng: eng.length };
-      { const o = H.poseS, sn = !o || SNAP, pa = Object.assign({}, pose, { dx: px0 + pose.dx }); H.pose = pose;   // la base de la main est lissée en position ABSOLUE sur le clavier : une paume qui bouge ne déplace pas un doigt posé
-        if (sn) H.poseS = pa; else Object.keys(pa).forEach(k => { o[k] += (pa[k] - o[k]) * AL; }); }
-      const PS = Object.assign({}, H.poseS, { dx: H.poseS.dx - px0 }), FR = fr(px0 + PS.dx, PS.bz, PS.py, PS.th, PS.rho, PS.psi), th = -PS.th, hz = PS.bz, hy = PS.py;
+      { const o = H.poseS, sn = !o || SNAP; H.pose = pose; if (sn) H.poseS = Object.assign({}, pose); else Object.keys(pose).forEach(k => { o[k] += (pose[k] - o[k]) * AL; }); }
+      const PS = H.poseS, FR = fr(px0 + PS.dx, PS.bz, PS.py, PS.th, PS.rho, PS.psi), th = -PS.th, hz = PS.bz, hy = PS.py;
       stats.pose = stats.pose || {}; ['th', 'rho', 'psi', 'py', 'bz'].forEach(k => { const m = stats.pose[k] = stats.pose[k] || [99, -99]; m[0] = Math.min(m[0], +PS[k].toFixed(2)); m[1] = Math.max(m[1], +PS[k].toFixed(2)); });
       const hfx = FR.F[0], hfz = FR.F[2]; (stats.pl = stats.pl || {})[h] = Object.assign({ palm: +a.palm.toFixed(2), xs: xs.map(v => +v.toFixed(1)), eng: eng.map(o => o.i) }, PS); stats.rhoT = (stats.rhoT || 0) + 1; if (PS.rho > 20) stats.rhoN = (stats.rhoN || 0) + 1; if (Math.abs(PS.psi) > 5) stats.psiN = (stats.psiN || 0) + 1;
       H.fingers.forEach(F => {
@@ -488,7 +445,6 @@ const View3D = (() => {
           if (f.pressed) { const real = Math.hypot(best.tu2 + dzS - tu, best.ty2 - ty); (stats.errF = stats.errF || {})[h + F.f] = +real.toFixed(2); stats.press = (stats.press || 0) + 1; stats.frameErr = Math.max(stats.frameErr || 0, real); if (real > 0.12) { stats.miss = (stats.miss || 0) + 1; (stats.ml = stats.ml || []).push([+sp.toFixed(2), h, F.f, +real.toFixed(2)]); } if (real > 0.3) { stats.big = (stats.big || 0) + 1; (stats.bl = stats.bl || []).push([F.f, +real.toFixed(2), +tu.toFixed(2), +ty.toFixed(2), +best.tu2.toFixed(2), +best.ty2.toFixed(2), +th.toFixed(0), +hz.toFixed(1), +hy.toFixed(1), +blk.toFixed(1), +(T.x - K.x).toFixed(1), +(xs[F.f - 1] - K.x).toFixed(1), +dzS.toFixed(2), best.dz]); } }   // écart réel entre le bout du doigt et la touche visée (en largeurs de touche)
         }
         // RÈGLE : aucun os ne traverse une touche. Les articulations (et le bout d'un doigt qui ne joue pas) restent au-dessus du dessus des touches : 0,45 au-dessus d'une touche noire (tant qu'on est dans sa longueur), 0 au-dessus d'une touche blanche, plus le rayon de l'os
-        if (f.pressed && H.hold[F.f - 1]) { const hd = H.hold[F.f - 1]; if (hd.t === undefined) hd.t = spH; const wh = SNAP ? 1 : Math.min(1, (spH - hd.t) / 0.03); T.x += (hd.x - T.x) * wh; T.z += (hd.z - T.z) * wh; }   // RÈGLE : un doigt posé sur sa touche ne bouge plus (son bout rejoint en 30 ms le point de contact retenu et y reste)
         { const flr = (p, r) => { if (p.z < ZB) for (const bx of blackXs) if (Math.abs(p.x - bx) < 0.36) return 0.45 + r; return r; };
           [M, D].forEach(p => { if (p) p.y = Math.max(p.y, flr(p, 0.12), 0.62 * mv); });
           if (f.pressed && Math.abs(T.x - fx) < (T.z >= ZB ? 0.45 : 0.2)) { if (T.y < flr(T, 0) + 0.4) T.y = flr(T, 0.07); else T.y = Math.max(T.y, flr(T, 0.07)); } else T.y = Math.max(T.y, flr(T, 0.25), 0.7 * mv); }   // un bout de doigt ne descend à la surface (appui) que sur SA touche ; partout ailleurs, y compris un doigt qui n'est pas encore arrivé, il reste à 0,25 au moins : aucun contact avec une autre touche   // un doigt qui appuie a son bout à 0,07 au-dessus de la touche (appui net) ; un doigt qui ne joue pas reste à 0,25 au moins (clairement au-dessus)
@@ -505,8 +461,7 @@ const View3D = (() => {
         [[W, P[0][0]], [W, P[1][0]], [W, P[4][0]], [P[1][0], P[2][0]], [P[2][0], P[3][0]], [P[3][0], P[4][0]]].forEach(([a, b], i) => limb(sk.palmB[i], a, b));
         H.fingers.forEach((F, i) => { const o = sk.fing[i], q = F.pts, n = q.length; for (let k = 0; k < 3; k++) { o.b[k].visible = k < n - 1; if (k < n - 1) limb(o.b[k], q[k], q[k + 1]); } const ji = n === 3 ? [0, 1, 3] : [0, 1, 2, 3]; o.j.forEach((j, k) => { const at = ji.indexOf(k); j.visible = at >= 0; if (at >= 0) j.position.copy(q[at]); }); });
       }
-    };
-    ['L', 'R'].forEach(h => doHand(h, sp, false));
+    });
     // enfoncement des touches : progressif, c'est le bout du doigt qui enfonce la touche (jamais avant le contact) ; sans doigt visible sur la touche, l'enfoncement suit la note.
     // Retour à l'ancien comportement (enfoncement instantané à la note) : View3D.setContact(false) dans la console, ou ?touches=note à la fin de l'adresse de la page.
     if (contact) for (const m in keys) {
