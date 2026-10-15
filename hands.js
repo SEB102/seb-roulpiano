@@ -330,7 +330,7 @@
       // le doigt suit la main (asservie à lui) : il ne s'écarte d'elle que de ce que la main ne peut pas absorber au moment de la frappe / du relâchement
       const uP = i >= 0 ? L[i].u - (palmAt(L[i].b) + off(f)) : 0, uN = j < L.length ? L[j].u - (palmAt(L[j].a) + off(f)) : 0;
       const x = r + uP * wP * (1 - wN) + uN * wN;
-      return { x, depth, wN, wP, blk, blkP: i >= 0 && isBlack(L[i].midi) ? 1 : 0, blkN: j < L.length && isBlack(L[j].midi) ? 1 : 0, pressed: false, midi: 0, lift: (1 - depth) * (0.35 + 0.65 * 4 * wN * (1 - wN)) };
+      return { x, depth, wN, wP, blk, blkP: i >= 0 && isBlack(L[i].midi) ? 1 : 0, blkN: j < L.length && isBlack(L[j].midi) ? 1 : 0, pressed: false, midi: 0, lift: (1 - depth) * 0.35 };
     }
     // Un doigt posé sur sa touche est un mur : les doigts voisins (index, majeur, annulaire, auriculaire ; pas le pouce, qui passe sous la main) ne le traversent
     // pas, ils sont repoussés derrière lui, de moins en moins à mesure qu'ils s'enfoncent eux-mêmes (le résultat reste donc continu).

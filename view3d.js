@@ -275,7 +275,8 @@ const View3D = (() => {
       const eng = a.fingers.map((f, i) => ({ f, i, e: Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0) })).filter(o => o.e >= 0.5);
       // Passage du pouce sous la paume : permis seulement dans le sens du mouvement naturel (main droite : vers le grave ; main gauche : vers l'aigu), jamais dans l'autre sens
       const thumbOn = eng.some(o => o.i === 0), others = eng.filter(o => o.i > 0);
-      const tuckOK = thumbOn && H.lastX !== undefined && sg * (xs[0] - H.lastX) < 0;
+      const passPouce = (() => { const P = pl.presses || []; for (let k = 0; k < P.length; k++) { const q = P[k]; if (q.f !== 1 || q.sub || sp < q.a - 0.5 || sp > q.a + 0.15) continue; let pv = null; for (let m = k - 1; m >= 0; m--) if (P[m].a < q.a - 0.03 && !P[m].sub) { pv = P[m]; break; } if (pv && pv.f >= 2 && sg * (q.u - pv.u) > 0) return true; } return false; })();   // passage du pouce sous la main (d'après le plan, quel que soit le moteur de plan) : la paume translate, elle ne bascule pas
+      const tuckOK = thumbOn && ((H.lastX !== undefined && sg * (xs[0] - H.lastX) < 0) || passPouce);
       if (!thumbOn && others.length) H.lastX = others.reduce((q, o) => q + xs[o.i], 0) / others.length;
       // ===== TEST MODELE 3D : la main est un SOLIDE (paume rigide, longueurs fixes, bases 2.0–3.0–4.0–5.0 toujours alignées) =====
       // Mouvements de P (poignet) : horizontal sans limite ; hauteur de P au-dessus du clavier : de 0 à la distance 2.0–5.0 ;
@@ -317,8 +318,9 @@ const View3D = (() => {
             if (e + p < er) er = e + p;
           }
           // un doigt qui tient une touche (pouce compris) ne la quitte jamais au profit des suivants (poids plein) ; un doigt qui s'apprête à jouer pèse moins, le pouce encore moins
-          const hold = !!fe.pressed, held = hold && H.hold[i], w = hold ? 1 : i === 0 ? 0.25 : 0.6; if (held) er *= 4;   // un doigt qui tient une touche garde sa position sur elle : son écart pèse 4 fois plus que celui du doigt suivant qui s'apprête
-          if (hold || i !== 0) worst = Math.max(worst, hold ? er : 0.7 * er); tot += w * er * er;
+          const hold = !!fe.pressed, held = hold && H.hold[i], w = hold ? 1 : i === 0 ? 0.25 : 0.6; if (held) er *= 4;
+          const pri = hold ? 1 : 1 - 0.7 * eng.reduce((m, o) => o.i === i ? m : Math.max(m, o.f.pressed ? 1 : (o.f.depth || 0) * (o.f.wN || 0)), 0);   // un doigt qui frappe (ou va frapper dans l'instant) passe avant les autres, de façon continue (pas de saut : la main ne tremble pas)   // un doigt qui tient une touche garde sa position sur elle : son écart pèse 4 fois plus que celui du doigt suivant qui s'apprête
+          if (hold || i !== 0) worst = Math.max(worst, hold ? er : 0.7 * pri * er); tot += w * pri * er * er; if (i === 0) latPen *= pri;
         }
         return worst + 0.5 * tot / Math.max(1, eng.length) + latPen;
       };
@@ -338,10 +340,12 @@ const View3D = (() => {
         // recherche en deux temps : (1) départ = pose de l'image précédente (ou grille grossière si elle est mauvaise, si les doigts engagés ont changé, ou toutes les 10 images) ;
         // (2) affinage par pas décroissants, une coordonnée à la fois
         const key = eng.map(o => o.i).join(''), lim = { th: [-15, 40], rho: [-10, 70], psi: [-20, 20], py: [0, YMAX], bz: [0.2, BASE_ZMAX], dx: [-2.5, 2.5] };
+        // passage du pouce : la main TRANSLATE (dx, recul, hauteur), son orientation (inclinaison, roulis, lacet) reste celle d'avant le passage
+        if (passPouce) { if (!H.lockQ) H.lockQ = { th: (H.pose || pose).th, rho: (H.pose || pose).rho, psi: (H.pose || pose).psi }; ['th', 'rho', 'psi'].forEach(k => { lim[k] = [H.lockQ[k], H.lockQ[k]]; }); pose = Object.assign({}, pose, H.lockQ); if (H.pose) H.pose = Object.assign({}, H.pose, H.lockQ); } else H.lockQ = null;
         let best = H.pose ? scoreQ(H.pose) : Infinity;
         H.fc = (H.fc || 0) + 1;
         if (!H.pose || best > 0.7 || H.engKey !== key || SNAP) {
-          for (const dx of [-1.5, 0, 1.5]) for (const bz of [1.2, 2.1, 2.8]) for (const py of [0.8, 1.8, 2.7]) for (const th of [0, 15, 35]) for (const rho of [-5, 15, 40]) for (const psi of [-15, 0, 15]) {
+          for (const dx of [-1.5, 0, 1.5]) for (const bz of [1.2, 2.1, 2.8]) for (const py of [0.8, 1.8, 2.7]) for (const th of H.lockQ ? [H.lockQ.th] : [0, 15, 35]) for (const rho of H.lockQ ? [H.lockQ.rho] : [-5, 15, 40]) for (const psi of H.lockQ ? [H.lockQ.psi] : [-15, 0, 15]) {
             const q = { dx, bz, py, th, rho, psi }, sc = scoreQ(q); if (sc < best - 0.04) { best = sc; pose = q; } }
         } else pose = H.pose;
         H.engKey = key;
@@ -363,7 +367,8 @@ const View3D = (() => {
         const f = a.fingers[F.f - 1], fx = xs[F.f - 1], thumb = F.f === 1, off = sg * (F.f - 3);
         const K = V(...FR.w(LOC[F.f - 1])), TOT = REACHF[F.f - 1], L1 = TOT * (thumb ? 0.45 : 0.46), L2 = TOT - L1;
         const blk = F.blkS, zt = zNom(thumb ? 0 : 1, blk), yk = blk ? 0.55 : 0.1;
-        const prep = f.pressed ? 0 : 4 * (f.wN || 0) * (1 - (f.wN || 0));   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
+        const prep = 0;   // plus d'élan vers le haut du doigt qui va jouer : il descend directement vers sa touche
+        //   // doigt qui s'apprête à jouer : levée et élan un peu amplifiés
         const tipY = f.pressed ? 0.08 + 0.44 * blk : yk + 0.25 + ((f.lift || 0) * 2.3 * (1 + 0.3 * prep) + (0.55 + 0.75 * (1 - blk)) * prep) * (thumb ? 0.45 : 1) + (thumb ? 0 : 0.35 * (1 - f.depth));   // touche blanche : levée plus ample (la touche noire bouge déjà davantage)
         const T = V(fx, tipY, zt);   // attaque verticale : le bout est au-dessus du point de contact (x, z) pendant toute la descente
         if (f.pressed && !thumb) {   // même choix que dans la recherche de pose : la position d'appui dans la zone de la touche qui convient le mieux à la pose
@@ -375,7 +380,7 @@ const View3D = (() => {
         // doigt qui ne joue pas : il se soulève et se replie À MOITIÉ (flexion partielle, bout du doigt en l'air devant la phalange) ; il se déplie vers sa touche
         // à mesure qu'elle approche (wN), reste déplié un instant après la frappe (wP) puis se relâche
         if (!thumb) {
-          const kw = kws[F.f - 1], curl = [0, 0.82, 0.84, 0.8, 0.76][F.f - 1];   // 3D : pas de repli maximal des doigts qui ne jouent pas (réservé au 2D, pour la visibilité) ; ils restent détendus, légèrement fléchis, au ras des touches
+          const kw = kws[F.f - 1], curl = [0, 0.62, 0.84, 0.8, 0.76][F.f - 1];   // 3D : pas de repli maximal des doigts qui ne jouent pas (réservé au 2D, pour la visibilité) ; ils restent détendus, légèrement fléchis, au ras des touches
           const rest = V(K.x + hfx * TOT * curl, 0.45 + 0.25 * (f.lift || 0), K.z + hfz * TOT * curl);   // repos : devant la base, dans l'axe de la main
           { const kh = Math.min(1, kw / 0.55), kv = Math.min(1, kw);   // le déplacement horizontal vers la touche est terminé à mi-chemin ; la fin est une descente verticale
             T.x += (rest.x - T.x) * (1 - kh); T.z += (rest.z - T.z) * (1 - kh); T.y += (rest.y - T.y) * (1 - kv); }
