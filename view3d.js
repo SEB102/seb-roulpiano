@@ -255,14 +255,37 @@ const View3D = (() => {
     stats.frameErr = 0;
     const nowT = performance.now(), dtS = Math.max(0.004, Math.min(0.1, (nowT - (render.lastT || nowT)) / 1000)), JUMP = Math.abs(sp - (render.lastSp === undefined ? sp : render.lastSp)) > 0.4 || !render.lastT || (nowT - render.lastT) > 400, SNAP = stats.noSmooth || JUMP, fwdSp = sp >= (render.lastSp === undefined ? sp : render.lastSp), rateSp = Math.abs(sp - (render.lastSp === undefined ? sp : render.lastSp)) / dtS, tau = rateSp < 0.02 ? 0.17 : Math.max(0.17, Math.min(0.6, 0.17 / Math.min(1, Math.max(rateSp, 0.17)))), AL = 1 - Math.exp(-dtS / tau); render.lastT = nowT; render.lastSp = sp;   // lissage ≈ 70 ms à vitesse normale, jusqu'à 0,4 s à basse vitesse : le retard reste ≈ 70 ms de musique et les paliers du choix de pose ne se voient plus
     // mains
-    ['L', 'R'].forEach(h => {
-      const H = hands[h], pl = st.plan && st.plan[h], show = vis.includes(h) && pl && !pl.empty && st.handsMode !== 'off'; H.g.visible = !!show; if (!show) return;
+    // Pose de la main : calculée UNE FOIS par note (image clé, à l'instant de l'appui, avec les doigts qui appuient), jamais image par image ; entre deux notes la main glisse de la pose de la note
+    // précédente à celle de la suivante. Seule la position finale trouvée par le modèle s'affiche : plus de va-et-vient par des poses intermédiaires quand les doigts s'engagent ou se dégagent.
+    // handBody(h, sp, kf, …) : kf = vrai pour une image clé (rien n'est dessiné, aucun état de l'affichage n'est touché, la pose est renvoyée)
+    const kfHand = (h, pl, tk, prevKf) => {
+      const R = hands[h], ap = pl.at(Math.max(0, tk - 0.25)), oth = ap.fingers.map((f, i) => f.pressed && i > 0 ? f.x : null).filter(v => v !== null);
+      return { g: R.g, sk: R.sk, fingers: R.fingers.map(F => ({ f: F.f })), hold: [null, null, null, null, null], lastX: oth.length ? oth.reduce((q, v) => q + v, 0) / oth.length : undefined, prevKf, lockQ: null, fc: 0 };
+    };
+    // Positions de la main : tant que chaque doigt retrouve la même touche (le pouce posé sur la touche A, le 2 sur A+1…), la main ne bouge pas. Une position = une pose NATURELLE, calculée une seule fois
+    // avec les cinq doigts sur cinq touches voisines (ligne des bases 2.0 → 5.0 parallèle au clavier : aucun lacet). Passer d'une position à l'autre par un passage du pouce se fait en BASCULANT
+    // autour du pouce (il sert d'appui, la main pivote par-dessus), puis la main se remet en position naturelle ; sinon (saut) elle glisse d'une position à l'autre avant la note.
+    const kfOf = (h, pl) => {
+      const Hh = hands[h]; if (Hh.kf && Hh.kf.pl === pl) return Hh.kf;
+      const sg = h === 'L' ? -1 : 1, P = (pl.presses || []).filter(q => !q.sub), gs = [];
+      P.forEach(q => { const l = gs[gs.length - 1]; if (l && q.a - l.a < 0.03) l.ps.push(q); else gs.push({ a: q.a, ps: [q] }); });
+      const med = v => { const w = v.slice().sort((x, y) => x - y); return w[w.length >> 1]; }, anc = g => med(g.ps.map(q => q.u - sg * (q.f - 1)));
+      const seg = [];
+      gs.forEach(g => { const A = anc(g), l = seg[seg.length - 1]; if (l && Math.abs(A - med(l.As)) <= 0.9) { l.As.push(A); l.t1 = Math.max(l.t1, ...g.ps.map(q => q.b)); l.last = g; l.gs.push(g); } else seg.push({ As: [A], t0: g.a, t1: Math.max(...g.ps.map(q => q.b)), first: g, last: g, gs: [g] }); });
+      seg.forEach((q, i) => { q.A = med(q.As); q.nat = null; if (i) { const pp = seg[i - 1].last.ps, pf = q.first.ps; const th1 = pf.find(r => r.f === 1), th0 = pp.find(r => r.f === 1); q.pivotX = th1 ? th1.u : th0 ? th0.u : null; q.pivotMode = th1 ? 'after' : th0 ? 'before' : null; q.thA = th0 ? th0.a : 0; q.prevPr = pp.find(r => r.f > 1); } });   // pivotX : abscisse du pouce autour duquel la main bascule (passage du pouce) ; null : simple déplacement
+      const KF = { pl, seg };
+      KF.at = k => { if (k < 0 || k >= seg.length) return null; const q = seg[k]; if (!q.nat) q.nat = handBody(h, 0.5 * (q.t0 + q.t1), true, true, false, {}, KF, { A: q.A }); return q.nat; };
+      return (Hh.kf = KF);
+    };
+    const handBody = (h, sp, kf, SNAP, JUMP, stats, KF, nat) => {
+      const pl = st.plan && st.plan[h], H = kf ? kfHand(h, pl, sp, null) : hands[h]; if (!kf && pl && !pl.empty) KF = kfOf(h, pl); const show = vis.includes(h) && pl && !pl.empty && st.handsMode !== 'off'; if (!kf) H.g.visible = !!show; if (!show) return null;
       const spH = sp + (fwdSp && !SNAP ? Math.min(0.12, rateSp * tau) : 0), a = pl.at(spH), sg = h === 'L' ? -1 : 1, col = h === 'R' ? CR : CL;
       // Doigt en contact avec une touche : il ne glisse plus dessus tant qu'il la tient (H.hold[i] = point de contact retenu à l'appui) ; relâché, ou autre touche, ou saut dans le morceau : libre
       H.hold = H.hold || [null, null, null, null, null];
       a.fingers.forEach((f, i) => { if (!f.pressed || JUMP || (H.hold[i] && Math.abs(H.hold[i].x - f.x) > 0.3)) H.hold[i] = null; });
       const xs = a.fingers.map(f => f.x), pin = a.fingers.map(f => !!f.pressed || (f.depth || 0) > 0.6 || (f.wN || 0) > 0.85);
-      const px0 = a.palm;   // position horizontale de la base 3.0 donnée par le plan (sans limite) ; la recherche l'ajuste de ±2 touches
+      if (nat) for (let i = 0; i < 5; i++) xs[i] = nat.A + sg * i;   // position naturelle : cinq doigts sur cinq touches blanches voisines
+      const px0 = nat ? xs[2] : a.palm;   // position horizontale de la base 3.0 donnée par le plan (sans limite) ; la recherche l'ajuste de ±2 touches
       enforceOrder(xs, pin, sg);
       // Règle d'enchaînement : un doigt voisin qui vient de jouer (ou de quitter sa touche) doit se replier AVANT que l'autre ne s'étende, sinon les deux doigts se croisent.
       const kws = a.fingers.map(f => Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0, 0.7 * (f.wP || 0)));
@@ -272,10 +295,10 @@ const View3D = (() => {
       }
       const REACHF = [4.2, 3.2, 3.6, 3.1, 2.4];   // longueurs des doigts (fixes)
       H.fingers.forEach((F, i) => { const bt = a.fingers[i].blk || 0; F.blkS = (F.blkS === undefined || SNAP) ? bt : F.blkS + (bt - F.blkS) * AL; });
-      const eng = a.fingers.map((f, i) => ({ f, i, e: Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0) })).filter(o => o.e >= 0.5);
+      const eng = a.fingers.map((f, i) => ({ f, i, e: Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0) })).filter(o => kf ? (nat || o.f.pressed) : o.e >= 0.5);
       // Passage du pouce sous la paume : permis seulement dans le sens du mouvement naturel (main droite : vers le grave ; main gauche : vers l'aigu), jamais dans l'autre sens
       const thumbOn = eng.some(o => o.i === 0), others = eng.filter(o => o.i > 0);
-      const passPouce = (() => { const P = pl.presses || []; for (let k = 0; k < P.length; k++) { const q = P[k]; if (q.f !== 1 || q.sub || sp < q.a - 0.5 || sp > q.a + 0.15) continue; let pv = null; for (let m = k - 1; m >= 0; m--) if (P[m].a < q.a - 0.03 && !P[m].sub) { pv = P[m]; break; } if (pv && pv.f >= 2 && sg * (q.u - pv.u) > 0) return true; } return false; })();   // passage du pouce sous la main (d'après le plan, quel que soit le moteur de plan) : la paume translate, elle ne bascule pas
+      const passPouce = !nat && (() => { const P = pl.presses || []; for (let k = 0; k < P.length; k++) { const q = P[k]; if (q.f !== 1 || q.sub || sp < q.a - 0.5 || sp > q.a + 0.15) continue; let pv = null; for (let m = k - 1; m >= 0; m--) if (P[m].a < q.a - 0.03 && !P[m].sub) { pv = P[m]; break; } if (pv && pv.f >= 2 && sg * (q.u - pv.u) > 0) return true; } return false; })();   // passage du pouce sous la main (d'après le plan, quel que soit le moteur de plan) : la paume translate, elle ne bascule pas
       const tuckOK = thumbOn && ((H.lastX !== undefined && sg * (xs[0] - H.lastX) < 0) || passPouce);
       if (!thumbOn && others.length) H.lastX = others.reduce((q, o) => q + xs[o.i], 0) / others.length;
       // ===== TEST MODELE 3D : la main est un SOLIDE (paume rigide, longueurs fixes, bases 2.0–3.0–4.0–5.0 toujours alignées) =====
@@ -314,7 +337,7 @@ const View3D = (() => {
             const w = [T[0] - K[0], T[1] - K[1], z - K[2]]; let e;
             if (i === 0) e = thumbErr(dot(w, F.L), dot(w, F.F), dot(w, F.N));
             else { const fv = dot(w, F.F), lv = dot(w, F.L), nv = dot(w, F.N), a = Math.max(LACET[i][0] * D2R, Math.min(LACET[i][1] * D2R, Math.atan2(lv, Math.max(1e-3, fv)))), u = fv * Math.cos(a) + lv * Math.sin(a), off = Math.abs(-fv * Math.sin(a) + lv * Math.cos(a));
-              e = (fv <= 0 ? 1 : 0) + off + chainTab(i, u * c - nv * s, u * s + nv * c, -th, lvl); }
+              e = (fv <= 0 ? 1 : 0) + off + chainTab(i, u * c - nv * s, u * s + nv * c, -th, lvl) + (nat ? 0.5 * Math.abs(lv) : 0); }   // position naturelle : la main se place pour que chaque doigt soit dans l'alignement de sa touche, sans lacet
             if (e + p < er) er = e + p;
           }
           // un doigt qui tient une touche (pouce compris) ne la quitte jamais au profit des suivants (poids plein) ; un doigt qui s'apprête à jouer pèse moins, le pouce encore moins
@@ -332,20 +355,20 @@ const View3D = (() => {
       const spd = (H.px0P === undefined || SNAP) ? 0 : Math.abs(px0 - H.px0P) / dtS; H.px0P = px0;
       H.mvS = (H.mvS === undefined || SNAP) ? 0 : H.mvS + ((eng.length ? 0 : Math.min(1, spd / 1.5)) - H.mvS) * AL; const mv = H.mvS;
       const khT0 = (eng.length ? 1.0 : 1.2) + 0.6 * nb; H.khS = (H.khS === undefined || SNAP) ? khT0 : H.khS + (khT0 - H.khS) * AL; const khT = H.khS;
-      const pref = q => 0.004 * Math.abs(q.dx) + (1 - nb) * (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.06 * Math.abs(q.bz - 3) : 0.01 * Math.abs(q.bz - 2.2)) + nb * 0.6 * Math.abs(q.bz - BASE_ZMAX) + 1.2 * Math.abs(q.py - khT) + 0.004 * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5));
+      const pref = q => 0.004 * Math.abs(q.dx) + (1 - nb) * (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.06 * Math.abs(q.bz - 3) : 0.01 * Math.abs(q.bz - 2.2)) + nb * 0.6 * Math.abs(q.bz - BASE_ZMAX) + 1.2 * Math.abs(q.py - khT) + (nat ? 0.1 : 0.004) * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5));
       const scoreQ = q => (stats.ev = (stats.ev || 0) + 1, stats.evF = stats.evF || 0, evalPose)(px0 + q.dx, q.bz, q.py, q.th, q.rho, q.psi) + pref(q);
       let pose = H.pose || { dx: 0, bz: 2.2, py: 1.8, th: 10, rho: 0, psi: 5 };   // lacet de P par défaut : 5° vers l'extérieur
-      if (!eng.length) pose = { dx: 0, bz: 2.8 + (BASE_ZMAX - 2.8) * nb, py: 1.2 + 0.6 * nb + 0.9 * mv, th: 5, rho: 0, psi: 5 };   // au repos (entre deux notes) : la main reste près du clavier, sans remonter
-      if (eng.length) {
+      if (kf && !eng.length) pose = { dx: 0, bz: 2.8 + (BASE_ZMAX - 2.8) * nb, py: 1.2 + 0.6 * nb + 0.9 * mv, th: 5, rho: 0, psi: 5 };   // au repos (entre deux notes) : la main reste près du clavier, sans remonter
+      if (kf && eng.length) {
         // recherche en deux temps : (1) départ = pose de l'image précédente (ou grille grossière si elle est mauvaise, si les doigts engagés ont changé, ou toutes les 10 images) ;
         // (2) affinage par pas décroissants, une coordonnée à la fois
-        const key = eng.map(o => o.i).join(''), lim = { th: [-15, 40], rho: [-10, 70], psi: [-20, 20], py: [0, YMAX], bz: [0.2, BASE_ZMAX], dx: [-2.5, 2.5] };
+        const key = eng.map(o => o.i).join(''), lim = { th: [-15, 40], rho: [-10, 70], psi: [-20, 20], py: [0, YMAX], bz: [0.2, BASE_ZMAX], dx: [-2.5, 2.5] }; if (nat) lim.psi = [0, 0];
         // passage du pouce : la main TRANSLATE (dx, recul, hauteur), son orientation (inclinaison, roulis, lacet) reste celle d'avant le passage
-        if (passPouce) { if (!H.lockQ) H.lockQ = { th: (H.pose || pose).th, rho: (H.pose || pose).rho, psi: (H.pose || pose).psi }; ['th', 'rho', 'psi'].forEach(k => { lim[k] = [H.lockQ[k], H.lockQ[k]]; }); pose = Object.assign({}, pose, H.lockQ); if (H.pose) H.pose = Object.assign({}, H.pose, H.lockQ); } else H.lockQ = null;
+        if (passPouce) { if (!H.lockQ) { const src = (H.prevKf && H.prevKf()) || H.pose || pose; H.lockQ = { th: src.th, rho: src.rho, psi: src.psi }; } ['th', 'rho', 'psi'].forEach(k => { lim[k] = [H.lockQ[k], H.lockQ[k]]; }); pose = Object.assign({}, pose, H.lockQ); if (H.pose) H.pose = Object.assign({}, H.pose, H.lockQ); } else H.lockQ = null;
         let best = H.pose ? scoreQ(H.pose) : Infinity;
         H.fc = (H.fc || 0) + 1;
         if (!H.pose || best > 0.7 || H.engKey !== key || SNAP) {
-          for (const dx of [-1.5, 0, 1.5]) for (const bz of [1.2, 2.1, 2.8]) for (const py of [0.8, 1.8, 2.7]) for (const th of H.lockQ ? [H.lockQ.th] : [0, 15, 35]) for (const rho of H.lockQ ? [H.lockQ.rho] : [-5, 15, 40]) for (const psi of H.lockQ ? [H.lockQ.psi] : [-15, 0, 15]) {
+          for (const dx of [-1.5, 0, 1.5]) for (const bz of [1.2, 2.1, 2.8]) for (const py of [0.8, 1.8, 2.7]) for (const th of H.lockQ ? [H.lockQ.th] : [0, 15, 35]) for (const rho of H.lockQ ? [H.lockQ.rho] : [-5, 15, 40]) for (const psi of nat ? [0] : H.lockQ ? [H.lockQ.psi] : [-15, 0, 15]) {
             const q = { dx, bz, py, th, rho, psi }, sc = scoreQ(q); if (sc < best - 0.04) { best = sc; pose = q; } }
         } else pose = H.pose;
         H.engKey = key;
@@ -359,8 +382,45 @@ const View3D = (() => {
         }
         stats.selW = Math.max(stats.selW || 0, evalPose(px0 + pose.dx, pose.bz, pose.py, pose.th, pose.rho, pose.psi));
       }
-      { const o = H.poseS, sn = !o || SNAP; H.pose = pose; if (sn) H.poseS = Object.assign({}, pose); else Object.keys(pose).forEach(k => { o[k] += (pose[k] - o[k]) * AL; }); }
-      const PS = H.poseS, FR = fr(px0 + PS.dx, PS.bz, PS.py, PS.th, PS.rho, PS.psi), th = -PS.th, hz = PS.bz, hy = PS.py;
+      if (kf) return Object.assign({}, pose, { bx: px0 + pose.dx });
+      {   // pose affichée : positions naturelles de la main, reliées par un pivot autour du pouce (passage du pouce) ou par un glissement
+        const SG = KF.seg, restP = { bx: px0, bz: 2.8 + (BASE_ZMAX - 2.8) * nb, py: 1.2 + 0.6 * nb + 0.9 * mv, th: 5, rho: 0, psi: 5 };
+        const sm = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); }, lp = (A, B, t) => { const o = {}; for (const k in A) if (k !== 'dx') o[k] = A[k] + (B[k] - A[k]) * t; return o; };
+        // rotation de la pose A d'un angle d (degrés) autour du point (xT, zT) du clavier (le pouce) : la paume tourne avec la main
+        const rotA = (A, d, xT, zT) => { const r = d * D2R, c = Math.cos(r), sn = Math.sin(r), PA = fr(A.bx, A.bz, A.py, A.th, A.rho, A.psi).P, dx = PA[0] - xT, dz = PA[2] - zT, x2 = xT + dx * c - dz * sn, z2 = zT + dx * sn + dz * c, psi2 = A.psi + sg * d, F2 = fr(0, 0, A.py, A.th, A.rho, psi2).F;
+          return Object.assign({}, A, { psi: psi2, bx: x2 + PALM * F2[0], bz: z2 + PALM * F2[2] }); };
+        let lo = 0, hi = SG.length; while (lo < hi) { const m = (lo + hi) >> 1; if (SG[m].t0 <= sp) lo = m + 1; else hi = m; }
+        const k = lo - 1, cur = SG[k], nxt = SG[k + 1], Kc = KF.at(k), Kn = KF.at(k + 1), relax = cur ? cur.t1 + 0.25 : -Infinity;   // relax : la main commence à se détendre 0,25 s après la fin de la dernière note
+        const zT = zNom(0, 0);   // profondeur d'appui du pouce
+        // Le pouce est BLOQUÉ sur sa touche pendant la bascule : la paume tourne autour de lui (son bout est le pivot, la distance base du pouce – bout ne change pas, donc il reste posé sans se déformer).
+        // reach : angle de la rotation autour du pouce (posé en xT) qui amène le doigt de la touche visée (press : doigt f, touche u) dans l'alignement de sa touche
+        const reach = (Ka, xT, pr) => { if (!pr) return 0; const fi = pr.f - 1; let bd = 0, be = Infinity;
+          for (let d = -40; d <= 40; d += 1) { const A = rotA(Ka, d, xT, zT), Fr = fr(A.bx, A.bz, A.py, A.th, A.rho, A.psi), Kf = Fr.w(LOC[fi]), v = [pr.u - Kf[0], 0.08 - Kf[1], zNom(fi, 0) - Kf[2]], lv = dot(v, Fr.L), fv = dot(v, Fr.F), e = Math.abs(lv) + (fv <= 0.3 ? 5 : 0) + 0.01 * Math.abs(d); if (e < be) { be = e; bd = d; } }
+          return bd; };
+        const memo = (o, key, f) => o[key] !== undefined ? o[key] : (o[key] = f());
+        // MONTÉE (le pouce passe sous la main) : pendant la note qui précède, la main passe à la pose d'atterrissage (pouce sous la paume, doigts qui jouent encore à gauche du pouce) ; le pouce posé,
+        // la paume bascule autour de lui jusqu'à la position naturelle, avant la note suivante. DESCENTE (un doigt passe par-dessus le pouce) : le pouce posé reste posé ; la paume tourne autour de lui,
+        // le doigt passe par-dessus et arrive sur sa touche (lacet du poignet vers la droite) ; la note jouée, la main retrouve sa position naturelle.
+        if (!cur) pose = Kn ? lp(restP, Kn, sm((sp - (nxt.t0 - 0.5)) / 0.5)) : restP;
+        else {
+          let base = Kc;
+          if (cur.pivotX !== null && k > 0) {
+            const Kp = KF.at(k - 1), xT = cur.pivotX, el = sp - cur.t0;
+            if (cur.pivotMode === 'after') { const dA = memo(cur, 'dA', () => reach(Kc, xT, cur.prevPr)), t2 = cur.gs[1] ? cur.gs[1].a - cur.t0 : 0.6, d2 = Math.min(0.3, 0.9 * t2); if (el < d2) base = rotA(Kc, dA * (1 - sm(el / d2)), xT, zT); }
+            else if (el < 0.3) { const dD = memo(cur, 'dD', () => reach(Kp, xT, cur.first.ps.find(r => r.f > 1))); base = lp(rotA(Kp, dD, xT, zT), Kc, sm(el / 0.3)); }
+          }
+          if (!nxt) base = lp(base, restP, sm((sp - relax) / 0.5));
+          else if (nxt.t0 - relax < 1.2) {
+            if (nxt.pivotX === null) { const tr = Math.max(0.08, Math.min(0.3, 0.8 * (nxt.t0 - cur.t0))); base = lp(base, Kn, sm((sp - (nxt.t0 - tr)) / tr)); }   // saut sans passage du pouce : la main glisse vers la position suivante avant la note
+            else if (nxt.pivotMode === 'after') { const dA = memo(nxt, 'dA', () => reach(Kn, nxt.pivotX, nxt.prevPr)), tA = cur.last.a, dur = nxt.t0 - tA; base = lp(base, rotA(Kn, dA, nxt.pivotX, zT), sm((sp - (tA + 0.05)) / (0.85 * dur))); }
+            else if (nxt.pivotMode === 'before' && sp >= nxt.thA) { const dD = memo(nxt, 'dD', () => reach(Kc, nxt.pivotX, nxt.first.ps.find(r => r.f > 1))), dur = nxt.t0 - nxt.thA; base = rotA(Kc, dD * sm((sp - nxt.thA) / (0.8 * dur)), nxt.pivotX, zT); }
+          }
+          else base = lp(lp(base, restP, sm((sp - relax) / 0.5)), Kn, sm((sp - (nxt.t0 - 0.5)) / 0.5));   // longue pause : la main se détend puis repart
+          pose = base;
+        }
+        pose = Object.assign({ dx: 0 }, pose); H.pose = pose; H.poseS = pose;
+      }
+      const PS = H.poseS, FR = fr(PS.bx, PS.bz, PS.py, PS.th, PS.rho, PS.psi), th = -PS.th, hz = PS.bz, hy = PS.py;
       stats.pose = stats.pose || {}; ['th', 'rho', 'psi', 'py', 'bz'].forEach(k => { const m = stats.pose[k] = stats.pose[k] || [99, -99]; m[0] = Math.min(m[0], +PS[k].toFixed(2)); m[1] = Math.max(m[1], +PS[k].toFixed(2)); });
       const hfx = FR.F[0], hfz = FR.F[2]; (stats.pl = stats.pl || {})[h] = Object.assign({ palm: +a.palm.toFixed(2), xs: xs.map(v => +v.toFixed(1)), eng: eng.map(o => o.i) }, PS); stats.rhoT = (stats.rhoT || 0) + 1; if (PS.rho > 20) stats.rhoN = (stats.rhoN || 0) + 1; if (Math.abs(PS.psi) > 5) stats.psiN = (stats.psiN || 0) + 1;
       H.fingers.forEach(F => {
@@ -461,7 +521,8 @@ const View3D = (() => {
         [[W, P[0][0]], [W, P[1][0]], [W, P[4][0]], [P[1][0], P[2][0]], [P[2][0], P[3][0]], [P[3][0], P[4][0]]].forEach(([a, b], i) => limb(sk.palmB[i], a, b));
         H.fingers.forEach((F, i) => { const o = sk.fing[i], q = F.pts, n = q.length; for (let k = 0; k < 3; k++) { o.b[k].visible = k < n - 1; if (k < n - 1) limb(o.b[k], q[k], q[k + 1]); } const ji = n === 3 ? [0, 1, 3] : [0, 1, 2, 3]; o.j.forEach((j, k) => { const at = ji.indexOf(k); j.visible = at >= 0; if (at >= 0) j.position.copy(q[at]); }); });
       }
-    });
+    };
+    ['L', 'R'].forEach(h => handBody(h, sp, false, SNAP, JUMP, stats));
     // enfoncement des touches : progressif, c'est le bout du doigt qui enfonce la touche (jamais avant le contact) ; sans doigt visible sur la touche, l'enfoncement suit la note.
     // Retour à l'ancien comportement (enfoncement instantané à la note) : View3D.setContact(false) dans la console, ou ?touches=note à la fin de l'adresse de la page.
     if (contact) for (const m in keys) {
