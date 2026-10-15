@@ -1,4 +1,5 @@
 const assert = require('assert');
+const fs = require('fs');
 const zlib = require('zlib');
 const C = require('./core.js');
 const E = require('./exemples.js');
@@ -149,7 +150,7 @@ ${note('C', 5, 1, 1)}${note('E', 5, 1, 1)}${note('G', 5, 1, 1)}${note('C', 6, 1,
 ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2, 5)}</measure>
 <measure number="3">
 ${note('C', 3, 2, 5, 2)}${note('G', 3, 2, 5, 2)}<backup><duration>4</duration></backup>
-${note('C', 2, 2, 6, 4)}</measure>
+${note('G', 2, 2, 6, 4)}</measure>
 <measure number="4">
 ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2, 5)}</measure>
 </part></score-partwise>`;
@@ -187,6 +188,21 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
     const ns = (step, stem, fing) => `<note><pitch><step>${step}</step><octave>3</octave></pitch><duration>4</duration><staff>2</staff><stem>${stem}</stem><notations><technical><fingering>${fing}</fingering></technical></notations></note>`;
     const s2 = C.parseMusicXml(`<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"><part-name>x</part-name></score-part></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><staves>2</staves></attributes>${ns('A', 'up', 'MD3')}${ns('B', 'up', '2')}${ns('C', 'down', '5')}</measure></part></score-partwise>`);
     assert.deepStrictEqual(s2.notes.map(x => x.hand), ['R', 'R', 'L'], 'hampes inversées : retour à la main de la portée');
+  });
+
+  await t('Une note hors d\'atteinte passe à l\'autre main : Goldberg mesure 3 temps 4, le do4 (écrit à la droite, avec le mi5 au 5) va à la gauche, avec son doigt 1 ; une main écrite (MD / MG) n\'est jamais changée', async () => {
+    const g = await C.loadSong('g.musicxml', fs.readFileSync(__dirname + '/exemple-goldberg.musicxml')), m = g.measures.find(x => x.label === '3');
+    const at4 = g.notes.filter(x => x.tick === m.startTick + 3 * g.ppq);
+    const do4 = at4.find(x => x.midi === 60), mi5 = at4.find(x => x.midi === 76);
+    assert.strictEqual(do4.hand, 'L', 'do4 à la main gauche'); assert.strictEqual(do4.finger, 1, 'son doigt 1 est conservé'); assert.strictEqual(mi5.hand, 'R', 'mi5 reste à la droite');
+    const note = (step, oct, staff, extra = '') => `<note><pitch><step>${step}</step><octave>${oct}</octave></pitch><duration>4</duration><voice>${staff}</voice><staff>${staff}</staff>${extra}</note>`;
+    const xml = ex => `<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"/></part-list><part id="P1"><measure number="1"><attributes><divisions>4</divisions><staves>2</staves></attributes>${note('C', 4, 1)}${note('E', 5, 1).replace('<note>', '<note><chord/>')}<backup><duration>4</duration></backup>${note('A', 3, 2, ex)}</measure></part></score-partwise>`;
+    // do4 + mi5 simultanés à la droite (16 demi-tons) : le do4 passe à la gauche, qui tient la3 – do4 (3 demi-tons)
+    const a = C.parseMusicXml(xml('')).notes; assert.deepStrictEqual([a.find(x => x.midi === 60).hand, a.find(x => x.midi === 76).hand], ['L', 'R']);
+    // une neuvième majeure (14) tient dans la main : rien ne bouge
+    const b = C.parseMusicXml(xml('').replace('<step>E</step><octave>5', '<step>D</step><octave>5')).notes; assert.strictEqual(b.find(x => x.midi === 60).hand, 'R');
+    // main écrite dans le fichier (« MD1 ») : prioritaire, la note reste à la droite
+    const c = C.parseMusicXml(xml('').replace(note('C', 4, 1), note('C', 4, 1, '<notations><technical><fingering>MD1</fingering></technical></notations>'))).notes; assert.strictEqual(c.find(x => x.midi === 60).hand, 'R');
   });
 
   console.log(`\n${n} tests passés`);

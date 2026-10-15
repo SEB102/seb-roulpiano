@@ -134,11 +134,34 @@
     return song;
   }
 
+  // ---------- Mains : une note hors d'atteinte passe à l'autre main ----------
+  // Une main ne tient pas plus d'une neuvième majeure (14 demi-tons) entre sa note la plus grave et sa plus aiguë qui sonnent ensemble. Si la partition l'exige, la note la plus proche de l'autre main (la plus grave de la droite, la plus aiguë de la gauche) lui est confiée, à condition que cette main puisse l'atteindre sans dépasser l'octave (12) avec ce qu'elle joue déjà ; une main indiquée dans le fichier (« MD », « MG ») n'est jamais changée. Le doigt écrit reste (un pouce reste un pouce).
+  const SPAN_MAX = 14, SPAN_ACCUEIL = 12;
+  function rebalanceHands(notes) {
+    const maxDur = notes.reduce((m, n) => Math.max(m, n.dur), 0);   // notes triées par attaque : on ne regarde que celles qui ont pu commencer dans les maxDur derniers ticks
+    const sounding = (h, t) => { let lo = 0, hi = notes.length; while (lo < hi) { const m = (lo + hi) >> 1; if (notes[m].tick < t - maxDur) lo = m + 1; else hi = m; } const r = []; for (let i = lo; i < notes.length && notes[i].tick <= t; i++) { const n = notes[i]; if (n.hand === h && t < n.tick + n.dur) r.push(n); } return r; };
+    const span = ns => ns.length ? Math.max.apply(null, ns.map(n => n.midi)) - Math.min.apply(null, ns.map(n => n.midi)) : 0;
+    const attacks = Array.from(new Set(notes.map(n => n.tick))).sort((a, b) => a - b);
+    for (let pass = 0; pass < 4; pass++) {
+      let moved = false;
+      for (const t of attacks) for (const h of ['R', 'L']) {
+        const S = sounding(h, t); if (span(S) <= SPAN_MAX) continue;
+        const o = h === 'R' ? 'L' : 'R', cand = S.filter(n => !n.fileHand).sort((a, b) => h === 'R' ? a.midi - b.midi : b.midi - a.midi)[0];
+        if (!cand) continue;
+        const ev = attacks.filter(a => a >= cand.tick && a < cand.tick + cand.dur);
+        if (!ev.every(a => span(sounding(o, a).concat([cand])) <= SPAN_ACCUEIL)) continue;
+        cand.hand = cand.autoHand = o; moved = true;
+      }
+      if (!moved) break;
+    }
+  }
+
   function finish(song) {
     if (!song.tempos.some(t => t.tick === 0)) song.tempos.unshift({ tick: 0, uspq: 500000 }); // 120 par défaut
     song.timeline = makeTimeline(song.tempos, song.ppq);
     song.fileBpm = song.timeline.bpmAtTick(0); // tempo de départ du fichier (noire par minute)
     song.notes.sort((a, c) => a.tick - c.tick || a.midi - c.midi);
+    rebalanceHands(song.notes);
     song.maxDur = song.notes.reduce((m, n) => Math.max(m, n.dur), 0);
     computeTimes(song);
     song.lo = song.notes.length ? Math.min.apply(null, song.notes.map(n => n.midi)) : 60;
