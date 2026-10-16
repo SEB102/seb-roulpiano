@@ -271,9 +271,10 @@ const View3D = (() => {
       P.forEach(q => { const l = gs[gs.length - 1]; if (l && q.a - l.a < 0.03) l.ps.push(q); else gs.push({ a: q.a, ps: [q] }); });
       const med = v => { const w = v.slice().sort((x, y) => x - y); return w[w.length >> 1]; }, anc = g => med(g.ps.map(q => q.u - sg * (q.f - 1)));
       const seg = [];
-      gs.forEach(g => { const A = anc(g), l = seg[seg.length - 1]; if (l && Math.abs(A - med(l.As)) <= 1.6) { l.As.push(A); l.t1 = Math.max(l.t1, ...g.ps.map(q => q.b)); l.last = g; l.gs.push(g); } else seg.push({ As: [A], t0: g.a, t1: Math.max(...g.ps.map(q => q.b)), first: g, last: g, gs: [g] }); });
+      gs.forEach(g => { const A = anc(g), l = seg[seg.length - 1]; if (l && Math.abs(A - med(l.As)) <= 0.9) { l.As.push(A); l.t1 = Math.max(l.t1, ...g.ps.map(q => q.b)); l.last = g; l.gs.push(g); } else seg.push({ As: [A], t0: g.a, t1: Math.max(...g.ps.map(q => q.b)), first: g, last: g, gs: [g] }); });
       // une vraie bascule autour du pouce (pivotX) ne se fait que pour un passage d'au moins 2,5 touches ; en dessous, la main glisse simplement
-      seg.forEach((q, i) => { q.A = med(q.As); q.nat = null; if (i) { const pp = seg[i - 1].last.ps, pf = q.first.ps; const th1 = pf.find(r => r.f === 1), th0 = pp.find(r => r.f === 1); q.pivotX = Math.abs(q.A - seg[i - 1].A) < 2.5 ? null : th1 ? th1.u : th0 ? th0.u : null; q.pivotMode = th1 ? 'after' : th0 ? 'before' : null; q.thA = th0 ? th0.a : 0; q.prevPr = pp.find(r => r.f > 1); } });   // pivotX : abscisse du pouce autour duquel la main bascule (passage du pouce) ; null : simple déplacement
+      seg.forEach((q, i) => { q.A = med(q.As); q.nat = null; if (i) { const pp = seg[i - 1].last.ps, pf = q.first.ps; const th1 = pf.find(r => r.f === 1), th0 = pp.find(r => r.f === 1); const pa = pp.find(r => r.f >= 2), pb = pf.find(r => r.f >= 2), sous = !!(th1 && pa && sg * (th1.u - pa.u) > 0), dessus = !!(th0 && pb && sg * (pb.u - th0.u) < 0);   // vrai passage : pouce sous un doigt (la main avance), ou doigt par-dessus le pouce ; sinon (le doigt s'éloigne du pouce : mouvement naturel) la main glisse seulement
+        q.pivotX = Math.abs(q.A - seg[i - 1].A) < 2.5 ? null : sous ? th1.u : dessus ? th0.u : null; q.pivotMode = q.pivotX === null ? null : sous ? 'after' : 'before'; q.thA = th0 ? th0.a : 0; q.prevPr = pp.find(r => r.f > 1); } });   // pivotX : abscisse du pouce autour duquel la main bascule (passage du pouce) ; null : simple déplacement
       const KF = { pl, seg };
       KF.at = k => { if (k < 0 || k >= seg.length) return null; const q = seg[k]; if (!q.nat) q.nat = handBody(h, 0.5 * (q.t0 + q.t1), true, true, false, {}, KF, { A: q.A }); return q.nat; };
       return (Hh.kf = KF);
@@ -400,10 +401,12 @@ const View3D = (() => {
         const zT = zNom(0, 0);   // profondeur d'appui du pouce
         // Le pouce est BLOQUÉ sur sa touche pendant la bascule : la paume tourne autour de lui (son bout est le pivot, la distance base du pouce – bout ne change pas, donc il reste posé sans se déformer).
         // reach : angle de la rotation autour du pouce (posé en xT) qui amène le doigt de la touche visée (press : doigt f, touche u) dans l'alignement de sa touche
-        const reach = (Ka, xT, pr) => { if (!pr) return 0; const fi = pr.f - 1; let bd = 0, be = Infinity;
-          for (let d = -40; d <= 40; d += 1) { const A = rotA(Ka, d, xT, zT), Fr = fr(A.bx, A.bz, A.py, A.th, A.rho, A.psi), Kf = Fr.w(LOC[fi]), v = [pr.u - Kf[0], 0.08 - Kf[1], zNom(fi, 0) - Kf[2]], lv = dot(v, Fr.L), fv = dot(v, Fr.F), e = Math.abs(lv) + (fv <= 0.3 ? 5 : 0) + 0.01 * Math.abs(d); if (e < be) { be = e; bd = d; } }
+        const reach = (Ka, xT, pr, lim = 40) => { if (!pr) return 0; const fi = pr.f - 1; let bd = 0, be = Infinity;
+          for (let d = -lim; d <= lim; d += 1) { const A = rotA(Ka, d, xT, zT), Fr = fr(A.bx, A.bz, A.py, A.th, A.rho, A.psi), Kf = Fr.w(LOC[fi]), v = [pr.u - Kf[0], 0.08 - Kf[1], zNom(fi, 0) - Kf[2]], lv = dot(v, Fr.L), fv = dot(v, Fr.F), e = Math.abs(lv) + (fv <= 0.3 ? 5 : 0) + 0.01 * Math.abs(d); if (e < be) { be = e; bd = d; } }
           return bd; };
         const memo = (o, key, f) => o[key] !== undefined ? o[key] : (o[key] = f());
+        const palmOf = P => fr(P.bx, P.bz, P.py, P.th, P.rho, P.psi).P;
+        const palmAngle = (Ka, Kb, x, z) => { const T = palmOf(Kb); let bd = 0, be = Infinity; for (let d = -40; d <= 40; d += 1) { const Pa = palmOf(rotA(Ka, d, x, z)), e = Math.hypot(Pa[0] - T[0], Pa[2] - T[2]); if (e < be) { be = e; bd = d; } } return bd; };   // angle de rotation de Ka autour de (x, z) qui amène sa paume au plus près de celle de Kb
         // MONTÉE (le pouce passe sous la main) : pendant la note qui précède, la main passe à la pose d'atterrissage (pouce sous la paume, doigts qui jouent encore à gauche du pouce) ; le pouce posé,
         // la paume bascule autour de lui jusqu'à la position naturelle, avant la note suivante. DESCENTE (un doigt passe par-dessus le pouce) : le pouce posé reste posé ; la paume tourne autour de lui,
         // le doigt passe par-dessus et arrive sur sa touche (lacet du poignet vers la droite) ; la note jouée, la main retrouve sa position naturelle.
@@ -412,14 +415,21 @@ const View3D = (() => {
           let base = Kc;
           if (cur.pivotX !== null && k > 0) {
             const Kp = KF.at(k - 1), xT = cur.pivotX, el = sp - cur.t0;
-            if (cur.pivotMode === 'after') { const dA = memo(cur, 'dA', () => reach(Kc, xT, cur.prevPr)), t2 = cur.gs[1] ? cur.gs[1].a - cur.t0 : 0.6, d2 = Math.min(0.3, 0.9 * t2); if (el < d2) base = rotA(Kc, dA * (1 - sm(el / d2)), xT, zT); }
-            else if (el < 0.3) { const dD = memo(cur, 'dD', () => reach(Kp, xT, cur.first.ps.find(r => r.f > 1))); base = lp(rotA(Kp, dD, xT, zT), Kc, sm(el / 0.3)); }
+            if (cur.pivotMode === 'after') {
+              const dA = memo(cur, 'dA', () => reach(Kc, xT, cur.prevPr)), Lr = rotA(Kc, dA, xT, zT), xE = cur.prevPr.u, zE = zNom(cur.prevPr.f - 1, 0), L1 = Lr,
+                b1 = memo(cur, 'b1', () => palmAngle(L1, Kc, xT, zT)), t2 = cur.gs[1] ? cur.gs[1].a - cur.t0 : 0.6, d2 = Math.min(0.3, 0.9 * t2);
+              if (el < d2) { const u = sm(el / d2); base = lp(rotA(L1, b1 * u, xT, zT), Kc, u); }   // le pouce est posé : la main tourne en appui sur lui, de la pose atteinte en appui sur le doigt précédent jusqu'à la position naturelle
+            }
+            else if (el < 0.3) { const dD = memo(cur, 'dD', () => reach(Kp, xT, cur.first.ps.find(r => r.f > 1), 65)); base = lp(rotA(Kp, dD, xT, zT), Kc, sm(el / 0.3)); }
           }
           if (!nxt) base = lp(base, restP, sm((sp - relax) / 0.5));
           else if (nxt.t0 - relax < 3.0) {
-            if (nxt.pivotX === null) { const tr = Math.max(0.08, Math.min(0.3, 0.8 * (nxt.t0 - cur.t0))); base = lp(base, Kn, sm((sp - (nxt.t0 - tr)) / tr)); }   // saut sans passage du pouce : la main glisse vers la position suivante avant la note
-            else if (nxt.pivotMode === 'after') { const dA = memo(nxt, 'dA', () => reach(Kn, nxt.pivotX, nxt.prevPr)), tA = cur.last.a, dur = nxt.t0 - tA; base = lp(base, rotA(Kn, dA, nxt.pivotX, zT), sm((sp - (tA + 0.05)) / (0.85 * dur))); }
-            else if (nxt.pivotMode === 'before' && sp >= nxt.thA) { const dD = memo(nxt, 'dD', () => reach(Kc, nxt.pivotX, nxt.first.ps.find(r => r.f > 1))), dur = nxt.t0 - nxt.thA; base = rotA(Kc, dD * sm((sp - nxt.thA) / (0.8 * dur)), nxt.pivotX, zT); }
+            if (nxt.pivotX === null) { const tE = nxt.t0, tS = Math.min(tE - 0.08, Math.max(tE - 0.3, cur.t1)); base = lp(base, Kn, sm((sp - tS) / (tE - tS))); }   // la main ne bouge pas tant qu'une touche est tenue : le glissement commence quand la dernière note de la position est relâchée (au plus 0,3 s et au moins 0,08 s avant l'appui suivant)   // saut sans passage du pouce : la main glisse vers la position suivante avant la note
+            else if (nxt.pivotMode === 'after') {   // montée : le doigt qui joue (le 3) reste posé sur sa touche, la main tourne en appui sur lui pour que le pouce passe dessous
+              const dA = memo(nxt, 'dA', () => reach(Kn, nxt.pivotX, nxt.prevPr)), Lr = rotA(Kn, dA, nxt.pivotX, zT), xE = nxt.prevPr.u, zE = zNom(nxt.prevPr.f - 1, 0), a1 = memo(nxt, 'a1', () => palmAngle(Kc, Lr, xE, zE)), tA = cur.last.a, dur = nxt.t0 - tA;
+              if (sp >= tA + 0.05) base = lp(rotA(Kc, a1 * sm((sp - (tA + 0.05)) / (0.85 * dur)), xE, zE), Lr, sm((sp - (nxt.t0 - 0.1)) / 0.1));   // la main tourne en appui sur le doigt qui joue ; dans les 0,1 s avant l'attaque du pouce, elle rejoint exactement la pose où il atteint sa touche
+            }
+            else if (nxt.pivotMode === 'before' && sp >= nxt.thA) { const dD = memo(nxt, 'dD', () => reach(Kc, nxt.pivotX, nxt.first.ps.find(r => r.f > 1), 65)), dur = nxt.t0 - nxt.thA; base = rotA(Kc, dD * sm((sp - nxt.thA) / (0.8 * dur)), nxt.pivotX, zT); }
           }
           else base = lp(lp(base, restP, sm((sp - relax) / 0.5)), Kn, sm((sp - (nxt.t0 - 0.5)) / 0.5));   // longue pause : la main se détend puis repart
           pose = base;

@@ -21,6 +21,9 @@
   // Le 2 et le 3 (index et majeur) sont physiologiquement liés : un écart de notes non conjointes (3 demi-tons ou plus) entre eux est coûteux ; le 2 et le 4 sont à l'aise sur cet écart.
   function pairCost(f1, q1, f2, q2) { return pairCost0(f1, q1, f2, q2) + (f1 === 3 && f2 === 4 ? 0.5 : 0) + (((f1 === 2 && f2 === 3) || (f1 === 3 && f2 === 2)) && Math.abs(q2 - q1) >= 3 ? WDEUXTROIS : 0); }
   const WDEUXTROIS = 1.2;
+  // Écarts maximaux (demi-tons, main droite) de Parncutt et al. 1997, table 1 : « relâché » et « confortable », par paire de doigts (clé = plus petit·plus grand)
+  const MAXREL = { '12': 5, '13': 7, '14': 9, '15': 10, '23': 2, '24': 4, '25': 6, '34': 2, '35': 4, '45': 2 }, MAXCOMF = { '12': 8, '13': 10, '14': 12, '15': 13, '23': 3, '24': 5, '25': 8, '34': 2, '35': 5, '45': 3 };
+  const C1 = true, C2 = true;
   // Règles de Parncutt et al. 1997 : nombre de changements de position (un point fixe par déplacement de la main, quelle que soit sa taille) et « 3-4-5 » (trois notes de suite jouées par les doigts 3, 4 et 5 : les trois doigts les moins indépendants)
   const WCOUNT = 0.1, W345 = 0.3;   // poids volontairement faibles : plus forts, ils défont des doigtés validés (gamme de do 1 2 3 1 2 3 4 5 contient un 3-4-5 ; mi sol♯ si do = 1 2 4 5)
   // Taille de la main : les écarts confortables entre deux doigts sont multipliés par ce facteur (petite 0,85 ; moyenne 1 ; grande 1,15)
@@ -29,7 +32,7 @@
     const dq = q2 - q1, df = f2 - f1, a = Math.abs(dq), m = Math.abs(df);
     if (dq === 0) return f1 === f2 ? 0 : 1;                 // même touche : changer de doigt coûte un peu
     if (df === 0) return 1 + 0.4 * a;                       // même doigt sur une autre touche : saut
-    if (df * dq > 0) { const lo = m, hi = (2.2 * m + 1) * HS; return a < lo ? (lo - a) * 0.5 : a > hi ? (a - hi) * 0.9 : 0; } // sens naturel : écart confortable
+    if (df * dq > 0) { const lo = m, hi = Math.max(2.2 * m + 1, C2 && Math.min(f1, f2) === 1 && Math.max(f1, f2) === 2 ? MAXREL['12'] : 0) * HS; return a < lo ? (lo - a) * 0.5 : a > hi ? (a - hi) * 0.9 : 0; } // sens naturel : écart confortable
     const far = a > 8 ? 40 : a > 5 ? (a - 5) * 0.6 : 0;   // passage du pouce : au-delà de huit demi-tons, c'est impossible (le pouce passe sous la main par pas conjoints)
     if (f2 === 1) return ({ 2: 1.6, 3: 0.3, 4: 0.8, 5: 2.5 }[f1] || 3) + far; // le pouce passe sous la main
     if (f1 === 1) return ({ 2: 1.2, 3: 0.3, 4: 0.8, 5: 2.8 }[f2] || 3) + far; // un doigt passe par-dessus le pouce
@@ -61,6 +64,38 @@
         const fing = hand === 'L' ? [5, 3, 2, 1] : [1, 2, 3, 5], byPitch = m.slice().sort((x, y) => x.midi - y.midi);
         byPitch.forEach((n, k) => { n._arp = fing[k]; }); i += 4;
       } else i++;
+    }
+    // Arpège de 3 notes (racine, quinte ou octave, tierce ou octave : trois notes seules qui montent ou descendent, un premier saut de 7 à 12 demi-tons puis un second de 3 à 7, sur au plus 17 demi-tons) : le doigté suit la hauteur,
+    // main droite 1-2-5 de la note la plus grave à la plus aiguë, main gauche 5-2-1 (la main s'ouvre : le 5 et le 2 couvrent le grand intervalle sans passer le pouce). Imposé aux notes sans doigté.
+    for (let i = 0; i + 2 < ev.length; ) {
+      const w = ev.slice(i, i + 3), one = w.every(e => e.all.length === 1), m = one ? w.map(e => e.all[0]) : null;
+      const iv = m ? [m[1].midi - m[0].midi, m[2].midi - m[1].midi] : null;
+      const mono = iv && ((iv[0] > 0 && iv[1] > 0) || (iv[0] < 0 && iv[1] < 0)), a0 = iv ? Math.abs(iv[0]) : 0, a1 = iv ? Math.abs(iv[1]) : 0;
+      if (m && mono && a0 >= 7 && a0 <= 12 && a1 >= 3 && a1 <= 7 && a0 + a1 <= 17 && m.every(n => !n.finger && !n._arp) && w.every((e, k) => !k || e.t - w[k - 1].t < 0.9)) {
+        const fing = hand === 'L' ? [5, 2, 1] : [1, 2, 5], byPitch = m.slice().sort((x, y) => x.midi - y.midi);
+        byPitch.forEach((n, k) => { n._arp = fing[k]; }); i += 3;
+      } else i++;
+    }
+    // Gamme de do majeur (touches blanches seulement) : huit notes seules ou plus, conjointes (pas d'un ton ou d'un demi-ton), dans un seul sens, sans silence de plus de 0,9 s. Doigté classique en blocs :
+    // le pouce tombe sur do et fa à la main droite, sur sol et do à la main gauche ; main droite, le doigt d'une note est 1 + sa distance (en degrés) au pouce le plus proche en dessous (1 2 3 1 2 3 4 1 2 3 1 2 3 4 5) ;
+    // main gauche, 1 + sa distance au pouce le plus proche au-dessus (5 4 3 2 1 3 2 1 4 3 2 1 3 2 1). La note la plus aiguë (main droite) ou la plus grave (main gauche), si c'est un do au pouce précédé d'un 4, prend le 5.
+    {
+      const dia = m => Math.floor(m / 12) * 7 + WIDX[((m % 12) + 12) % 12], white = n => !isBlack(n.midi);
+      const fingerOf = n => { const d = ((dia(n.midi) % 7) + 7) % 7;
+        if (hand === 'R') { const th = [0, 3]; let b = 0; th.forEach(t => { if (t <= d) b = t; }); return 1 + d - b; }
+        const th = [0, 4, 7]; let a = 7; th.slice().reverse().forEach(t => { if (t >= d) a = t; }); return 1 + a - d; };
+      for (let i = 0; i + 7 < ev.length; ) {
+        if (ev[i].all.length !== 1) { i++; continue; }
+        let j = i, dir = 0;
+        while (j + 1 < ev.length && ev[j + 1].all.length === 1 && ev[j + 1].t - ev[j].t < 0.9) { const a = ev[j].all[0], b = ev[j + 1].all[0], dm = b.midi - a.midi; if (!white(a) || !white(b) || Math.abs(dm) < 1 || Math.abs(dm) > 2 || (dir && Math.sign(dm) !== dir)) break; dir = Math.sign(dm); j++; }
+        const run = ev.slice(i, j + 1).map(e => e.all[0]);
+        if (run.length >= 8 && run.every(n => !n.finger && !n._arp && white(n))) {
+          const fs = run.map(fingerOf), top = hand === 'R' ? run.reduce((m, n, k) => run[m].midi >= n.midi ? m : k, 0) : run.reduce((m, n, k) => run[m].midi <= n.midi ? m : k, 0), nb = top > 0 ? top - 1 : top + 1;
+          if (fs[top] === 1 && fs[nb] === 4) fs[top] = 5;
+          run.forEach((n, k) => { n._arp = fs[k]; });
+          i = j + 1;
+        } else i = Math.max(i + 1, j);
+      }
     }
     const imposed = n => n.finger || n._arp || 0;
     // Début de phrase : après un silence assez long (≥ 0,45 s) la main a le temps de se déplacer puis de se remettre dans sa position naturelle : la première note se joue au doigt « de départ »
@@ -135,7 +170,13 @@
               const pa = p.ns[near0], fa0 = SA[near0]; if (pa && fa0) {
                 const dP = (sgn * (ux(n.midi) - ux(pa.midi))) - (fb - fa0), croise = fa0 !== fb && (fa0 === 1 || fb === 1) && (fb - fa0) * (q(n) - q(pa)) < 0;
                 const dxk = Math.abs(ux(n.midi) - ux(pa.midi));   // écart sur le clavier, en touches blanches
-                c += scale * (croise ? WCROIS * Math.min(Math.abs(dP), 2) : (!e.fit && dxk >= 1.9 && dxk > Math.abs(fb - fa0) && Math.abs(q(n) - q(pa)) <= 5 ? WPOS_SAUT : WPOS) * Math.abs(dP));
+                let dPe = Math.abs(dP);
+                if (C1 && !croise && Math.abs(fb - fa0) >= 3 && (fb - fa0) * (q(n) - q(pa)) > 0 && Math.abs(ux(n.midi) - ux(pa.midi)) > Math.abs(fb - fa0)) {   // les doigts s'étirent : l'écart sur le clavier dépasse la distance des doigts ; ce que l'écart confortable de la paire absorbe n'est pas un décalage de la main
+                  const pk = Math.min(fa0, fb) + '' + Math.max(fa0, fb), mc = ((fa0 === 1 || fb === 1) ? MAXREL[pk] : MAXCOMF[pk]) || 0,   // écart maximal de la position naturelle : relâché pour le pouce, confortable pour les autres doigts
+                   absorb = Math.max(0, (mc - 1.7 * Math.abs(fb - fa0)) / 1.7);
+                  if (Math.abs(q(n) - q(pa)) <= mc - ((fa0 === 1 || fb === 1) ? 1 : 0)) dPe = Math.max(0, dPe - absorb);
+                }
+                c += scale * (croise ? WCROIS * Math.min(Math.abs(dP), 2) : (!e.fit && dxk >= 1.9 && dxk > Math.abs(fb - fa0) && Math.abs(q(n) - q(pa)) <= 5 ? WPOS_SAUT : WPOS) * dPe);
                 if (Math.abs(dP) >= 0.9) c += scale * WCOUNT;   // nombre de changements de position (Parncutt) : chaque déplacement de la main coûte un point fixe, en plus de sa taille
                 // Aucune contrainte d'empan : les doigts se suivent dans l'ordre (main droite 1 2 3 4 5 en montant et 5 4 3 2 1 en descendant ; main gauche l'inverse) ;
                 // sauter un doigt (1 puis 3 pour une tierce) ne se fait que si l'empan l'impose (les grands intervalles gardent leurs doigtés habituels : 5 puis 1 pour une quarte en descendant)

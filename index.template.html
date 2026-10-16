@@ -139,6 +139,7 @@
     <button id="demo" title="Charger l'exemple : début de la Lettre à Élise (Beethoven)">Exemple : Élise</button>
     <button id="demo3" title="Charger l'exemple : « J'ai du bon tabac », très simple : une main à cinq doigts (do à sol), accompagnement facile">Exemple : J'ai du bon tabac</button>
     <button id="demo2" title="Charger l'exemple : Variation 30 des Variations Goldberg (Bach)">Exemple : Bach</button>
+    <button id="demo4" title="Charger l'exemple : gamme de do majeur sur deux octaves, deux mains, montante puis descendante (doigtés classiques)">Exemple : gamme de do</button>
     <div class="grp tip">
       <button id="export">🎬 Export vidéo</button>
       <select id="xres" title="Résolution de la vidéo"><option value="1280">720p</option><option value="1920">1080p</option></select>
@@ -208,7 +209,7 @@
 
 <script>
 'use strict';
-const EXEMPLE_B64 = '__EXEMPLE_B64__', EXEMPLE_ELISE_B64 = '__EXEMPLE_ELISE_B64__', EXEMPLE_TABAC_B64 = '__EXEMPLE_TABAC_B64__';
+const EXEMPLE_B64 = '__EXEMPLE_B64__', EXEMPLE_ELISE_B64 = '__EXEMPLE_ELISE_B64__', EXEMPLE_TABAC_B64 = '__EXEMPLE_TABAC_B64__', EXEMPLE_GAMME_B64 = '__EXEMPLE_GAMME_B64__';
 const $ = id => document.getElementById(id);
 const cv = $('cv'); let ctx = cv.getContext('2d'); const screenCtx = ctx;
 
@@ -791,6 +792,7 @@ const openExemple = (b64, nom) => {
 $('demo').onclick = () => openExemple(EXEMPLE_ELISE_B64, 'Lettre à Élise (exemple)');
 $('demo2').onclick = () => openExemple(EXEMPLE_B64, 'Goldberg – Variation 30 (exemple)');
 $('demo3').onclick = () => openExemple(EXEMPLE_TABAC_B64, 'J\'ai du bon tabac (exemple)');
+$('demo4').onclick = () => openExemple(EXEMPLE_GAMME_B64, 'Gamme de do majeur, deux octaves (exemple)');
 let dragDepth = 0;
 addEventListener('dragenter', e => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
 addEventListener('dragleave', e => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
