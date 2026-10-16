@@ -113,7 +113,8 @@
     ev.forEach((e, i) => { e.repN = i && e.all.length === 1 && ev[i - 1].all.length === 1 && e.all[0].midi === ev[i - 1].all[0].midi ? (ev[i - 1].repN || 0) + 1 : 0; });
     // Les notes voisines (trois événements de chaque côté) tiennent-elles dans l'empan de la main (cinq touches blanches) ? Si oui, la main reste immobile : un doigt par touche, quoi qu'il arrive.
     // Sinon, la main doit se déplacer et on choisit des doigts consécutifs même pour une tierce.
-    ev.forEach((e, i) => { let lo = Infinity, hi = -Infinity; for (let j = Math.max(0, i - 3); j <= Math.min(ev.length - 1, i + 3); j++) ev[j].all.forEach(n => { lo = Math.min(lo, ux(n.midi)); hi = Math.max(hi, ux(n.midi)); }); e.fit = hi - lo <= 4.01; });
+    // La fenêtre s'arrête au début de la phrase suivante (pause + saut) : une main ne « voit » pas les notes d'une autre phrase pour décider si elle bouge.
+    ev.forEach((e, i) => { let a = i, b = i; while (a > 0 && i - a < 3 && !ev[a].start) a--; while (b + 1 < ev.length && b - i < 3 && !ev[b + 1].start) b++; let lo = Infinity, hi = -Infinity; for (let j = a; j <= b; j++) ev[j].all.forEach(n => { lo = Math.min(lo, ux(n.midi)); hi = Math.max(hi, ux(n.midi)); }); e.fit = hi - lo <= 4.01; });
     if (!ev.length) return;
     let cost = ev[0].own.slice(), back = [];
     for (let i = 1; i < ev.length; i++) {

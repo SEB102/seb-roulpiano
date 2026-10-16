@@ -286,7 +286,9 @@ const View3D = (() => {
       a.fingers.forEach((f, i) => { if (!f.pressed || JUMP || (H.hold[i] && Math.abs(H.hold[i].x - f.x) > 0.3)) H.hold[i] = null; });
       const xs = a.fingers.map(f => f.x), pin = a.fingers.map(f => !!f.pressed || (f.depth || 0) > 0.6 || (f.wN || 0) > 0.85);
       if (nat) for (let i = 0; i < 5; i++) xs[i] = nat.A + sg * i;   // position naturelle : cinq doigts sur cinq touches blanches voisines
-      const px0 = nat ? xs[2] : a.palm;   // position horizontale de la base 3.0 donnée par le plan (sans limite) ; la recherche l'ajuste de ±2 touches
+      const px0 = nat ? xs[2] : a.palm;
+      // position naturelle, pour les DEUX mains et tous les morceaux : lacet nul, roulis nul, et les doigts 2 à 5 alignés avec le milieu de leurs touches (bases au milieu des touches, au mieux sur les quatre)
+      const dxN = nat ? [1, 2, 3, 4].reduce((q, i) => q + xs[i] - sg * LOC[i][0], 0) / 4 - px0 : 0;   // position horizontale de la base 3.0 donnée par le plan (sans limite) ; la recherche l'ajuste de ±2 touches
       enforceOrder(xs, pin, sg);
       // Règle d'enchaînement : un doigt voisin qui vient de jouer (ou de quitter sa touche) doit se replier AVANT que l'autre ne s'étende, sinon les deux doigts se croisent.
       const kws = a.fingers.map(f => Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0, 0.7 * (f.wP || 0)));
@@ -312,8 +314,11 @@ const View3D = (() => {
       // Passage sans touche noire (pour cette main : de 0,6 s avant à 2 s après l'instant courant) : la main recule pour que les doigts frappent les touches blanches, au plus loin, au niveau du bord avant des touches noires (z = 0,6) ; le pouce peut toucher le bord de sa touche
       let nbT = 0; { let any = false, blackSeen = false; for (let i = st.lowerBoundSec(sp - 0.6); i < S.length && S[i].t0 <= sp + 2.0; i++) { const n = S[i]; if (n.t1 < sp - 0.6 || st.noteHand(n) !== h) continue; any = true; if (st.isBlack(n.midi)) { blackSeen = true; break; } } nbT = any && !blackSeen ? 1 : 0; }
       H.nbS = (H.nbS === undefined || SNAP) ? nbT : H.nbS + (nbT - H.nbS) * AL * 0.5; const nb = H.nbS;
-      const zNom = (i, bk) => { const w = i === 0 ? 2.3 + 0.5 * nb : 1.7 + 0.2 * nb; return w + (0.15 - w) * bk; };   // ligne d'appui nominale (touche blanche : 1,7 ; pouce : 2,3 ; en passage sans touche noire : 1,9, et pouce 2,8 = bord de sa touche)
-      const zCands = i => { if (H.hold[i]) return [{ z: H.hold[i].z, p: 0 }]; const bk = H.fingers[i].blkS, zt = zNom(i, bk), lo = Math.max(zt - 1.1, 0.6 + (-2.5 - 0.6) * bk), hi = Math.min(zt + (i === 0 ? 0.4 : 0.9), 2.95 + (0.5 - 2.95) * bk);
+      // Les doigts 2 à 5 se replient : ils ne frappent jamais une touche blanche entre deux touches noires. Leur point de contact le plus profond est 1/5 de la longueur d'une touche blanche (1,2) en avant de la ligne
+      // formée par le bord avant des touches noires (z = 0,6), quelles que soient les notes jouées (les touches noires sont toujours là).
+      const ZFLOOR = ZB + 0.2 * KEY_L;
+      const zNom = (i, bk) => { const w = i === 0 ? 2.3 + 0.5 * nb : Math.max(1.7 + 0.2 * nb, ZFLOOR + 0.2); return w + (0.15 - w) * bk; };   // ligne d'appui nominale (touche blanche : 1,7 ; pouce : 2,3 ; en passage sans touche noire : 1,9, et pouce 2,8 = bord de sa touche)
+      const zCands = i => { if (H.hold[i]) return [{ z: H.hold[i].z, p: 0 }]; const bk = H.fingers[i].blkS, zt = zNom(i, bk), lo = Math.max(zt - 1.1, 0.6 + (-2.5 - 0.6) * bk, i > 0 && bk < 0.5 ? ZFLOOR : -Infinity), hi = Math.min(zt + (i === 0 ? 0.4 : 0.9), 2.95 + (0.5 - 2.95) * bk);
         return [zt, lo, (lo + zt) / 2, (zt + hi) / 2, hi].filter(z => z >= lo - 1e-9 && z <= hi + 1e-9).map(z => ({ z, p: 0.05 * Math.abs(z - zt) })); };
       const tgt = i => { const bk = H.fingers[i].blkS; return [xs[i], (bk ? 0.52 : 0.08), zNom(i, bk)]; };
       const rotY = (v, b) => [v[0] * Math.cos(b) - v[2] * Math.sin(b), v[1], v[0] * Math.sin(b) + v[2] * Math.cos(b)];
@@ -356,20 +361,20 @@ const View3D = (() => {
       const spd = (H.px0P === undefined || SNAP) ? 0 : Math.abs(px0 - H.px0P) / dtS; H.px0P = px0;
       H.mvS = (H.mvS === undefined || SNAP) ? 0 : H.mvS + ((eng.length ? 0 : Math.min(1, spd / 1.5)) - H.mvS) * AL; const mv = H.mvS;
       const khT0 = (eng.length ? 1.0 : 1.2) + 0.6 * nb; H.khS = (H.khS === undefined || SNAP) ? khT0 : H.khS + (khT0 - H.khS) * AL; const khT = H.khS;
-      const pref = q => 0.004 * Math.abs(q.dx) + (1 - nb) * (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.06 * Math.abs(q.bz - 3) : 0.01 * Math.abs(q.bz - 2.2)) + nb * 0.6 * Math.abs(q.bz - BASE_ZMAX) + 1.2 * Math.abs(q.py - khT) + (nat ? 0.1 : 0.004) * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5));
+      const pref = q => 0.004 * Math.abs(q.dx) + (1 - nb) * (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.06 * Math.abs(q.bz - 3) : 0.01 * Math.abs(q.bz - 2.2)) + nb * 0.6 * Math.abs(q.bz - BASE_ZMAX) + (nat ? 0.04 : 1.2) * Math.abs(q.py - khT) + 0.004 * Math.abs(q.th - 10) + 0.012 * Math.abs(q.rho) + 0.03 * Math.max(0, q.rho - 20) + (eng.some(o => o.i >= 1 && o.i <= 3) ? 0.05 * Math.abs(q.psi - 15) : 0.02 * Math.abs(q.psi - 5));
       const scoreQ = q => (stats.ev = (stats.ev || 0) + 1, stats.evF = stats.evF || 0, evalPose)(px0 + q.dx, q.bz, q.py, q.th, q.rho, q.psi) + pref(q);
       let pose = H.pose || { dx: 0, bz: 2.2, py: 1.8, th: 10, rho: 0, psi: 5 };   // lacet de P par défaut : 5° vers l'extérieur
       if (kf && !eng.length) pose = { dx: 0, bz: 2.8 + (BASE_ZMAX - 2.8) * nb, py: 1.2 + 0.6 * nb + 0.9 * mv, th: 5, rho: 0, psi: 5 };   // au repos (entre deux notes) : la main reste près du clavier, sans remonter
       if (kf && eng.length) {
         // recherche en deux temps : (1) départ = pose de l'image précédente (ou grille grossière si elle est mauvaise, si les doigts engagés ont changé, ou toutes les 10 images) ;
         // (2) affinage par pas décroissants, une coordonnée à la fois
-        const key = eng.map(o => o.i).join(''), lim = { th: [-15, 40], rho: [-10, 70], psi: [-20, 20], py: [0, YMAX], bz: [0.2, BASE_ZMAX], dx: [-2.5, 2.5] }; if (nat) lim.psi = [0, 0];
+        const key = eng.map(o => o.i).join(''), lim = { th: [-15, 40], rho: [-10, 70], psi: [-20, 20], py: [0, YMAX], bz: [0.2, BASE_ZMAX], dx: [-2.5, 2.5] }; if (nat) { lim.psi = [0, 0]; lim.rho = [0, 0]; lim.dx = [dxN, dxN]; lim.th = [0, 35]; }
         // passage du pouce : la main TRANSLATE (dx, recul, hauteur), son orientation (inclinaison, roulis, lacet) reste celle d'avant le passage
         if (passPouce) { if (!H.lockQ) { const src = (H.prevKf && H.prevKf()) || H.pose || pose; H.lockQ = { th: src.th, rho: src.rho, psi: src.psi }; } ['th', 'rho', 'psi'].forEach(k => { lim[k] = [H.lockQ[k], H.lockQ[k]]; }); pose = Object.assign({}, pose, H.lockQ); if (H.pose) H.pose = Object.assign({}, H.pose, H.lockQ); } else H.lockQ = null;
         let best = H.pose ? scoreQ(H.pose) : Infinity;
         H.fc = (H.fc || 0) + 1;
         if (!H.pose || best > 0.7 || H.engKey !== key || SNAP) {
-          for (const dx of [-1.5, 0, 1.5]) for (const bz of [1.2, 2.1, 2.8]) for (const py of [0.8, 1.8, 2.7]) for (const th of H.lockQ ? [H.lockQ.th] : [0, 15, 35]) for (const rho of H.lockQ ? [H.lockQ.rho] : [-5, 15, 40]) for (const psi of nat ? [0] : H.lockQ ? [H.lockQ.psi] : [-15, 0, 15]) {
+          for (const dx of nat ? [dxN] : [-1.5, 0, 1.5]) for (const bz of [1.2, 2.1, 2.8]) for (const py of [0.8, 1.8, 2.7]) for (const th of nat ? [0, 15, 30] : H.lockQ ? [H.lockQ.th] : [0, 15, 35]) for (const rho of nat ? [0] : H.lockQ ? [H.lockQ.rho] : [-5, 15, 40]) for (const psi of nat ? [0] : H.lockQ ? [H.lockQ.psi] : [-15, 0, 15]) {
             const q = { dx, bz, py, th, rho, psi }, sc = scoreQ(q); if (sc < best - 0.04) { best = sc; pose = q; } }
         } else pose = H.pose;
         H.engKey = key;
