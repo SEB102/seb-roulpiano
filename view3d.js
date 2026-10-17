@@ -279,9 +279,12 @@ const View3D = (() => {
       KF.at = k => { if (k < 0 || k >= seg.length) return null; const q = seg[k]; if (!q.nat) q.nat = handBody(h, 0.5 * (q.t0 + q.t1), true, true, false, {}, KF, { A: q.A }); return q.nat; };
       return (Hh.kf = KF);
     };
+    // Un doigt qui appuie ne bouge plus du tout : son état (touche, hauteur) est celui du TEMPS RÉEL, jamais celui de l'anticipation (qui le ferait glisser vers la note suivante ou se lever en avance) ;
+    // un doigt que l'anticipation voit déjà appuyé, alors que la note n'a pas encore commencé, reste en approche (pas encore appuyé).
+    const mixP = (A, N) => N ? Object.assign({}, A, { fingers: A.fingers.map((f, i) => N.fingers[i].pressed ? N.fingers[i] : f.pressed ? Object.assign({}, f, { pressed: false }) : f) }) : A;
     const handBody = (h, sp, kf, SNAP, JUMP, stats, KF, nat) => {
       const pl = st.plan && st.plan[h], H = kf ? kfHand(h, pl, sp, null) : hands[h]; if (!kf && pl && !pl.empty) KF = kfOf(h, pl); const show = vis.includes(h) && pl && !pl.empty && st.handsMode !== 'off'; if (!kf) H.g.visible = !!show; if (!show) return null;
-      const spH = sp + (fwdSp && !SNAP ? Math.min(0.12, rateSp * tau) : 0), a = pl.at(spH), sg = h === 'L' ? -1 : 1, col = h === 'R' ? CR : CL;
+      const spH = sp + (fwdSp && !SNAP ? Math.min(0.12, rateSp * tau) : 0), a = mixP(pl.at(spH), kf ? null : pl.at(sp)), sg = h === 'L' ? -1 : 1, col = h === 'R' ? CR : CL;
       // Doigt en contact avec une touche : il ne glisse plus dessus tant qu'il la tient (H.hold[i] = point de contact retenu à l'appui) ; relâché, ou autre touche, ou saut dans le morceau : libre
       H.hold = H.hold || [null, null, null, null, null];
       a.fingers.forEach((f, i) => { if (!f.pressed || JUMP || (H.hold[i] && Math.abs(H.hold[i].x - f.x) > 0.3)) H.hold[i] = null; });
@@ -483,7 +486,7 @@ const View3D = (() => {
           if (f.pressed) { let bb = null; for (const { z, p } of zCands(0)) { const w = [fx - K.x, Tt.y - K.y, z - K.z]; tl = [dot(w, FR.L), dot(w, FR.F), dot(w, FR.N)]; const b = solveT(); if (!bb || b.e + p < bb.e + bb.p) bb = { e: b.e, psi: b.psi, inc: b.inc, flx: b.flx, p, tl, z }; } tl = bb.tl; bt = bb; if (!H.hold[0]) H.hold[0] = { x: fx, z: bb.z }; } else bt = solveT();
           if (wt < 1) { bt = { e: bt.e, psi: wt * bt.psi + (1 - wt) * REST_T[0], inc: wt * bt.inc + (1 - wt) * REST_T[1], flx: wt * bt.flx + (1 - wt) * REST_T[2] }; }   // au repos : pose de repos exacte (y compris flexion −5°, hors de la plage de jeu 0–90°)
           const ALt = 1 - Math.exp(-dtS / (tau * 0.4));   // le pouce suit sa cible plus vite que les doigts (il parcourt de grands angles)
-          F.thS = (!pv || SNAP) ? { psi: bt.psi, inc: bt.inc, flx: bt.flx } : { psi: pv.psi + (bt.psi - pv.psi) * ALt, inc: pv.inc + (bt.inc - pv.inc) * ALt, flx: pv.flx + (bt.flx - pv.flx) * ALt };
+          F.thS = (!pv || SNAP || f.pressed) ? { psi: bt.psi, inc: bt.inc, flx: bt.flx } : { psi: pv.psi + (bt.psi - pv.psi) * ALt, inc: pv.inc + (bt.inc - pv.inc) * ALt, flx: pv.flx + (bt.flx - pv.flx) * ALt };
           const o = thumbOff(F.thS.psi, F.thS.inc, F.thS.flx), w = q => V(K.x + FR.L[0] * q[0] + FR.F[0] * q[1] + FR.N[0] * q[2], K.y + FR.L[1] * q[0] + FR.F[1] * q[1] + FR.N[1] * q[2], K.z + FR.L[2] * q[0] + FR.F[2] * q[1] + FR.N[2] * q[2]);
           M = w(o.m); T.copy(w(o.t)); D = M.clone().lerp(T, 0.55);
           const real = Math.hypot(o.t[0] - tl[0], o.t[1] - tl[1], o.t[2] - tl[2]);
@@ -497,7 +500,7 @@ const View3D = (() => {
           // direction du doigt dans le plan de la paume : lacet à la base x.0 (2, 3, 4 : ±20° ; 5 : −5° à +45°) ; inclinaison de x.0 : +5° (haut) à −70° (bas) par rapport à la paume ; roulis 0 ; le doigt fléchit dans le plan (direction, normale de la paume), sans roulis propre
           const v0 = [T.x - K.x, T.y - K.y, T.z - K.z], fv = dot(v0, FR.F), lv = dot(v0, FR.L), nv0 = dot(v0, FR.N);
           let ang = Math.max(LACET[F.f - 1][0] * D2R, Math.min(LACET[F.f - 1][1] * D2R, Math.atan2(lv, Math.max(1.2, fv))));
-          ang = (F.angS === undefined || SNAP) ? ang : F.angS + (ang - F.angS) * AL; F.angS = ang;
+          ang = (F.angS === undefined || SNAP || f.pressed) ? ang : F.angS + (ang - F.angS) * AL; F.angS = ang;
           const dd = [0, 1, 2].map(k => Math.cos(ang) * FR.F[k] + Math.sin(ang) * FR.L[k]), NN = FR.N, cT = Math.cos(th * D2R), sT = Math.sin(th * D2R);
           const u0 = Math.max(0.2, dot(v0, dd)), tu = u0 * cT - nv0 * sT, ty = u0 * sT + nv0 * cT;   // passage au repère « paume inclinée de th » utilisé par la recherche de pose
           let best = null; const R2D = Math.PI / 180;
@@ -509,7 +512,7 @@ const View3D = (() => {
             if (!best || err < best.err) best = { err, e1, f2, rr, dz, mu, my, du, dy, tu2, ty2 };
           }
           // lissage temporel : les angles retenus sont filtrés (≈ 70 ms) pour que les doigts ne « tremblent » pas quand la meilleure pose change d'une image à l'autre
-          { const sn = F.f2S === undefined || SNAP; F.e1S = sn ? best.e1 : F.e1S + (best.e1 - F.e1S) * AL; F.f2S = sn ? best.f2 : F.f2S + (best.f2 - F.f2S) * AL; F.dzS = sn ? best.dz : F.dzS + (best.dz - F.dzS) * AL; F.rS = (sn || F.rS === undefined) ? best.rr : F.rS + (best.rr - F.rS) * AL;
+          { const sn = F.f2S === undefined || SNAP || f.pressed; F.e1S = sn ? best.e1 : F.e1S + (best.e1 - F.e1S) * AL; F.f2S = sn ? best.f2 : F.f2S + (best.f2 - F.f2S) * AL; F.dzS = sn ? best.dz : F.dzS + (best.dz - F.dzS) * AL; F.rS = (sn || F.rS === undefined) ? best.rr : F.rS + (best.rr - F.rS) * AL;
             const a1 = F.e1S * R2D, a2 = a1 - F.f2S * R2D, a3 = a2 - F.rS * F.f2S * R2D;
             best.mu = La * Math.cos(a1); best.my = La * Math.sin(a1); best.du = best.mu + Lb * Math.cos(a2); best.dy = best.my + Lb * Math.sin(a2); best.tu2 = best.du + Lc * Math.cos(a3); best.ty2 = best.dy + Lc * Math.sin(a3); }
           { const A1 = F.e1S, A2 = A1 - F.f2S, A3 = A2 - (F.rS === undefined ? 0.45 : F.rS) * F.f2S, v = stats.val = stats.val || { n: 0, mcp: 0, pip: 0, dip: 0, back: 0 };
