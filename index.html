@@ -1534,7 +1534,7 @@ function frame(ts) {
 // ---------- Barre de commandes (décomposition) ----------
 addEventListener('click', e => { const b = e.target.closest && e.target.closest('button'); if (b) b.blur(); });
 // Mains virtuelles, trois états : aucune / avec trajectoires (doigts repliés, repères, chemins) / sans trajectoires (doigts tendus, ni repères ni chemins)
-function setHandsMode(m) { handsMode = m; showHands = m !== 'off'; showTraj = curlFingers = m === 'traj'; markPlan(); }
+function setHandsMode(m) { handsMode = m; if (m === 'traj') anticip = true; showHands = m !== 'off'; showTraj = curlFingers = m === 'traj'; markPlan(); }
 function cycleHandsMode() { setHandsMode(handsMode === 'traj' ? 'plain' : handsMode === 'plain' ? 'off' : 'traj'); }
 // ---------- Vue 3D : clavier en perspective, rouleau qui s'éloigne, mains en traits épais (glisser pour tourner, molette pour zoomer, double-clic pour revenir) ----------
 function toggle3D() {
