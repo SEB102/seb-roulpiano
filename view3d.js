@@ -323,7 +323,8 @@ const View3D = (() => {
       const ZFLOOR = ZB + 0.2 * KEY_L;
       const zNom = (i, bk) => { const w = i === 0 ? 2.3 + 0.5 * nb : Math.max(1.7 + 0.2 * nb, ZFLOOR + 0.2); return w + (0.15 - w) * bk; };   // ligne d'appui nominale (touche blanche : 1,7 ; pouce : 2,3 ; en passage sans touche noire : 1,9, et pouce 2,8 = bord de sa touche)
       const zCands = i => { if (H.hold[i]) return [{ z: H.hold[i].z, p: 0 }]; const bk = H.fingers[i].blkS, zt = zNom(i, bk), lo = Math.max(zt - 1.1, 0.6 + (-2.5 - 0.6) * bk, i > 0 && bk < 0.5 ? ZFLOOR : -Infinity), hi = Math.min(zt + (i === 0 ? 0.4 : 0.9), 2.95 + (0.5 - 2.95) * bk);
-        return [zt, lo, (lo + zt) / 2, (zt + hi) / 2, hi].filter(z => z >= lo - 1e-9 && z <= hi + 1e-9).map(z => ({ z, p: 0.05 * Math.abs(z - zt) })); };
+        const L = [zt, lo, (lo + zt) / 2, (zt + hi) / 2, hi].filter(z => z >= lo - 1e-9 && z <= hi + 1e-9).map(z => ({ z, p: 0.05 * Math.abs(z - zt) })); return L.length ? L : [{ z: zt, p: 0 }]; };   // doigt déjà appuyé alors que la touche (blkS) est encore en transition : plage vide, on retombe sur le point nominal
+
       const tgt = i => { const bk = H.fingers[i].blkS; return [xs[i], (bk ? 0.52 : 0.08), zNom(i, bk)]; };
       const rotY = (v, b) => [v[0] * Math.cos(b) - v[2] * Math.sin(b), v[1], v[0] * Math.sin(b) + v[2] * Math.cos(b)];
       const fr = (bx, bz, py, th, rho, psi) => {
