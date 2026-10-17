@@ -242,11 +242,34 @@ function setRange(first, last) {
   VIEW.x0 = 0; VIEW.n = NW;
 }
 setRange(21, 108);
-function keyRect(m, W) {
-  const ww = W / VIEW.n, o = VIEW.x0 * ww;
-  if (!isBlack(m)) return { x: whiteIdx[m] * ww - o, w: ww, black: false };
-  const bw = ww * 0.6;
-  return { x: (whiteIdx[m - 1] + 1) * ww - bw / 2 - o, w: bw, black: true };
+// VERSION BASES ÉGALES : au FOND des touches (colonnes du rouleau, haut du clavier) les 12 touches d'un octave ont la même largeur ;
+// à l'AVANT (bas du clavier) les 7 blanches ont la même largeur (comme sur un piano réel). VIEW.n et VIEW.x0 restent en touches blanches : 7 blanches = 12 colonnes.
+// Pour que les lignes mi|fa et si|do restent DROITES (même abscisse au fond et à l'avant), le fond est découpé par demi-octave :
+// do→mi : 5 colonnes sur 3 blanches (0,6 chacune) ; fa→si : 7 colonnes sur 4 blanches (4/7 chacune).
+const WIDX12 = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6], colU = m => { const o = Math.floor(m / 12), pc = m - o * 12; return 7 * o + (pc < 5 ? pc * 0.6 : 3 + (pc - 5) * 4 / 7); };
+function keyRect(m, W) {   // colonne du fond (rouleau, noires)
+  const ww = W / VIEW.n, w0 = isBlack(FIRST) ? FIRST + 1 : FIRST, c0 = 7 * Math.floor(w0 / 12) + WIDX12[w0 % 12] - whiteIdx[w0];
+  const pc = m % 12;
+  return { x: (colU(m) - c0 - VIEW.x0) * ww, w: (pc < 5 ? 0.6 : 4 / 7) * ww, black: isBlack(m) };
+}
+// abscisse des mains : une touche blanche vise le centre de son devant, une noire le centre de sa colonne (interpolation linéaire entre touches voisines)
+let handMap = null;
+function handU(u) {
+  const key = FIRST + '/' + LAST;
+  if (!handMap || handMap.key !== key) {
+    const w0 = isBlack(FIRST) ? FIRST + 1 : FIRST, c0 = 7 * Math.floor(w0 / 12) + WIDX12[w0 % 12] - whiteIdx[w0], a = [], b = [];
+    for (let m = FIRST; m <= LAST; m++) { a.push(PianoHands.ux(m)); b.push(isBlack(m) ? colU(m) - c0 + (m % 12 < 5 ? 0.3 : 2 / 7) : whiteIdx[m] + 0.5); }
+    handMap = { key, a, b };
+  }
+  const { a, b } = handMap, n = a.length;
+  if (u <= a[0]) return b[0] + (u - a[0]);
+  if (u >= a[n - 1]) return b[n - 1] + (u - a[n - 1]);
+  let lo = 0, hi = n - 1; while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (a[mid] <= u) lo = mid; else hi = mid; }
+  return b[lo] + (b[hi] - b[lo]) * (u - a[lo]) / (a[hi] - a[lo]);
+}
+function frontRect(m, W) {   // devant d'une touche blanche : largeur d'une blanche
+  const ww = W / VIEW.n;
+  return { x: whiteIdx[m] * ww - VIEW.x0 * ww, w: ww };
 }
 const NOMS = ['Do', 'Do♯', 'Ré', 'Ré♯', 'Mi', 'Fa', 'Fa♯', 'Sol', 'Sol♯', 'La', 'La♯', 'Si'];
 let keyLanes = true;   // colonnes du rouleau en blanc / noir, comme un second clavier (touche K)
@@ -1029,8 +1052,8 @@ function drawOverlays(W, top, kbH, sp, active, posTick) {
   if (!stepMode && countIn && sp < 0) { // décompte (lecture rythmée seulement, jamais en pas à pas) : le temps qui reste avant la première mesure
     const M = song.measures[0], n = M.num - beatIndex(sp);
     if (n >= 1 && n <= M.num) {
-      ctx.save(); ctx.font = '800 ' + Math.round(kbH * 0.42) + 'px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(8,10,24,.85)'; ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.strokeText(String(n), W / 2, top + kbH * 0.45); ctx.fillText(String(n), W / 2, top + kbH * 0.45); ctx.restore();
+      ctx.save(); ctx.font = '800 ' + Math.round(kbH * 0.622) + 'px -apple-system, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(8,10,24,.85)'; ctx.fillStyle = 'rgba(255,255,255,.92)'; ctx.strokeText(String(n), W / 2, top + kbH * 0.625); ctx.fillText(String(n), W / 2, top + kbH * 0.625); ctx.restore();
     }
   }
 }
@@ -1152,7 +1175,7 @@ const FLEN = [1.5, 2.0, 2.2, 2.0, 1.6];       // longueur du doigt au repos
 const FWID = [0.62, 0.54, 0.57, 0.54, 0.44];    // épaisseur à la base
 function makeG(W, top, kbH, sp) {
   const ww = W / VIEW.n, hs = handsMode === 'plain' ? Math.min(ww * 1.2, kbH / 5.4) : Math.min(ww * 1.2 * handScale, kbH / 4.2), uF = PianoHands.ux(FIRST) - 0.5;
-  return { ww, hs, top, kbH, W, X: u => (u - uF - VIEW.x0) * ww, T: ctx === screenCtx ? performance.now() / 1000 : sp }; // T : horloge du clignotement (murale à l'écran, temps du morceau à l'export)
+  return { ww, hs, top, kbH, W, X: u => (handU(u) - VIEW.x0) * ww, T: ctx === screenCtx ? performance.now() / 1000 : sp }; // T : horloge du clignotement (murale à l'écran, temps du morceau à l'export)
 }
 function drawHands(W, top, kbH, sp) {
   ensurePlan(); if (!song.plan) return;
@@ -1310,7 +1333,7 @@ const BUBBLE_MIN = 0.3, BUBBLE_POP = 0.15, BURST_SEC = 0.4; // secondes de temps
 function drawPastilles(W, top, kbH, active) {
   active.forEach((an, m) => {
     const f = fof(an); if (!f || !showFing || !visibleHands().includes(noteHand(an))) return;
-    const side = noteHand(an), kr = keyRect(m, W), blk = isBlack(m), R = Math.max(10, Math.min(24, W / VIEW.n * 0.5)), cx = kr.x + kr.w / 2, cy = blk ? top + kbH * 0.62 - R - 6 : top + kbH - R - 10; // touche noire : sur la touche noire elle-même
+    const side = noteHand(an), kr = isBlack(m) ? keyRect(m, W) : frontRect(m, W), blk = isBlack(m), R = Math.max(10, Math.min(24, W / VIEW.n * 0.5)), cx = kr.x + kr.w / 2, cy = blk ? top + kbH * 0.62 - R - 6 : top + kbH - R - 10; // touche noire : sur la touche noire elle-même
     ctx.save(); ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
     ctx.fillStyle = side === 'R' ? '#ffc23a' : '#7fd0ff'; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 14; ctx.fill(); ctx.shadowBlur = 0;
     ctx.lineWidth = 5; ctx.strokeStyle = '#10121f'; ctx.stroke(); ctx.lineWidth = 2.5; ctx.strokeStyle = '#fff'; ctx.stroke();
@@ -1375,13 +1398,15 @@ function drawKeyboard(W, top, kbH, active) {
   ctx.fillStyle = '#05060d'; ctx.fillRect(0, top, W, kbH);
   for (let m = FIRST; m <= LAST; m++) {
     if (isBlack(m)) continue;
-    const r = keyRect(m, W), an = active.get(m), hand = an && noteHand(an);
+    const r = keyRect(m, W), f = frontRect(m, W), an = active.get(m), hand = an && noteHand(an), yS = top + bh;
     const gr = ctx.createLinearGradient(0, top, 0, top + kbH);
     if (hand) { gr.addColorStop(0, COL[hand].key); gr.addColorStop(1, COL[hand].lit); } else { gr.addColorStop(0, '#f7f7f9'); gr.addColorStop(1, '#d9dbe3'); }
-    ctx.fillStyle = gr; rrect(r.x + .5, top + 2, r.w - 1, kbH - 3, 3); ctx.fill();
+    ctx.fillStyle = gr; ctx.beginPath();   // forme en L : fond étroit (colonne), devant large (une blanche)
+    ctx.moveTo(r.x + .5, top + 2); ctx.lineTo(r.x + r.w - .5, top + 2); ctx.lineTo(r.x + r.w - .5, yS); ctx.lineTo(f.x + f.w - .5, yS); ctx.lineTo(f.x + f.w - .5, top + kbH - 1); ctx.lineTo(f.x + .5, top + kbH - 1); ctx.lineTo(f.x + .5, yS); ctx.lineTo(r.x + .5, yS); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1; ctx.stroke();
     if (m % 12 === 0 && ww >= 17) {
       ctx.fillStyle = hand ? '#1b1b2a' : '#6a6f88'; ctx.font = '600 11px -apple-system, sans-serif'; ctx.textAlign = 'center';
-      ctx.fillText('Do' + (Math.floor(m / 12) - 1), r.x + r.w / 2, top + kbH - 9);
+      ctx.fillText('Do' + (Math.floor(m / 12) - 1), f.x + f.w / 2, top + kbH - 9);
     }
   }
   for (let m = FIRST; m <= LAST; m++) {
