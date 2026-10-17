@@ -39,8 +39,8 @@ const View3D = (() => {
   const FLEXP = [[5, 10], [12, 28], [25, 45]], lvOf = h => h < 0.9 ? 0 : h < 1.5 ? 1 : 2;
   // x.2 (dernier segment) : sa flexion vaut de 0,15 à 0,45 fois celle de x.1 (tolérance) ; il ne dépasse pas −100° (la verticale, 10° de tolérance)
   const RR3 = [0.45, 0.3, 0.15], A3MIN = -100;
-  function chainErr(TOT, tu, ty, th, lv) {
-    const La = TOT * 0.37, Lb = TOT * 0.32, Lc = TOT * 0.31, R = Math.PI / 180; let m = Infinity;
+  function chainErr(TOT, tu, ty, th, lv, fi) {
+    const La = TOT * SEG[fi][0], Lb = TOT * SEG[fi][1], Lc = TOT * SEG[fi][2], R = Math.PI / 180; let m = Infinity;
     for (let dz = 0; dz <= 0; dz += 1) for (let d1 = -10; d1 <= 70; d1 += 5) for (let f2 = 0; f2 <= 90; f2 += 10) for (const rr of RR3) {   // d1 : flexion de la 1re articulation par rapport à la paume (0 = plat dans son prolongement)
       const a1 = (th - d1) * R, a2 = a1 - f2 * R, a3 = a2 - rr * f2 * R;
       if (a2 < -90 * R || a3 < A3MIN * R) continue;   // RÈGLE : aucun segment ne pointe vers l'arrière (angle absolu ≥ −90° : jamais au-delà de la verticale) ; tolérance au repliement arrière : 0
@@ -53,11 +53,16 @@ const View3D = (() => {
   const LACET = [null, [-20, 20], [-20, 20], [-20, 20], [-10, 45]];   // lacet permis à la base x.0 (degrés ; + = vers le côté du 5) : 2, 3, 4 : ±20° ; 5 : 5° vers le pouce, 45° vers l'extérieur
   let blackXs = [];   // positions (x) des touches noires du clavier construit : sert à interdire que les os des doigts passent dans les touches
   const YMIN = 0.6, YMIN_W = 0.2, YCAP = 2.0, BASE_ZMAX = 3.3;   // hauteur minimale du poignet, de la paume et des bases des doigts (au-dessus des touches noires, dessus à 0,45) ; plafond de la ligne des bases quand un doigt joue
-  const D2R = Math.PI / 180, SP = 1.07, PALM = 4.0, ZW = KEY_L / 2, ZB = BACK + BLK_L, YMAX = 3 * SP, RF = [4.2, 3.2, 3.6, 3.1, 2.4];
-  const LOC = [[-(SP + 0.55) * 2 / 3, (PALM - 1.2) * 2 / 3, -0.1],   // 1.0 : distance P–1.0 réduite d'un tiers (≈ 2,15 touches)
+  // PROPORTIONS DES DOIGTS. true = os mesurés sur radiographies (Buryanov et al., 66 adultes de 19 à 78 ans, repris dans le tableau 2.1 de la thèse arXiv 2003.11598) : phalange proximale / moyenne / distale en mm = index 39,78 / 22,38 / 15,82 ; majeur 44,63 / 26,33 / 17,40 ; annulaire 41,37 / 25,65 / 17,30 ; auriculaire 32,74 / 18,11 / 15,96. Longueurs totales ramenées à l'index = 3,2 unités ; segments = fractions de la longueur de chaque doigt (SEG). Recoupement : rapports majeur/index 1,13 (radios) · 1,11 (photos, 51 adultes) · 1,11 (tableau robot). false = anciennes valeurs (majeur 3,6 · annulaire 3,1 · auriculaire 2,4 ; segments 0,37 / 0,32 / 0,31 pour tous).
+  const PROP_MOYENNES = true;
+  const SEG = PROP_MOYENNES ? [[0.37, 0.32, 0.31], [0.510, 0.287, 0.203], [0.505, 0.298, 0.197], [0.491, 0.304, 0.205], [0.490, 0.271, 0.239]] : [[0.37, 0.32, 0.31], [0.37, 0.32, 0.31], [0.37, 0.32, 0.31], [0.37, 0.32, 0.31], [0.37, 0.32, 0.31]];   // [proximale, moyenne, distale] par doigt (0 = pouce, inutilisé : son modèle est à part)
+  // POUCE ANATOMIQUE. true = pouce remodelé : base 1.0 près du poignet (carpo-métacarpienne, y ≈ 0,7) ; 1.1 = articulation interphalangienne (la seule fléchie par le modèle) : segment 1.0–1.1 = métacarpien 1,63 + phalange proximale 1,20 = 2,83 (rigides, articulation métacarpo-phalangienne non modélisée), dernier segment = phalange distale 1,10 (ratios ramenés à l'index = 3,2 : 30,8 / 22,6 / 20,7 contre 60,3 mm de l'index, Table II de arXiv 1504.01151 ; le bout du pouce arrive ≈ 1,9 cm sous l'articulation du milieu de l'index, étude PMC12309929). false = ancien pouce (1.0 au milieu de la paume, 1,6 + 1,2).
+  const POUCE_ANATOMIQUE = true;
+  const D2R = Math.PI / 180, SP = 1.07, PALM = 4.0, ZW = KEY_L / 2, ZB = BACK + BLK_L, YMAX = 3 * SP, RF = PROP_MOYENNES ? [POUCE_ANATOMIQUE ? 3.93 : 4.2, 3.2, 3.63, 3.46, 2.74] : [4.2, 3.2, 3.6, 3.1, 2.4];
+  const LOC = [[-(SP + 0.55) * 2 / 3, POUCE_ANATOMIQUE ? 0.7 : (PALM - 1.2) * 2 / 3, -0.1],   // 1.0 : distance P–1.0 réduite d'un tiers (≈ 2,15 touches)
      [-SP, PALM, 0], [0, PALM, 0], [SP, PALM, 0], [2 * SP, PALM, 0]];   // [latéral vers le 5, avant, haut] depuis P : 1.0, 2.0, 3.0, 4.0, 5.0
   // POUCE : 1.0 (base) : inclinaison +45° (haut) à −10° (bas), roulis 0, lacet 90° vers l'extérieur (côté opposé au 5) à 45° vers l'intérieur ; 1.1 : roulis 0, lacet 0, inclinaison 0 à 90° vers le bas ; longueurs fixes
-  const TL1 = 1.6, TL2 = 1.2, TPSI = [-15, 90], TINC = [-10, 45], TFLX = [0, 25];   // psi > 0 = vers l'extérieur ; repère local (l vers le 5, f vers l'avant, n normale de la paume)
+  const TL1 = POUCE_ANATOMIQUE ? 2.83 : 1.6, TL2 = POUCE_ANATOMIQUE ? 1.1 : 1.2,   /* pouce : valeurs d'origine (1.0 est au milieu de la paume : avec 2,8 le bout du pouce tombe ≈ 1,8 cm sous l'articulation du milieu de l'index, ce que mesure l'étude) */ TPSI = [-15, 90], TINC = [-10, 45], TFLX = [0, 25];   // psi > 0 = vers l'extérieur ; repère local (l vers le 5, f vers l'avant, n normale de la paume)
   const thumbOff = (psi, inc, flx) => { const bt = psi * D2R, al = inc * D2R, fx = flx * D2R;
     // repère du pouce tourné de 90° par rapport à celui des doigts : son « lacet » (psi, de −45° à +90°) l'abaisse vers les touches (+) ou le relève (−) ; son « inclinaison » (inc, de −10° à +45°) l'écarte
     // de l'index dans le plan de la paume (+) ou le rapproche (−) ; 1.1 fléchit de flx° dans le plan de la paume, vers l'index (son « bas » est latéral), sans lacet ni roulis
@@ -77,7 +82,7 @@ const View3D = (() => {
   const CT = {};   // table précalculée de chainErr (doigt, flexion) → erreur minimale selon (tu, ty)
   function chainTab(i, tu, ty, th, lv) {
     const ti = Math.max(0, Math.min(12, Math.round((th + 40) / 5))), key = (i * 20 + ti) * 3 + lv; let t = CT[key];
-    if (!t) { t = CT[key] = new Float32Array(45 * 45); for (let a = 0; a < 45; a++) for (let b = 0; b < 45; b++) t[a * 45 + b] = chainErr(RF[i], a * 0.1, -3.2 + b * 0.1, -40 + ti * 5, lv); }
+    if (!t) { t = CT[key] = new Float32Array(45 * 45); for (let a = 0; a < 45; a++) for (let b = 0; b < 45; b++) t[a * 45 + b] = chainErr(RF[i], a * 0.1, -3.2 + b * 0.1, -40 + ti * 5, lv, i); }
     const a = Math.min(44, Math.max(0, Math.round(tu / 0.1))), b = Math.min(44, Math.max(0, Math.round((ty + 3.2) / 0.1)));
     return t[a * 45 + b] + Math.max(0, tu - 4.4) + Math.max(0, -3.2 - ty) + Math.max(0, ty - 1.2);
   }
@@ -300,7 +305,7 @@ const View3D = (() => {
         const f = a.fingers[i]; if (pin[i] || (f.wN || 0) <= (f.wP || 0)) continue;
         [i - 1, i + 1].forEach(j => { if (j < 1 || j > 4) return; const g = a.fingers[j]; if (pin[j] || (g.wP || 0) <= (g.wN || 0)) return; kws[i] = Math.min(kws[i], Math.max(0.3, 1 - 0.9 * kws[j])); });
       }
-      const REACHF = [4.2, 3.2, 3.6, 3.1, 2.4];   // longueurs des doigts (fixes)
+      const REACHF = RF;   // longueurs des doigts (fixes)
       H.fingers.forEach((F, i) => { const bt = a.fingers[i].blk || 0; F.blkS = (F.blkS === undefined || SNAP) ? bt : F.blkS + (bt - F.blkS) * AL; });
       const eng = a.fingers.map((f, i) => ({ f, i, e: Math.max(f.pressed ? 1 : 0, f.depth || 0, f.wN || 0) })).filter(o => kf ? (nat || o.f.pressed) : o.e >= 0.5);
       // Passage du pouce sous la paume : permis seulement dans le sens du mouvement naturel (main droite : vers le grave ; main gauche : vers l'aigu), jamais dans l'autre sens
@@ -497,7 +502,7 @@ const View3D = (() => {
           //  • le premier segment pointe vers l'avant, à ±28° au plus de côté (rotation à la première articulation), plat dans le prolongement de la paume (−15° à +10°) ;
           //  • la flexion de la 2e articulation va de 0° à 75° (aucune hyperextension, aucun segment ne revient vers l'arrière), celle de la 3e vaut les deux tiers de la précédente (couplage naturel) ;
           //  • on retient, parmi ces poses, celle dont le bout est le plus près du point visé (aucune pose impossible n'est jamais affichée).
-          const La = TOT * 0.37, Lb = TOT * 0.32, Lc = TOT * 0.31, ht = Math.hypot(T.x - K.x, T.z - K.z) || 1e-4;
+          const La = TOT * SEG[F.f - 1][0], Lb = TOT * SEG[F.f - 1][1], Lc = TOT * SEG[F.f - 1][2], ht = Math.hypot(T.x - K.x, T.z - K.z) || 1e-4;
           // direction du doigt dans le plan de la paume : lacet à la base x.0 (2, 3, 4 : ±20° ; 5 : −5° à +45°) ; inclinaison de x.0 : +5° (haut) à −70° (bas) par rapport à la paume ; roulis 0 ; le doigt fléchit dans le plan (direction, normale de la paume), sans roulis propre
           const v0 = [T.x - K.x, T.y - K.y, T.z - K.z], fv = dot(v0, FR.F), lv = dot(v0, FR.L), nv0 = dot(v0, FR.N);
           let ang = Math.max(LACET[F.f - 1][0] * D2R, Math.min(LACET[F.f - 1][1] * D2R, Math.atan2(lv, Math.max(1.2, fv))));

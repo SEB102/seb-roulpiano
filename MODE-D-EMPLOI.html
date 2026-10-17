@@ -330,6 +330,11 @@
 <li>K. C. Engel, M. Flanders, J. F. Soechting, <i>Anticipatory and sequential motor control in piano playing</i>, Experimental Brain Research 113(2), 1997, p. 189-199 (résumé consulté ; le texte complet n'a pas pu être lu).</li>
 <li>B. Alfarhan, D. Sandberg, <i>Suggested fingering for keyboards</i>, KTH, Stockholm, 2013 (<a href="https://www.csc.kth.se/utbildning/kth/kurser/DD143X/dkand13/Group7Anders/final/Bassam.Alfarhan.David.Sandberg.report.pdf">texte</a>).</li>
 <li>E. Nakamura, Y. Saito, K. Yoshii, <i>Statistical learning and estimation of piano fingering</i> (<a href="https://arxiv.org/pdf/1904.10237">arXiv 1904.10237</a>).</li>
+<li>Mesures de la main (« Le schéma de la main ») : A. Buryanov, V. Kotiuk, <i>Proportions of Hand Segments</i>, International Journal of Morphology 28(3), 2010, p. 755-758 (radiographies de 66 adultes ; je n'ai pas pu ouvrir l'article lui-même, les valeurs sont celles du tableau 2.1 de la thèse ci-dessous).</li>
+<li>Mesures de la main : <i>Design, Implementation and Control of an Underactuated Hand Exoskeleton</i> (thèse, <a href="https://arxiv.org/pdf/2003.11598">arXiv 2003.11598</a>, tableaux 2.1 et 2.2, qui reprennent les valeurs de Buryanov et al.).</li>
+<li>Mesures de la main : <i>Design method for an anthropomorphic hand able to gesture and grasp</i> (<a href="https://arxiv.org/pdf/1504.01151">arXiv 1504.01151</a>, tableau II : longueurs des segments du pouce et des doigts pour un robot de la taille d'un enfant de 6 ans, utilisées seulement comme proportions).</li>
+<li>Mesures de la main : Chatzioglou, Pınar, Govsa, <i>Biometric analysis hand parameters in young adults for prosthetic hand and ergonomic product applications</i>, Anatomy &amp; Cell Biology 57(2), 2024 (51 adultes de 18 à 30 ans ; seul le résumé a été lu : pouce 49,5 · index 63,9 · majeur 70,7 · annulaire 65,5 · auriculaire 53,3 mm).</li>
+<li>Mesures de la main : <i>Investigating Normative Measurements of the Thumb and Index Finger to Aid in Reconstructive Surgery</i> (<a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC12309929/">PMC12309929</a> : 162 adultes, pouce 6,6 cm, index 9,0 cm, bout du pouce à 1,9 cm sous l'articulation du milieu de l'index).</li>
 <li>M. Hart, R. Bosch, E. Tsai, <i>Finding optimal piano fingerings</i>, UMAP Journal, 2000 ; A. Al Kasimi, E. Nichols, C. Raphael, <i>A simple algorithm for automatic generation of polyphonic piano fingerings</i>, ISMIR 2007 ; M. Balliauw, D. Herremans, D. Palhazi Cuervo, K. Sörensen, <i>A variable neighborhood search algorithm to generate piano fingerings for polyphonic sheet music</i>, 2017.</li>
 </ul>
 <p>Les conventions « doigts conjoints » et « on n'écrit que les exceptions » sont celles de l'édition de partitions : le doigté écrit est l'exception, le reste se déduit.</p>
@@ -538,7 +543,21 @@
 <li><b>x.0</b> : la base de chaque doigt (articulation avec la paume). <b>2.0, 3.0, 4.0 et 5.0 sont toujours alignés</b> sur une ligne droite, car la paume est rigide ; l'écart entre 2.0 et 5.0 est de 3,2 touches.</li>
 <li><b>x.1</b> et <b>x.2</b> : les deux autres articulations des doigts 2 à 5. Le pouce n'a que <b>1.0</b> et <b>1.1</b>.</li>
 <li>Le bout de chaque doigt est le bout de son dernier segment : il n'a ni articulation ni mouvement propre et n'est pas numéroté.</li>
-<li>Longueurs des doigts, en touches blanches : pouce 2,8 (1,6 pour 1.0–1.1 et 1,2 ensuite) ; index 3,2 ; majeur 3,6 ; annulaire 3,1 ; auriculaire 2,4. La paume mesure 4 touches entre P et la ligne 2.0 – 5.0 ; la base du pouce 1.0 est à environ 2,15 touches de P.</li>
+<li>La paume mesure 4 touches entre P et la ligne 2.0 – 5.0. La base du pouce 1.0 est près du poignet, à 0,7 touche de P (là où le pouce s'attache vraiment à la main).</li>
+</ul>
+<p><b>Les mesures standardisées.</b> Les longueurs viennent de moyennes mesurées sur de vraies mains (références en bas de la page « Les règles du calcul des doigtés »). Pour les quatre doigts, ce sont les os mesurés sur des radiographies de 66 adultes ; la longueur totale de l'index sert d'étalon (3,2 touches, soit environ 7 cm) et les autres doigts sont mis à l'échelle. Les longueurs sont données en touches blanches (1 touche ≈ 2,2 cm).</p>
+<table>
+<tr><th>Doigt</th><th>Os mesurés (mm)</th><th>Segments du modèle (touches)</th><th>Longueur totale</th></tr>
+<tr><td>Index</td><td>39,8 · 22,4 · 15,8</td><td>1.0–1.1 : 1,63 · 1.1–1.2 : 0,92 · 1.2–bout : 0,65</td><td>3,2</td></tr>
+<tr><td>Majeur</td><td>44,6 · 26,3 · 17,4</td><td>1,83 · 1,08 · 0,72</td><td>3,63</td></tr>
+<tr><td>Annulaire</td><td>41,4 · 25,7 · 17,3</td><td>1,70 · 1,05 · 0,71</td><td>3,46</td></tr>
+<tr><td>Auriculaire</td><td>32,7 · 18,1 · 16,0</td><td>1,34 · 0,74 · 0,66</td><td>2,74</td></tr>
+<tr><td>Pouce</td><td>métacarpien 30,8 · phalange proximale 22,6 · phalange distale 20,7 (proportions d'un modèle, ramenées à l'index)</td><td>1.0–1.1 : 2,83 (métacarpien 1,63 + phalange proximale 1,20) · 1.1–bout : 1,10 (phalange distale)</td><td>3,93 depuis 1.0</td></tr>
+</table>
+<ul>
+<li>Pour les doigts, les trois mesures sont : phalange proximale, phalange moyenne, phalange distale, de la paume vers le bout. Chaque doigt a donc son propre découpage : environ la moitié de sa longueur pour la première phalange, 30 % pour la deuxième et 20 % pour la dernière, qui est la plus courte (sauf l'auriculaire, dont le bout est un peu plus long).</li>
+<li>Pour le pouce, le modèle n'a qu'une articulation qui plie (1.1, qui joue le rôle de l'articulation du bout du pouce) : le métacarpien et la première phalange sont donc réunis en un seul segment rigide, et la dernière phalange est le dernier segment. Le pouce du modèle est cohérent avec les mesures : son bout arrive environ 1,9 cm sous l'articulation du milieu de l'index, comme sur 162 adultes mesurés.</li>
+<li>Limites : les rapports entre doigts concordent entre trois sources à environ 2 % près pour le majeur (1,11 à 1,13 fois l'index), 3 % pour l'auriculaire et 5 % pour l'annulaire. Les longueurs du pouce viennent d'un tableau de proportions pour un robot, pas d'une mesure directe sur des mains adultes. Ce sont des moyennes : une vraie main peut s'en écarter de 10 à 15 %.</li>
 </ul>
 <h3>Les trois rotations</h3>
 <p>Ce sont les trois rotations d'un <b>avion</b> : la main est l'appareil, ses doigts en sont le nez. Chaque dessin montre la position de repos (en couleur pleine) et deux positions extrêmes (estompées), avec la flèche de rotation.</p>
