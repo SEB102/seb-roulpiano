@@ -134,7 +134,7 @@
   </div>
   <div id="panel" hidden>
   <div class="row"><span class="lab" style="min-width:104px;font-weight:600">Fichier</span>
-    <label class="btn" for="file">📂 Ouvrir un fichier…</label>
+    <label class="btn" for="file">📂 Ouvrir une partition</label>
     <input id="file" type="file" accept=".mid,.midi,.musicxml,.xml,.mxl">
     <button id="demo" title="Charger l'exemple : début de la Lettre à Élise (Beethoven)">Exemple : Élise</button>
     <button id="demo3" title="Charger l'exemple : « J'ai du bon tabac », très simple : une main à cinq doigts (do à sol), accompagnement facile">Exemple : J'ai du bon tabac</button>
@@ -623,7 +623,17 @@ cv.addEventListener('wheel', e => { if (!song || exp.active) return; const [, y]
 let tScroll = null;
 cv.addEventListener('touchstart', e => { if (e.touches.length !== 1 || !song || exp.active) { tScroll = null; return; } const [, y] = canvasXY(e.touches[0]); tScroll = y > rollBottom() ? null : { y: e.touches[0].clientY, moved: false }; }, { passive: true });
 cv.addEventListener('touchmove', e => { if (!tScroll || e.touches.length !== 1) return; const cy = e.touches[0].clientY, dy = cy - tScroll.y; if (!tScroll.moved && Math.abs(dy) < 6) return; tScroll.moved = true; tScroll.y = cy; e.preventDefault(); scrollRollBy(dy / Math.max(1, rollBottom() * cv.getBoundingClientRect().height / cssH)); }, { passive: false });   // le contenu suit le doigt : glisser vers le bas fait avancer le temps
-cv.addEventListener('touchend', () => { tScroll = null; }, { passive: true });
+// double-toucher sur le rouleau (smartphone) : lecture / pause, comme la barre d'espace (hors d'une note : un toucher sur une note ouvre la saisie du doigté)
+let lastTap = null;
+cv.addEventListener('touchend', e => {
+  const moved = tScroll && tScroll.moved; tScroll = null;
+  if (moved || !song || exp.active || e.touches.length || e.changedTouches.length !== 1) { lastTap = null; return; }
+  const [x, y] = canvasXY(e.changedTouches[0]); if (y > rollBottom() || hit.some(h => x >= h.x && x <= h.x + h.w && y >= h.top && y <= h.bottom)) { lastTap = null; return; }
+  const now = performance.now();
+  if (lastTap && now - lastTap.t < 350 && Math.hypot(x - lastTap.x, y - lastTap.y) < 30) { lastTap = null; hideFpop(); clearGroup(); unlockAudio(); if (stepMode) toggleStepAuto(); else if (playing) pause(); else { enterRoll(); play(); } return; }
+  lastTap = { t: now, x, y };
+}, { passive: true });
+cv.style.touchAction = 'manipulation';   // pas de zoom au double-toucher
 cv.addEventListener('mousedown', e => {
   if (!song || exp.active || e.button !== 0) return;
   const [x, y] = canvasXY(e); if (y > rollBottom()) return;
