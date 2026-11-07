@@ -41,6 +41,16 @@
       hi.forEach(n => n.hand = 'R'); lo.forEach(n => n.hand = 'L');
       return 'pistes';
     }
+    if (withNotes.length >= 3) {   // plusieurs pistes : on les regroupe en deux mains d'après leur hauteur moyenne (si la séparation est nette), au lieu de couper toutes les notes au do central
+      const mean = g => g.reduce((t, n) => t + n.midi, 0) / g.length, L = withNotes.map(g => ({ g, m: mean(g) })).sort((x, y) => y.m - x.m);
+      let best = null;
+      for (let k = 1; k < L.length; k++) {
+        const top = L.slice(0, k), bot = L.slice(k), mt = top.reduce((t, o) => t + o.m, 0) / top.length, mb = bot.reduce((t, o) => t + o.m, 0) / bot.length;
+        const sse = top.reduce((t, o) => t + (o.m - mt) ** 2, 0) + bot.reduce((t, o) => t + (o.m - mb) ** 2, 0), spread = a => Math.max.apply(null, a.map(o => o.m)) - Math.min.apply(null, a.map(o => o.m));
+        if (mt - mb >= 7 && spread(top) <= 8 && spread(bot) <= 8 && (!best || sse < best.sse)) best = { k, sse };
+      }
+      if (best) { L.forEach((o, i) => o.g.forEach(n => { n.hand = i < best.k ? 'R' : 'L'; })); return 'pistes'; }
+    }
     notes.forEach(n => n.hand = n.midi >= 60 ? 'R' : 'L');
     return 'do-central';
   }
@@ -411,12 +421,18 @@
   // ---------- Export d'un MIDI : MusicXML construit à partir des notes (approximatif : pas de tonalité, croches/doubles-croches seulement, triolets ramenés à la double-croche) ----------
   function xmlFromMidi(song, fing) {
     const g = Math.max(1, Math.round(song.ppq / 4)), div = g * 4, esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
-    // tonalité (majeure) : celle dont la gamme contient le plus de notes jouées ; à égalité, la moins chargée en altérations
-    const hist = new Array(12).fill(0); song.notes.forEach(n => { hist[n.midi % 12]++; });
+    // tonalité : profils de Krumhansl-Kessler (majeur et mineur) comparés, par corrélation, aux durées cumulées de chaque note (algorithme de Krumhansl-Schmuckler)
+    const hist = new Array(12).fill(0); song.notes.forEach(n => { hist[n.midi % 12] += Math.max(1, n.dur); });
+    if (song.notes.length) { const tot = hist.reduce((x, y) => x + y, 0), fst = song.notes[0], lst = song.notes.reduce((m, n) => n.tick + n.dur > m.tick + m.dur ? n : m, fst); hist[fst.midi % 12] += tot * 0.06; hist[lst.midi % 12] += tot * 0.06; }   // le début et surtout la fin d'un morceau tonal tombent presque toujours sur la tonique
+    const KMAJ = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88], KMIN = [6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17];
+    const corr = (x, y) => { const mx = x.reduce((a, b) => a + b) / 12, my = y.reduce((a, b) => a + b) / 12; let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < 12; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; } return sxx && syy ? sxy / Math.sqrt(sxx * syy) : -2; };
+    let kTon = 0, kMin = false, kBest = -9; for (let t = 0; t < 12; t++) [false, true].forEach(mn => { const P = mn ? KMIN : KMAJ, r = corr(hist, P.map((_, i) => P[(i - t + 12) % 12])); if (r > kBest) { kBest = r; kTon = t; kMin = mn; } });
     const TON = { '-6': 6, '-5': 1, '-4': 8, '-3': 3, '-2': 10, '-1': 5, '0': 0, '1': 7, '2': 2, '3': 9, '4': 4, '5': 11, '6': 6 }, MAJ = [0, 2, 4, 5, 7, 9, 11];
-    let fifths = 0, best = -1; for (let f = -6; f <= 6; f++) { const t = TON[f], sc = MAJ.reduce((a, d) => a + hist[(t + d) % 12], 0); if (sc > best || (sc === best && Math.abs(f) < Math.abs(fifths))) { best = sc; fifths = f; } }
+    const relMaj = kMin ? (kTon + 3) % 12 : kTon;   // un mode mineur s'écrit avec l'armure de sa tonalité relative majeure
+    let fifths = 0; { let bd = 99; for (let f = -6; f <= 6; f++) if (TON[f] === relMaj && Math.abs(f) < bd) { bd = Math.abs(f); fifths = f; } }
     const LET = ['C', 'D', 'E', 'F', 'G', 'A', 'B'], LPC = [0, 2, 4, 5, 7, 9, 11], TLET = { '-6': 4, '-5': 1, '-4': 5, '-3': 2, '-2': 6, '-1': 3, '0': 0, '1': 4, '2': 1, '3': 5, '4': 2, '5': 6, '6': 3 };
     const SH = new Array(12).fill(null); { const li = TLET[fifths], t = TON[fifths]; MAJ.forEach((d, i) => { const l = (li + i) % 7, pc = (t + d) % 12; let a = pc - LPC[l]; if (a > 6) a -= 12; if (a < -6) a += 12; SH[pc] = [LET[l], a]; });
+      if (kMin) [[(kTon + 11) % 12, (kTon + 10) % 12], [(kTon + 9) % 12, (kTon + 8) % 12]].forEach(([pc, nat]) => { if (!SH[pc] && SH[nat]) SH[pc] = [SH[nat][0], SH[nat][1] + 1]; });   // sensible et sixte relevées du mineur
       for (let pc = 0; pc < 12; pc++) if (!SH[pc]) { const l = LPC.map((v, i) => [v, i]).filter(([v]) => (fifths >= 0 ? v === pc - 1 : v === pc + 1)); const i = l.length ? l[0][1] : 0; SH[pc] = [LET[i], fifths >= 0 ? 1 : -1]; } }
     const PIECES = [[16, 'whole', 0], [12, 'half', 1], [8, 'half', 0], [6, 'quarter', 1], [4, 'quarter', 0], [3, 'eighth', 1], [2, 'eighth', 0], [1, '16th', 0]];   // en doubles-croches
     const q = t => Math.round(t / g);   // ticks → unités de double-croche
@@ -454,7 +470,7 @@
     measures.forEach((m, mi) => {
       xml += '<measure number="' + (mi + 1) + '">';
       const ts = m.num + '/' + m.den;
-      if (mi === 0) xml += '<attributes><divisions>' + div + '</divisions><key><fifths>' + fifths + '</fifths></key><time><beats>' + m.num + '</beats><beat-type>' + m.den + '</beat-type></time><staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes><direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>' + Math.round(song.fileBpm) + '</per-minute></metronome></direction-type><sound tempo="' + song.fileBpm + '"/></direction>';
+      if (mi === 0) xml += '<attributes><divisions>' + div + '</divisions><key><fifths>' + fifths + '</fifths><mode>' + (kMin ? 'minor' : 'major') + '</mode></key><time><beats>' + m.num + '</beats><beat-type>' + m.den + '</beat-type></time><staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes><direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>' + Math.round(song.fileBpm) + '</per-minute></metronome></direction-type><sound tempo="' + song.fileBpm + '"/></direction>';
       else if (ts !== lastTs) xml += '<attributes><time><beats>' + m.num + '</beats><beat-type>' + m.den + '</beat-type></time></attributes>';
       lastTs = ts;
       let first = true;
