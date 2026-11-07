@@ -174,7 +174,7 @@
     <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button>
   </div>
   <div class="row"><span class="lab" style="min-width:104px;font-weight:600">Doigtés</span>
-    <div class="grp"><div id="fingMode" class="seg" role="group" aria-label="Affichage des doigtés" title="Pour saisir un doigté : cliquer sur une note."><span class="seglab">🖐</span><button data-m="off">Masquer les doigtés</button><button data-m="simple">Doigtés simples</button><button data-m="illus">Doigtés illustrés</button></div><button id="fingExp" title="Exporter la partition avec vos doigtés (fichier MusicXML : s'ouvre dans MuseScore, qui peut l'enregistrer en .mscz). Disponible pour les fichiers MusicXML / .mxl">⤓ partition</button><button id="fingImp" title="Importer des doigtés depuis un fichier (remplace les actuels)">⤒</button><input id="fingFile" type="file" accept=".json,application/json"></div>
+    <div class="grp"><div id="fingMode" class="seg" role="group" aria-label="Affichage des doigtés" title="Pour saisir un doigté : cliquer sur une note."><span class="seglab">🖐</span><button data-m="off">Masquer les doigtés</button><button data-m="simple">Doigtés simples</button><button data-m="illus">Doigtés illustrés</button></div><button id="fingExp" title="Exporter la partition avec vos doigtés (fichier MusicXML : s'ouvre dans MuseScore, qui peut l'enregistrer en .mscz). Disponible pour les fichiers MusicXML / .mxl">⤓ partition</button></div>
     <button id="hands" class="pressed" style="display:none" title="Afficher les mains virtuelles sur le clavier : on voit les doigts jouer, le pouce passer sous la main, les mains se croiser">🖐 Mains virtuelles</button>
     <label class="chk" title="Pour les notes sans doigté, l'application propose un doigté plausible (utilisé pour animer les mains ; vos doigtés saisis ou ceux du fichier sont toujours respectés)"><input type="checkbox" id="autoFing" checked> doigtés auto</label>
     <label class="chk" title="Taille de la main : adapte les écarts confortables entre doigts utilisés pour calculer les doigtés (petite main = écarts plus courts)">main <select id="handSize"><option value="0.85">petite</option><option value="1" selected>moyenne</option><option value="1.15">grande</option></select></label>
@@ -527,7 +527,7 @@ function refreshButtons() {
   $('play').disabled = !song || playing || x; $('stop').disabled = !playing || x; $('rew').disabled = !song || x;
   $('progress').disabled = !song || x; $('speed').disabled = x; $('speed1').disabled = x; $('speedq').disabled = x; $('speedh').disabled = x; $('demo').disabled = x; $('demo2').disabled = x; $('demo3').disabled = x;
   $('file').disabled = x; $('export').disabled = !song; $('xres').disabled = x;
-  refreshFingButton(); $('fingExp').disabled = !song || !song.sourceXml; $('fingImp').disabled = !song || x;
+  refreshFingButton(); $('fingExp').disabled = !song || !song.sourceXml;
   $('tempo').disabled = !song || x; $('tempoReset').disabled = !song || x;
   $('export').textContent = x ? '⏹ Annuler l\'export' : '🎬 Export vidéo';
 }
@@ -562,7 +562,7 @@ const noteHand = n => n.fh || n.hand; // main du doigté : par défaut celle dé
 const handTxt = n => (noteHand(n) === 'L' ? 'M.G.' : 'M.D.');
 const storeKey = () => 'seb-roulpiano-doigtes:' + song.title + '|' + song.notes.length + '|' + song.endTick;
 // Les doigtés saisis ne sont PAS enregistrés dans le navigateur : ils vivent en mémoire le temps de la séance (si on rouvre le même
-// fichier dans la séance, on les retrouve) et disparaissent à la fermeture de la page. Seul l'export ⤓ (fichier .doigtes.json) les conserve.
+// fichier dans la séance, on les retrouve) et disparaissent à la fermeture de la page. Seul l'export de la partition les conserve.
 const sessionDoigtes = {};
 try { Object.keys(localStorage).filter(k => k.startsWith('seb-roulpiano-doigtes')).forEach(k => localStorage.removeItem(k)); } catch (e) {} // nettoyage des anciennes mémorisations
 function loadFingerings() {
@@ -717,21 +717,6 @@ $('fingExp').onclick = () => {
   const blob = new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = (song.title || 'morceau').replace(/[\\/:*?"<>|]+/g, '_') + '-doigtes.musicxml';
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
-};
-$('fingImp').onclick = () => $('fingFile').click();
-$('fingFile').onchange = async e => {
-  const f = e.target.files[0]; e.target.value = ''; if (!f || !song) return;
-  try {
-    const obj = JSON.parse(await f.text()); const d = obj && obj.doigtes;
-    if (!d || typeof d !== 'object') throw new Error('Fichier de doigtés invalide.');
-    hideFpop(); song.manual = { f: {}, h: {}, s: {} }; const mh = (obj.mains && typeof obj.mains === 'object') ? obj.mains : {}, ch = (obj.changements && typeof obj.changements === 'object') ? obj.changements : {};
-    song.notes.forEach(n => {
-      const k = noteKey(n), v = parseInt(d[k], 10) || 0; n.finger = v >= 1 && v <= 5 ? v : 0; if (n.finger !== n.fileFinger) song.manual.f[k] = n.finger;
-      n.fh = (mh[k] === 'L' || mh[k] === 'R') && mh[k] !== n.hand ? mh[k] : undefined; if (n.fh) song.manual.h[k] = n.fh;
-      const c2 = parseInt(ch[k], 10) || 0; n.finger2 = c2 >= 1 && c2 <= 5 ? c2 : undefined; if ((n.finger2 || 0) !== n.fileFinger2) song.manual.s[k] = n.finger2 || 0;
-    });
-    refreshHF(); saveManual(); clearError();
-  } catch (err) { showError(err.message || 'Fichier de doigtés illisible.'); }
 };
 
 // ---------- Tempo de départ ----------
