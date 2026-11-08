@@ -174,7 +174,7 @@
     <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button>
   </div>
   <div class="row"><span class="lab" style="min-width:104px;font-weight:600">Doigtés</span>
-    <div class="grp"><div id="fingMode" class="seg" role="group" aria-label="Affichage des doigtés" title="Pour saisir un doigté : cliquer sur une note."><span class="seglab">🖐</span><button data-m="off">Masquer les doigtés</button><button data-m="simple">Doigtés simples</button><button data-m="illus">Doigtés illustrés</button></div><button id="fingExp" title="Exporter la partition avec vos doigtés (fichier MusicXML : s'ouvre dans MuseScore, qui peut l'enregistrer en .mscz). Pour un fichier MIDI, la partition est construite à partir des notes (rythme approximatif)">⤓ partition</button></div>
+    <div class="grp"><div id="fingMode" class="seg" role="group" aria-label="Affichage des doigtés" title="Pour saisir un doigté : cliquer sur une note."><span class="seglab">🖐</span><button data-m="off">Masquer les doigtés</button><button data-m="simple">Doigtés simples</button><button data-m="illus">Doigtés illustrés</button></div><button id="fingExp" title="Exporter la partition avec vos doigtés (fichier MusicXML : s'ouvre dans MuseScore, qui peut l'enregistrer en .mscz). Un fichier qui n'est pas déjà une partie de piano à deux portées (MIDI, plusieurs parties…) est réécrit sur deux portées à partir des notes (rythme approximatif)">⤓ partition</button></div>
     <button id="hands" class="pressed" style="display:none" title="Afficher les mains virtuelles sur le clavier : on voit les doigts jouer, le pouce passer sous la main, les mains se croiser">🖐 Mains virtuelles</button>
     <label class="chk" title="Pour les notes sans doigté, l'application propose un doigté plausible (utilisé pour animer les mains ; vos doigtés saisis ou ceux du fichier sont toujours respectés)"><input type="checkbox" id="autoFing" checked> doigtés auto</label>
     <label class="chk" title="Taille de la main : adapte les écarts confortables entre doigts utilisés pour calculer les doigtés (petite main = écarts plus courts)">main <select id="handSize"><option value="0.85">petite</option><option value="1" selected>moyenne</option><option value="1.15">grande</option></select></label>
@@ -527,7 +527,7 @@ function refreshButtons() {
   $('play').disabled = !song || playing || x; $('stop').disabled = !playing || x; $('rew').disabled = !song || x;
   $('progress').disabled = !song || x; $('speed').disabled = x; $('speed1').disabled = x; $('speedq').disabled = x; $('speedh').disabled = x; $('demo').disabled = x; $('demo2').disabled = x; $('demo3').disabled = x;
   $('file').disabled = x; $('export').disabled = !song; $('xres').disabled = x;
-  refreshFingButton(); $('fingExp').disabled = !song || !(song.sourceXml || song.format === 'midi');
+  refreshFingButton(); $('fingExp').disabled = !song;
   $('tempo').disabled = !song || x; $('tempoReset').disabled = !song || x;
   $('export').textContent = x ? '⏹ Annuler l\'export' : '🎬 Export vidéo';
 }

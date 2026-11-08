@@ -205,5 +205,16 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
     const c = C.parseMusicXml(xml('').replace(note('C', 4, 1), note('C', 4, 1, '<notations><technical><fingering>MD1</fingering></technical></notations>'))).notes; assert.strictEqual(c.find(x => x.midi === 60).hand, 'R');
   });
 
+  await t('Export : toujours une seule partie de piano à deux portées, quelle que soit l\'origine (plusieurs parties, une seule portée) ; les notes sont conservées, sans doublon', async () => {
+    const part = (id, step, oct) => '<part id="' + id + '"><measure number="1"><attributes><divisions>1</divisions><key><fifths>0</fifths></key><time><beats>4</beats><beat-type>4</beat-type></time><clef><sign>G</sign><line>2</line></clef></attributes>' +
+      '<note><pitch><step>' + step + '</step><octave>' + oct + '</octave></pitch><duration>4</duration><type>whole</type></note></measure></part>';
+    const src = '<?xml version="1.0"?><score-partwise><part-list><score-part id="P1"/><score-part id="P2"/><score-part id="P3"/></part-list>' + part('P1', 'C', 5) + part('P2', 'C', 5) + part('P3', 'C', 3) + '</score-partwise>';
+    const s = await C.loadSong('trois.musicxml', Buffer.from(src));
+    const x = C.injectFingerings(s, n => ({ f: 0 }));
+    assert.strictEqual((x.match(/<part /g) || []).length, 1, 'une seule partie'); assert.ok(/<staves>2<\/staves>/.test(x), 'deux portées');
+    const s2 = await C.loadSong('deux.musicxml', Buffer.from(x));
+    assert.deepStrictEqual(s2.notes.map(n => n.midi).sort(), [48, 72], 'do5 doublé : une seule note ; do3 conservé');
+  });
+
   console.log(`\n${n} tests passés`);
 })();

@@ -419,7 +419,7 @@
 
 
   // ---------- Export d'un MIDI : MusicXML construit à partir des notes (approximatif : pas de tonalité, croches/doubles-croches seulement, triolets ramenés à la double-croche) ----------
-  function xmlFromMidi(song, fing) {
+  function xmlFromMidi(song, fing, keyHint, layout) {
     const g = Math.max(1, Math.round(song.ppq / 4)), div = g * 4, esc = t => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
     // tonalité : profils de Krumhansl-Kessler (majeur et mineur) comparés, par corrélation, aux durées cumulées de chaque note (algorithme de Krumhansl-Schmuckler)
     const hist = new Array(12).fill(0); song.notes.forEach(n => { hist[n.midi % 12] += Math.max(1, n.dur); });
@@ -428,6 +428,7 @@
     const corr = (x, y) => { const mx = x.reduce((a, b) => a + b) / 12, my = y.reduce((a, b) => a + b) / 12; let sxy = 0, sxx = 0, syy = 0; for (let i = 0; i < 12; i++) { sxy += (x[i] - mx) * (y[i] - my); sxx += (x[i] - mx) ** 2; syy += (y[i] - my) ** 2; } return sxx && syy ? sxy / Math.sqrt(sxx * syy) : -2; };
     let kTon = 0, kMin = false, kBest = -9; for (let t = 0; t < 12; t++) [false, true].forEach(mn => { const P = mn ? KMIN : KMAJ, r = corr(hist, P.map((_, i) => P[(i - t + 12) % 12])); if (r > kBest) { kBest = r; kTon = t; kMin = mn; } });
     const TON = { '-6': 6, '-5': 1, '-4': 8, '-3': 3, '-2': 10, '-1': 5, '0': 0, '1': 7, '2': 2, '3': 9, '4': 4, '5': 11, '6': 6 }, MAJ = [0, 2, 4, 5, 7, 9, 11];
+    if (keyHint) { kMin = keyHint.minor; const mj = TON[keyHint.fifths]; if (mj !== undefined) kTon = kMin ? (mj + 9) % 12 : mj; }   // tonalité écrite dans le fichier d'origine : on la garde
     const relMaj = kMin ? (kTon + 3) % 12 : kTon;   // un mode mineur s'écrit avec l'armure de sa tonalité relative majeure
     let fifths = 0; { let bd = 99; for (let f = -6; f <= 6; f++) if (TON[f] === relMaj && Math.abs(f) < bd) { bd = Math.abs(f); fifths = f; } }
     const LET = ['C', 'D', 'E', 'F', 'G', 'A', 'B'], LPC = [0, 2, 4, 5, 7, 9, 11], TLET = { '-6': 4, '-5': 1, '-4': 5, '-3': 2, '-2': 6, '-1': 3, '0': 0, '1': 4, '2': 1, '3': 5, '4': 2, '5': 6, '6': 3 };
@@ -439,15 +440,32 @@
     const measures = song.measures.map(m => ({ s: q(m.startTick), l: Math.max(1, q(m.lenTick)), num: m.num, den: m.den }));
     const staffNotes = { R: [], L: [] };
     song.notes.forEach(n => { const s = q(n.tick); let e = Math.max(s + 1, q(n.tick + n.dur)); staffNotes[(n.fh || n.hand) === 'L' ? 'L' : 'R'].push({ n, s, e }); });
+    // grille adaptative : si au moins 80 % des débuts de notes tombent déjà sur la croche, on écrit tout à la croche (les doubles-croches isolées viennent surtout du jeu et alourdissent la partition) ; sinon on garde la double-croche
+    { const all = staffNotes.R.concat(staffNotes.L), onEighth = all.filter(o => o.s % 2 === 0).length;
+      if (all.length && onEighth / all.length >= 0.8) all.forEach(o => { o.s = Math.round(o.s / 2) * 2; o.e = Math.max(o.s + 2, Math.round(o.e / 2) * 2); }); }
+    staffNotes.R.concat(staffNotes.L).forEach(o => { if (o.e - o.s >= 2) o.e = Math.max(o.s + 1, Math.round(o.e / 2) * 2); });   // les fins de notes tombent sur la croche : pas de durées de trois doubles-croches ou de liaisons pour un cran
+    ['R', 'L'].forEach(h => {   // même hauteur au même instant (parties doublées dans le fichier d'origine) : une seule note, la plus longue
+      const best = new Map(); staffNotes[h].forEach(o => { const k = o.s + '|' + o.n.midi, b = best.get(k); if (!b || o.e > b.e) best.set(k, o); }); staffNotes[h] = [...best.values()];
+    });
+    ['R', 'L'].forEach(h => {   // une même note ne peut pas sonner deux fois à la fois : si elle est rejouée avant la fin de la précédente, celle-ci s'arrête à la nouvelle attaque
+      const byP = new Map(); staffNotes[h].forEach(o => { const k = o.n.midi; if (!byP.has(k)) byP.set(k, []); byP.get(k).push(o); });
+      byP.forEach(arr => { arr.sort((x, y) => x.s - y.s); for (let i = 0; i + 1 < arr.length; i++) if (arr[i].e > arr[i + 1].s) arr[i].e = Math.max(arr[i].s + 1, arr[i + 1].s); });
+    });
     ['R', 'L'].forEach(h => {
       const L = staffNotes[h], ons = [...new Set(L.map(o => o.s))].sort((a, b) => a - b), nxt = new Map(); ons.forEach((v, i) => nxt.set(v, ons[i + 1]));
       L.forEach(o => { const s2 = nxt.get(o.s); if (s2 !== undefined && o.e > s2 && o.e - s2 <= 1) o.e = s2; });   // chevauchement d'un seul cran avec la note suivante : jeu legato
       const bs = new Map(); L.forEach(o => { if (!bs.has(o.s)) bs.set(o.s, []); bs.get(o.s).push(o); });
-      bs.forEach(arr => { arr.sort((a, b) => a.e - b.e); let c = [arr[0]]; const fl = () => { const mx = c[c.length - 1].e; c.forEach(o => { o.e = mx; }); }; for (let i = 1; i < arr.length; i++) { if (arr[i].e - c[c.length - 1].e <= 2) c.push(arr[i]); else { fl(); c = [arr[i]]; } } fl(); });   // notes d'un même accord : même fin à un ou deux crans près
+      bs.forEach(arr => { arr.sort((a, b) => a.e - b.e); let c = [arr[0]]; const fl = () => { const mx = c[c.length - 1].e; c.forEach(o => { o.e = mx; }); }; for (let i = 1; i < arr.length; i++) { if (arr[i].e - c[c.length - 1].e <= 3) c.push(arr[i]); else { fl(); c = [arr[i]]; } } fl(); });   // notes d'un même accord : même fin à un ou deux crans près
+    });
+    ['R', 'L'].forEach(h => {   // dernier passage (après les ajustements de fins) : une même hauteur ne sonne jamais deux fois à la fois dans une main
+      const byP = new Map(); staffNotes[h].forEach(o => { const k = o.n.midi; if (!byP.has(k)) byP.set(k, []); byP.get(k).push(o); });
+      byP.forEach(arr => { arr.sort((x, y) => x.s - y.s); for (let i = 0; i + 1 < arr.length; i++) if (arr[i].e > arr[i + 1].s) arr[i].e = Math.max(arr[i].s + 1, arr[i + 1].s); });
     });
     const pieces = len => { const out = []; for (const p of PIECES) while (len >= p[0]) { out.push(p); len -= p[0]; } return out; };
-    const noteXml = (ev, p, tie, first, chord, voice, staff) => {
-      let x = '<note>' + (chord ? '<chord/>' : '');
+    const RP = [[16, 'whole', 0], [8, 'half', 0], [4, 'quarter', 0], [2, 'eighth', 0], [1, '16th', 0]];   // silences : jamais pointés, et alignés sur leur propre valeur (pas de silence de blanche sur le 2e temps)
+    const restPieces = (pos, len) => { const out = []; while (len > 0) { const p = RP.find(r => r[0] <= len && pos % r[0] === 0) || RP[4]; out.push(p); pos += p[0]; len -= p[0]; } return out; };
+    const noteXml = (ev, p, tie, first, chord, voice, staff, hide) => {
+      let x = '<note' + (ev === null && hide ? ' print-object="no"' : '') + '>' + (chord ? '<chord/>' : '');
       x += ev === null ? '<rest/>' : '<pitch><step>' + SH[ev.n.midi % 12][0] + '</step>' + (SH[ev.n.midi % 12][1] ? '<alter>' + SH[ev.n.midi % 12][1] + '</alter>' : '') + '<octave>' + (Math.floor(ev.n.midi / 12) - 1) + '</octave></pitch>';
       x += '<duration>' + p[0] * g + '</duration>';
       if (ev !== null) { if (tie.stop) x += '<tie type="stop"/>'; if (tie.start) x += '<tie type="start"/>'; }
@@ -456,11 +474,25 @@
       return x + '</note>';
     };
     // voix d'une main : des « événements » (notes de même début et même fin = accord) rangés dans la première voix libre
+    // écriture « une voix par main » : à chaque attaque de la main, toutes les notes qui sonnent à cet instant forment un seul accord, qui dure jusqu'à l'attaque suivante (une note tenue sous d'autres notes est donc réécrite à chaque nouvelle attaque)
+    const oneVoice = list => {
+      const ons = [...new Set(list.map(o => o.s))].sort((x, y) => x - y), evs = [];
+      ons.forEach((st, i) => { const cov = list.filter(o => o.s <= st && o.e > st), mx = Math.max.apply(null, cov.map(o => o.e)), nx = ons[i + 1]; evs.push({ s: st, e: nx === undefined ? mx : Math.min(nx, mx), notes: cov }); });
+      return evs.length ? [{ evs, end: evs[evs.length - 1].e }] : [];
+    };
+    // écriture « accords » (par défaut) : une seule voix par main ; à chaque attaque, les notes qui démarrent ensemble forment un accord qui dure jusqu'à la prochaine attaque de la main (au plus la longueur de la plus longue de ses notes). Une note tenue sous d'autres attaques est coupée à la prochaine attaque.
+    const chordVoice = list => {
+      const ons = [...new Set(list.map(o => o.s))].sort((x, y) => x - y), evs = [];
+      ons.forEach((st, i) => { const at = list.filter(o => o.s === st), mx = Math.max.apply(null, at.map(o => o.e)), nx = ons[i + 1]; evs.push({ s: st, e: nx === undefined ? mx : Math.min(nx, mx), notes: at }); });
+      return evs.length ? [{ evs, end: evs[evs.length - 1].e }] : [];
+    };
     const voicesOf = list => {
+      if (layout !== 'voix' && layout !== 'simple') { const V0 = chordVoice(list); V0.forEach(V => { for (let i = 0; i + 1 < V.evs.length; i++) { const gap = V.evs[i + 1].s - V.evs[i].e; if (gap >= 1 && gap <= 3) V.evs[i].e = V.evs[i + 1].s; } }); return V0; }
+      if (layout === 'simple') { const V1 = oneVoice(list); V1.forEach(V => { for (let i = 0; i + 1 < V.evs.length; i++) { const gap = V.evs[i + 1].s - V.evs[i].e; if (gap >= 1 && gap <= 3) V.evs[i].e = V.evs[i + 1].s; } }); return V1; }
       const byKey = new Map(); list.forEach(o => { const k = o.s + '|' + o.e; if (!byKey.has(k)) byKey.set(k, { s: o.s, e: o.e, notes: [] }); byKey.get(k).notes.push(o); });
       const evs = [...byKey.values()].sort((a, b) => a.s - b.s || b.e - a.e), voices = [];
       evs.forEach(ev => { let v = voices.find(V => V.end <= ev.s); if (!v) { v = { end: 0, evs: [] }; voices.push(v); } v.evs.push(ev); v.end = ev.e; });
-      voices.forEach(V => { for (let i = 0; i + 1 < V.evs.length; i++) { const gap = V.evs[i + 1].s - V.evs[i].e; if (gap >= 1 && gap <= 2) V.evs[i].e = V.evs[i + 1].s; } });   // petit silence entre deux notes d'une même voix : on prolonge la note (jeu détaché)
+      voices.forEach(V => { for (let i = 0; i + 1 < V.evs.length; i++) { const gap = V.evs[i + 1].s - V.evs[i].e; if (gap >= 1 && gap <= 3) V.evs[i].e = V.evs[i + 1].s; } });   // petit silence entre deux notes d'une même voix : on prolonge la note (jeu détaché)
       return voices;
     };
     const ttl = String(song.title || 'Morceau').replace(/\.(mid|midi)$/i, '');
@@ -468,13 +500,14 @@
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<score-partwise version="3.1"><work><work-title>' + esc(ttl) + '</work-title></work><movement-title>' + esc(ttl) + '</movement-title><identification/><credit page="1"><credit-type>title</credit-type><credit-words font-size="22" justify="center" valign="top" default-x="600" default-y="1500">' + esc(ttl) + '</credit-words></credit><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list><part id="P1">';
     let lastTs = '';
     measures.forEach((m, mi) => {
-      xml += '<measure number="' + (mi + 1) + '">';
+      xml += '<measure number="' + (mi + 1) + '"' + (mi === 0 && song.measures[0].lenTick < song.ppq * 4 * m.num / m.den * 0.999 ? ' implicit="yes"' : '') + '>';
       const ts = m.num + '/' + m.den;
       if (mi === 0) xml += '<attributes><divisions>' + div + '</divisions><key><fifths>' + fifths + '</fifths><mode>' + (kMin ? 'minor' : 'major') + '</mode></key><time><beats>' + m.num + '</beats><beat-type>' + m.den + '</beat-type></time><staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes><direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>' + Math.round(song.fileBpm) + '</per-minute></metronome></direction-type><sound tempo="' + song.fileBpm + '"/></direction>';
       else if (ts !== lastTs) xml += '<attributes><time><beats>' + m.num + '</beats><beat-type>' + m.den + '</beat-type></time></attributes>';
       lastTs = ts;
       let first = true;
       [[1, vR], [2, vL]].forEach(([staff, voices]) => {
+        const snd = new Map();   // hauteurs déjà écrites dans cette portée pour cette mesure : jamais la même note deux fois à la fois, même dans deux voix
         const act = voices.map((v, vi) => ({ v, vi })).filter(o => o.v.evs.some(ev => ev.e > m.s && ev.s < m.s + m.l));   // seulement les voix qui jouent dans cette mesure ; sinon un seul silence de mesure
         const V = act.length ? act : [{ v: { evs: [] }, vi: 0 }];
         V.forEach(({ v, vi }) => {
@@ -483,12 +516,14 @@
           v.evs.filter(ev => ev.e > m.s && ev.s < end).forEach(ev => {
             const s = Math.max(ev.s, cur, m.s), e = Math.min(ev.e, end);
             if (e <= s) return;
-            pieces(s - cur).forEach(p => { xml += noteXml(null, p, {}, false, false, voiceNo, staff); });
-            const ps = pieces(e - s);
-            ps.forEach((p, pi) => ev.notes.forEach((o, oi) => { xml += noteXml(o, p, { stop: pi > 0 || ev.s < m.s, start: pi < ps.length - 1 || ev.e > end }, pi === 0 && ev.s >= m.s, oi > 0, voiceNo, staff); }));
+            restPieces(cur - m.s, s - cur).forEach(p => { xml += noteXml(null, p, {}, false, false, voiceNo, staff, vi > 0); });
+            const ps = pieces(e - s), keep = ev.notes.filter(o => !((snd.get(o.n.midi) || 0) > s));
+            keep.forEach(o => snd.set(o.n.midi, e));
+            if (!keep.length) { restPieces(s - m.s, e - s).forEach(p => { xml += noteXml(null, p, {}, false, false, voiceNo, staff, true); }); cur = e; return; }
+            ps.forEach((p, pi) => keep.forEach((o, oi) => { xml += noteXml(o, p, { stop: pi > 0 || ev.s < m.s, start: pi < ps.length - 1 || ev.e > end }, pi === 0 && ev.s >= m.s, oi > 0, voiceNo, staff); }));
             cur = e;
           });
-          if (cur < end) { const rest = pieces(end - cur); if (cur === m.s && rest.length === 1 && rest[0][0] === m.l) xml += '<note><rest measure="yes"/><duration>' + m.l * g + '</duration><voice>' + voiceNo + '</voice><staff>' + staff + '</staff></note>'; else rest.forEach(p => { xml += noteXml(null, p, {}, false, false, voiceNo, staff); }); }
+          if (cur < end) { const rest = restPieces(cur - m.s, end - cur); if (cur === m.s && rest.length === 1 && rest[0][0] === m.l) xml += '<note><rest measure="yes"/><duration>' + m.l * g + '</duration><voice>' + voiceNo + '</voice><staff>' + staff + '</staff></note>'; else rest.forEach(p => { xml += noteXml(null, p, {}, false, false, voiceNo, staff, vi > 0); }); }
         });
       });
       xml += '</measure>';
@@ -499,8 +534,12 @@
     // ---------- Export : le fichier MusicXML d'origine, tel quel, avec les doigtés d'aujourd'hui ----------
   // fing(n) -> { f, f2, hand } : doigt affiché, doigt de substitution éventuel, main à écrire (« MD » / « MG ») ou rien. Renvoie null si la partition d'origine n'est pas un MusicXML « partwise ».
   function injectFingerings(song, fing) {
-    if (song && !song.sourceXml && song.format === 'midi') return xmlFromMidi(song, fing);
-    const src = song && song.sourceXml; if (!src) return null;
+    if (!song) return null;
+    const src = song.sourceXml;
+    // l'application ne traite que le piano : un fichier d'origine qui n'est pas déjà une partie de piano à deux portées (MIDI, plusieurs parties, une seule portée…) est réécrit sur deux portées à partir des notes
+    const onePiano = src && (src.match(/<part(?=[\s>])/g) || []).length === 1 && /<staves>\s*2\s*<\/staves>/.test(src);
+    if (!onePiano) { const km = src && /<fifths>\s*(-?\d+)\s*<\/fifths>(?:\s*<mode>\s*(\w+)\s*<\/mode>)?/.exec(src); return xmlFromMidi(song, fing, km ? { fifths: parseInt(km[1], 10), minor: km[2] === 'minor' } : null); }
+
     const byIdx = new Map(); song.notes.forEach(n => { if (n.srcIdx !== undefined) byIdx.set(n.srcIdx, n); });
     // Main : écrite (« MD » / « MG ») seulement sur la PREMIÈRE note d'une série, quand elle diffère de ce que la lecture du fichier supposerait : la main de la portée, ou celle déjà écrite plus haut dans la même portée (quelle que soit la voix ou la mesure) tant que les hampes gardent le même sens et qu'aucun silence ne l'interrompt ; le fichier exporté porte un repère qui l'indique à la relecture
     const handLab = new Map(), ser = new Map(), parts = []; { const rp = /<part(?=[\s>])/g; let pm; while ((pm = rp.exec(src))) parts.push(pm.index); }
