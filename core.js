@@ -440,9 +440,6 @@
     const measures = song.measures.map(m => ({ s: q(m.startTick), l: Math.max(1, q(m.lenTick)), num: m.num, den: m.den }));
     const staffNotes = { R: [], L: [] };
     song.notes.forEach(n => { const s = q(n.tick); let e = Math.max(s + 1, q(n.tick + n.dur)); staffNotes[(n.fh || n.hand) === 'L' ? 'L' : 'R'].push({ n, s, e }); });
-    // grille adaptative : si au moins 80 % des débuts de notes tombent déjà sur la croche, on écrit tout à la croche (les doubles-croches isolées viennent surtout du jeu et alourdissent la partition) ; sinon on garde la double-croche
-    { const all = staffNotes.R.concat(staffNotes.L), onEighth = all.filter(o => o.s % 2 === 0).length;
-      if (all.length && onEighth / all.length >= 0.8) all.forEach(o => { o.s = Math.round(o.s / 2) * 2; o.e = Math.max(o.s + 2, Math.round(o.e / 2) * 2); }); }
     staffNotes.R.concat(staffNotes.L).forEach(o => { if (o.e - o.s >= 2) o.e = Math.max(o.s + 1, Math.round(o.e / 2) * 2); });   // les fins de notes tombent sur la croche : pas de durées de trois doubles-croches ou de liaisons pour un cran
     ['R', 'L'].forEach(h => {   // même hauteur au même instant (parties doublées dans le fichier d'origine) : une seule note, la plus longue
       const best = new Map(); staffNotes[h].forEach(o => { const k = o.s + '|' + o.n.midi, b = best.get(k); if (!b || o.e > b.e) best.set(k, o); }); staffNotes[h] = [...best.values()];
