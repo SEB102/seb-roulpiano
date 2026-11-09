@@ -216,5 +216,19 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
     assert.deepStrictEqual(s2.notes.map(n => n.midi).sort(), [48, 72], 'do5 doublé : une seule note ; do3 conservé');
   });
 
+  await t('MIDI dont les notes ne tombent pas sur la grille déclarée (tempo et résolution incohérents) : mis à l\'échelle, la croche tombe sur la croche, le tempo est corrigé et la durée réelle ne change pas', async () => {
+    const vlq = v => { const o = [v & 0x7f]; while ((v >>= 7)) o.unshift((v & 0x7f) | 0x80); return o; };
+    const ev = []; let last = 0, tick = 0; const add = (tk, bytes) => { ev.push(...vlq(tk - last), ...bytes); last = tk; };
+    add(0, [0xff, 0x51, 3, 0x0f, 0x42, 0x40]);   // 60 par minute, noire = 1000 ticks
+    for (let i = 0; i < 24; i++) { const st = Math.round(i * 394.7); add(st, [0x90, 60 + (i % 5), 80]); add(st + 300, [0x80, 60 + (i % 5), 0]); }
+    add(Math.round(24 * 394.7), [0xff, 0x2f, 0]);
+    const trk = [0x4d, 0x54, 0x72, 0x6b, 0, 0, (ev.length >> 8) & 255, ev.length & 255, ...ev];
+    const mid = Buffer.from([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x03, 0xe8, ...trk]);
+    const s = await C.loadSong('desaccord.mid', mid);
+    assert.ok(Math.abs(s.fileBpm - 76) < 1, 'tempo corrigé : ' + s.fileBpm);
+    assert.ok(s.notes.every(n => Math.abs(n.tick - Math.round(n.tick / 500) * 500) <= 2), 'les attaques tombent sur la croche');
+    assert.ok(Math.abs(s.durationSec - (23 * 394.7 + 300) / 1000) < 0.05, 'durée réelle conservée : ' + s.durationSec);
+  });
+
   console.log(`\n${n} tests passés`);
 })();

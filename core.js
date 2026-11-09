@@ -124,6 +124,22 @@
       groups.push(group);
     }
     notes.sort((a, c) => a.tick - c.tick || a.midi - c.midi);
+    // Fichier dont les notes ne tombent pas sur la grille des temps déclarée (tempo et résolution incohérents, fichier produit par un programme) : on mesure l'intervalle le plus fréquent entre deux attaques, on le ramène à une croche (ou une double-croche, une noire) et on met le tout à l'échelle ; le tempo est corrigé du même facteur, la durée réelle ne change pas.
+    { const on = [...new Set(notes.map(n => n.tick))].sort((x, y) => x - y), gridFit = g => on.filter(t => Math.abs(t - Math.round(t / g) * g) <= 0.12 * g).length / (on.length || 1);
+      if (on.length >= 16 && gridFit(ppq / 12) < 0.9 && gridFit(ppq / 4) < 0.9) {
+        const bins = new Map(); for (let i = 1; i < on.length && i < 4000; i++) { const d = on[i] - on[i - 1]; if (d < ppq / 16 || d > 2 * ppq) continue; const k = Math.round(Math.log(d) / Math.log(1.02)); (bins.get(k) || bins.set(k, []).get(k)).push(d); }
+        let best = null; bins.forEach(a => { if (!best || a.length > best.length) best = a; });
+        if (best && best.length >= 8) {
+          const u = best.reduce((x, y) => x + y, 0) / best.length, r = u / ppq;
+          const target = [0.25, 0.5, 1].reduce((t, c) => Math.abs(Math.log(r / c)) < Math.abs(Math.log(r / t)) ? c : t), k = target * ppq / u;
+          const fitU = on.filter(t => Math.abs(t - Math.round(t / u) * u) <= 0.06 * u).length / on.length;
+          if (k > 0.5 && k < 2 && Math.abs(k - 1) > 0.04 && fitU >= 0.85) {
+            notes.forEach(n => { n.tick = Math.round(n.tick * k); n.dur = Math.max(1, Math.round(n.dur * k)); });
+            tempos.forEach(t => { t.tick = Math.round(t.tick * k); t.uspq = Math.round(t.uspq / k); });
+            timesigs.forEach(t => { t.tick = Math.round(t.tick * k); });
+          }
+        }
+      } }
     const handMode = assignHandsByPitch(notes, groups);
     const endTick = notes.reduce((m, n) => Math.max(m, n.tick + n.dur), 0);
     return finish({ format: 'midi', title, ppq, tempos, notes, handMode, measures: midiMeasures(timesigs, ppq, endTick), endTick });
