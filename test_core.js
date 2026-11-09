@@ -230,5 +230,19 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
     assert.ok(Math.abs(s.durationSec - (23 * 394.7 + 300) / 1000) < 0.05, 'durée réelle conservée : ' + s.durationSec);
   });
 
+  await t('Triolets de croches : écrits comme tels (croches de triolet avec crochet « 3 »), sans en inventer dans une musique à croches et doubles-croches régulières', async () => {
+    const vlq = v => { const o = [v & 0x7f]; while ((v >>= 7)) o.unshift((v & 0x7f) | 0x80); return o; };
+    const mk = pairs => { const ev = []; let last = 0; const add = (tk, b) => { ev.push(...vlq(tk - last), ...b); last = tk; }; add(0, [0xff, 0x51, 3, 0x07, 0xa1, 0x20]);
+      const evs = []; pairs.forEach(([st, d, p]) => { evs.push([st, [0x90, p, 80]], [st + d - 5, [0x80, p, 0]]); }); evs.sort((a, b) => a[0] - b[0]); evs.forEach(([tk, b]) => add(tk, b)); add(pairs[pairs.length - 1][0] + 480, [0xff, 0x2f, 0]);
+      const trk = [0x4d, 0x54, 0x72, 0x6b, 0, 0, (ev.length >> 8) & 255, ev.length & 255, ...ev]; return Buffer.from([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0, ...trk]); };
+    const tri = []; for (let b = 0; b < 8; b++) for (let k = 0; k < 3; k++) tri.push([b * 480 + k * 160, 160, 60 + ((b + k) % 5)]);
+    const xt = C.injectFingerings(await C.loadSong('tri.mid', mk(tri)), n => ({ f: 0 }));
+    assert.strictEqual((xt.match(/<tuplet type="start"/g) || []).length, 8, 'un crochet par temps'); assert.strictEqual((xt.match(/<time-modification>/g) || []).length, 24, 'trois croches de triolet par temps');
+    const bin = []; for (let i = 0; i < 32; i++) bin.push([i * 120, 120, 60 + (i % 7)]);
+    const xb = C.injectFingerings(await C.loadSong('bin.mid', mk(bin)), n => ({ f: 0 }));
+    assert.ok(!/time-modification/.test(xb), 'pas de triolet dans des doubles-croches régulières');
+    const s2 = await C.loadSong('x.musicxml', Buffer.from(xt)); assert.strictEqual(s2.notes.length, 24, 'notes conservées');
+  });
+
   console.log(`\n${n} tests passés`);
 })();
