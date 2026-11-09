@@ -133,7 +133,9 @@
           let u = best.reduce((x, y) => x + y, 0) / best.length;
           for (let it = 0; it < 3; it++) { let sn = 0, sd = 0; on.forEach(t => { const nn = Math.round(t / u); if (nn > 0) { sn += t * nn; sd += nn * nn; } }); if (sd) u = sn / sd; }   // l'unité est affinée par régression : une petite erreur sur elle s'accumule sur un morceau long
           const r = u / ppq;
-          const target = [0.25, 0.5, 1].reduce((t, c) => Math.abs(Math.log(r / c)) < Math.abs(Math.log(r / t)) ? c : t), k = target * ppq / u;
+          // l'unité mesurée est-elle une double-croche, une croche ou une noire ? On prend l'hypothèse qui donne le tempo le plus plausible (le plus proche de 90 à la noire) : la valeur « la plus proche de la grille » ne dit rien du tempo réel
+          const t0 = tempos.length ? tempos.slice().sort((x, y) => x.tick - y.tick)[0].uspq : 500000, uSec = u * t0 / ppq / 1e6;
+          const target = [0.25, 0.5, 1].reduce((t, c) => Math.abs(Math.log(60 * c / uSec / 90)) < Math.abs(Math.log(60 * t / uSec / 90)) ? c : t), k = target * ppq / u;
           const fitU = on.filter(t => Math.abs(t - Math.round(t / u) * u) <= 0.06 * u).length / on.length;
           if (k > 0.5 && k < 2 && Math.abs(k - 1) > 0.04 && fitU >= 0.85) {
             notes.forEach(n => { n.tick = Math.round(n.tick * k); n.dur = Math.max(1, Math.round(n.dur * k)); });
@@ -510,6 +512,7 @@
       for (let i = 0; i + 1 < evs.length; i++) { const gap = evs[i + 1].s - evs[i].e; if (gap >= 1 && gap <= 9) evs[i].e = evs[i + 1].s; }   // petit silence entre deux attaques : on prolonge la note (jeu détaché)
       return evs.length ? [{ evs, end: evs[evs.length - 1].e }] : [];
     };
+    const bpm0 = song.timeline ? song.timeline.bpmAtTick(0) : song.fileBpm;   // le tempo réglé dans l'application (celui du fichier tant qu'on n'y touche pas)
     const ttl = String(song.title || 'Morceau').replace(/\.(mid|midi)$/i, '');
     const vR = voicesOf(staffNotes.R), vL = voicesOf(staffNotes.L);
     let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<score-partwise version="3.1"><work><work-title>' + esc(ttl) + '</work-title></work><movement-title>' + esc(ttl) + '</movement-title><identification/><credit page="1"><credit-type>title</credit-type><credit-words font-size="22" justify="center" valign="top" default-x="600" default-y="1500">' + esc(ttl) + '</credit-words></credit><part-list><score-part id="P1"><part-name>Piano</part-name></score-part></part-list><part id="P1">';
@@ -517,7 +520,7 @@
     measures.forEach((m, mi) => {
       xml += '<measure number="' + (mi + 1) + '"' + (mi === 0 && song.measures[0].lenTick < song.ppq * 4 * m.num / m.den * 0.999 ? ' implicit="yes"' : '') + '>';
       const ts = m.num + '/' + m.den;
-      if (mi === 0) xml += '<attributes><divisions>' + U + '</divisions><key><fifths>' + fifths + '</fifths><mode>' + (kMin ? 'minor' : 'major') + '</mode></key><time><beats>' + m.num + '</beats><beat-type>' + m.den + '</beat-type></time><staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes><direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>' + Math.round(song.fileBpm) + '</per-minute></metronome></direction-type><sound tempo="' + song.fileBpm + '"/></direction>';
+      if (mi === 0) xml += '<attributes><divisions>' + U + '</divisions><key><fifths>' + fifths + '</fifths><mode>' + (kMin ? 'minor' : 'major') + '</mode></key><time><beats>' + m.num + '</beats><beat-type>' + m.den + '</beat-type></time><staves>2</staves><clef number="1"><sign>G</sign><line>2</line></clef><clef number="2"><sign>F</sign><line>4</line></clef></attributes><direction placement="above"><direction-type><metronome><beat-unit>quarter</beat-unit><per-minute>' + Math.round(bpm0) + '</per-minute></metronome></direction-type><sound tempo="' + bpm0 + '"/></direction>';
       else if (ts !== lastTs) xml += '<attributes><time><beats>' + m.num + '</beats><beat-type>' + m.den + '</beat-type></time></attributes>';
       lastTs = ts;
       let first = true;

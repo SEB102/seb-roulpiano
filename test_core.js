@@ -244,5 +244,16 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
     const s2 = await C.loadSong('x.musicxml', Buffer.from(xt)); assert.strictEqual(s2.notes.length, 24, 'notes conservées');
   });
 
+  await t('Export d\'un MIDI : le tempo écrit est celui réglé dans l\'application (retime), pas celui du fichier', async () => {
+    const vlq = v => { const o = [v & 0x7f]; while ((v >>= 7)) o.unshift((v & 0x7f) | 0x80); return o; };
+    const ev = []; let last = 0; const add = (tk, b) => { ev.push(...vlq(tk - last), ...b); last = tk; };
+    add(0, [0xff, 0x51, 3, 0x07, 0xa1, 0x20]); for (let i = 0; i < 8; i++) { add(i * 480, [0x90, 60 + i, 80]); add(i * 480 + 400, [0x80, 60 + i, 0]); } add(3840, [0xff, 0x2f, 0]);
+    const trk = [0x4d, 0x54, 0x72, 0x6b, 0, 0, (ev.length >> 8) & 255, ev.length & 255, ...ev]; const mid = Buffer.from([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0, ...trk]);
+    const s = await C.loadSong('tempo.mid', mid);
+    assert.ok(/<per-minute>120</.test(C.injectFingerings(s, n => ({ f: 0 }))), 'tempo du fichier au départ');
+    C.retime(s, 96);
+    const x = C.injectFingerings(s, n => ({ f: 0 })); assert.ok(/<per-minute>96</.test(x) && /<sound tempo="96/.test(x), 'tempo réglé : 96');
+  });
+
   console.log(`\n${n} tests passés`);
 })();
