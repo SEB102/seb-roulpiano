@@ -262,7 +262,7 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
       const trk = [0x4d, 0x54, 0x72, 0x6b, 0, 0, (ev.length >> 8) & 255, ev.length & 255, ...ev]; return Buffer.from([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0, ...trk]); };
     const sex = []; for (let b = 0; b < 4; b++) for (let k = 0; k < 6; k++) sex.push([b * 480 + k * 80, 80, 60 + ((b * 6 + k) % 9)]);
     const xs = C.injectFingerings(await C.loadSong('sex.mid', mk(sex)), n => ({ f: 0 }));
-    assert.strictEqual((xs.match(/<tuplet type="start"/g) || []).length, 4, 'un crochet par temps'); assert.strictEqual((xs.match(/<type>16th<\/type>/g) || []).length, 24, 'six doubles-croches par temps');
+    assert.strictEqual((xs.match(/<tuplet type="start"/g) || []).length, 4, 'un crochet par temps'); assert.strictEqual((xs.match(/<type>16th<\/type>/g) || []).length, 24, 'six doubles-croches par temps'); assert.strictEqual((xs.match(/<actual-notes>6<\/actual-notes><normal-notes>4<\/normal-notes>/g) || []).length, 24, 'rapport 6 pour 4 (le crochet affiche « 6 »)');
     const s2 = await C.loadSong('x.musicxml', Buffer.from(xs)); assert.strictEqual(s2.notes.length, 24, 'notes conservées');
     const bin = []; for (let i = 0; i < 32; i++) bin.push([i * 120, 120, 60 + (i % 7)]);
     assert.ok(!/time-modification/.test(C.injectFingerings(await C.loadSong('bin.mid', mk(bin)), n => ({ f: 0 }))), 'pas de sextolet dans des doubles-croches régulières');

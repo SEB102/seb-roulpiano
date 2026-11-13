@@ -469,12 +469,12 @@
     const TT = { 8: ['quarter', 0], 6: ['eighth', 1], 4: ['eighth', 0], 2: ['16th', 0] };   // valeurs d'un temps de triolet, en douzièmes de noire
     const tripPiece = (off, len) => (off === 0 || off === 4) && len >= 8 && off + 8 <= U ? 8 : (off === 0 || off === 6) && len >= 6 && off + 6 <= U ? 6 : off % 4 === 0 && len >= 4 ? 4 : 2;
     const pieces = (pos, len) => { const out = []; while (len > 0) {
-      if (isTrip(pos) && !(pos % U === 0 && len >= U)) { const sz = tripPiece(pos % U, len); out.push({ n: sz, type: TT[sz][0], dot: TT[sz][1], tm: true, sb: pos % U === 0, eb: (pos % U) + sz === U }); pos += sz; len -= sz; continue; }
+      if (isTrip(pos) && !(pos % U === 0 && len >= U)) { const sz = tripPiece(pos % U, len); out.push({ n: sz, type: TT[sz][0], dot: TT[sz][1], tm: true, r: tripGrid.get(Math.floor(pos / U)) === 2 ? [6, 4] : [3, 2], sb: pos % U === 0, eb: (pos % U) + sz === U }); pos += sz; len -= sz; continue; }
       const p = NORM.find(r => r[0] <= len && okSpan(pos, r[0])) || NORM[7]; out.push({ n: p[0], type: p[1], dot: p[2], tm: false }); pos += p[0]; len -= p[0]; } return out; };
     // silences : jamais pointés, et alignés sur leur propre valeur (pas de silence de blanche sur le 2e temps)
     const RPN = [48, 24, 12, 6, 3], RT = { 48: 'whole', 24: 'half', 12: 'quarter', 6: 'eighth', 3: '16th' };
     const restPieces = (rel, abs, len) => { const out = []; while (len > 0) {
-      if (isTrip(abs) && !(rel % U === 0 && len >= U)) { let sz = tripPiece(abs % U, len); if (sz === 6) sz = 4; out.push({ n: sz, type: TT[sz][0], dot: 0, tm: true, sb: abs % U === 0, eb: (abs % U) + sz === U }); rel += sz; abs += sz; len -= sz; continue; }
+      if (isTrip(abs) && !(rel % U === 0 && len >= U)) { let sz = tripPiece(abs % U, len); if (sz === 6) sz = 4; out.push({ n: sz, type: TT[sz][0], dot: 0, tm: true, r: tripGrid.get(Math.floor(abs / U)) === 2 ? [6, 4] : [3, 2], sb: abs % U === 0, eb: (abs % U) + sz === U }); rel += sz; abs += sz; len -= sz; continue; }
       const sz = RPN.find(r => r <= len && rel % r === 0 && okSpan(abs, r)) || 3; out.push({ n: sz, type: RT[sz], dot: 0, tm: false }); rel += sz; abs += sz; len -= sz; } return out; };
     const measures = song.measures.map(m => ({ s: Math.round(m.startTick / ppq * U), l: Math.max(1, Math.round(m.lenTick / ppq * U)), num: m.num, den: m.den }));
     const staffNotes = { R: [], L: [] };
@@ -501,7 +501,7 @@
       x += ev === null ? '<rest/>' : '<pitch><step>' + SH[ev.n.midi % 12][0] + '</step>' + (SH[ev.n.midi % 12][1] ? '<alter>' + SH[ev.n.midi % 12][1] + '</alter>' : '') + '<octave>' + (Math.floor(ev.n.midi / 12) - 1) + '</octave></pitch>';
       x += '<duration>' + p.n + '</duration>';
       if (ev !== null) { if (tie.stop) x += '<tie type="stop"/>'; if (tie.start) x += '<tie type="start"/>'; }
-      x += '<voice>' + voice + '</voice><type>' + p.type + '</type>' + (p.dot ? '<dot/>' : '') + (p.tm ? '<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes></time-modification>' : '') + '<staff>' + staff + '</staff>';
+      x += '<voice>' + voice + '</voice><type>' + p.type + '</type>' + (p.dot ? '<dot/>' : '') + (p.tm ? '<time-modification><actual-notes>' + p.r[0] + '</actual-notes><normal-notes>' + p.r[1] + '</normal-notes></time-modification>' : '') + '<staff>' + staff + '</staff>';
       const tup = p.tm && !chord ? (p.sb ? '<tuplet type="start" bracket="yes"/>' : '') + (p.eb ? '<tuplet type="stop"/>' : '') : '';
       let nt = tup;
       if (ev !== null) { const f = first ? ((fing(ev.n) || {}).f || 0) : 0; nt += (tie.stop ? '<tied type="stop"/>' : '') + (tie.start ? '<tied type="start"/>' : '') + (f ? '<technical><fingering>' + f + '</fingering></technical>' : ''); }
