@@ -457,21 +457,24 @@
       for (let pc = 0; pc < 12; pc++) if (!SH[pc]) { const l = LPC.map((v, i) => [v, i]).filter(([v]) => (fifths >= 0 ? v === pc - 1 : v === pc + 1)); const i = l.length ? l[0][1] : 0; SH[pc] = [LET[i], fifths >= 0 ? 1 : -1]; } }
     // Unité de temps : le douzième de noire (une double-croche = 3, une croche = 6, une croche de triolet = 4). Un temps est « de triolet » quand au moins deux attaques tombent au tiers ou aux deux tiers du temps, sans que les doubles-croches y dominent.
     const ppq = song.ppq, trip = new Set();
-    { const cT = new Map(), cB = new Map(); song.notes.forEach(n => { const bt = Math.floor(n.tick / ppq + 1e-9), ph = (n.tick - bt * ppq) / ppq * U; const dT = Math.min(Math.abs(ph - 4), Math.abs(ph - 8)), dB = Math.min(Math.abs(ph - 3), Math.abs(ph - 9)); if (dT < 0.8 && dT < dB) cT.set(bt, (cT.get(bt) || 0) + 1); else if (dB < 0.8 && dB < dT) cB.set(bt, (cB.get(bt) || 0) + 1); });
+    const tripGrid = new Map();   // temps de triolet -> pas (4 : croches de triolet ; 2 : doubles-croches de triolet, ou sextolets)
+    { const cT = new Map(), cB = new Map(), cS = new Map(); song.notes.forEach(n => { const bt = Math.floor(n.tick / ppq + 1e-9), ph = (n.tick - bt * ppq) / ppq * U, d4 = Math.min(Math.abs(ph - 4), Math.abs(ph - 8)), d2 = Math.min(Math.abs(ph - 2), Math.abs(ph - 10)), dB = Math.min(Math.abs(ph - 3), Math.abs(ph - 9)), dT = Math.min(d4, d2); if (dT < 0.6 && dT < dB) { cT.set(bt, (cT.get(bt) || 0) + 1); if (d2 < d4) cS.set(bt, (cS.get(bt) || 0) + 1); } else if (dB < 0.6 && dB < dT) cB.set(bt, (cB.get(bt) || 0) + 1); });
       const gu = ppq / U, onG = song.notes.filter(n => Math.abs(n.tick - Math.round(n.tick / gu) * gu) <= 0.15 * gu).length / (song.notes.length || 1);
-      if (onG >= 0.85) cT.forEach((c, bt) => { if (c >= 2 && c > (cB.get(bt) || 0)) trip.add(bt); }); }   // pas de triolets dans un fichier dont les attaques ne tombent pas sur la grille (jeu libre) : ce serait du bruit
-    const qpos = (t, isEnd, shortNote) => { const bt = Math.floor(t / ppq + 1e-9), ph = (t - bt * ppq) / ppq * U, gr = trip.has(bt) ? 4 : (isEnd && !shortNote ? 6 : 3); return bt * U + Math.round(ph / gr) * gr; };
+      if (onG >= 0.85) cT.forEach((c, bt) => { if (c >= 2 && c > (cB.get(bt) || 0)) { trip.add(bt); tripGrid.set(bt, cS.get(bt) ? 2 : 4); } }); }   // pas de triolets dans un fichier dont les attaques ne tombent pas sur la grille (jeu libre) : ce serait du bruit
+    const qpos = (t, isEnd, shortNote) => { const bt = Math.floor(t / ppq + 1e-9), ph = (t - bt * ppq) / ppq * U, gr = trip.has(bt) ? tripGrid.get(bt) : (isEnd && !shortNote ? 6 : 3); return bt * U + Math.round(ph / gr) * gr; };
     const isTrip = p => trip.has(Math.floor(p / U));
     const NORM = [[48, 'whole', 0], [36, 'half', 1], [24, 'half', 0], [18, 'quarter', 1], [12, 'quarter', 0], [9, 'eighth', 1], [6, 'eighth', 0], [3, '16th', 0]];   // en douzièmes de noire
     // un morceau de note peut couvrir en entier un temps de triolet, mais pas en couper une partie
     const okSpan = (p, size) => { for (let bt = Math.floor(p / U); bt <= Math.floor((p + size - 1) / U); bt++) if (trip.has(bt) && !(p <= bt * U && p + size >= (bt + 1) * U)) return false; return true; };
+    const TT = { 8: ['quarter', 0], 6: ['eighth', 1], 4: ['eighth', 0], 2: ['16th', 0] };   // valeurs d'un temps de triolet, en douzièmes de noire
+    const tripPiece = (off, len) => (off === 0 || off === 4) && len >= 8 && off + 8 <= U ? 8 : (off === 0 || off === 6) && len >= 6 && off + 6 <= U ? 6 : off % 4 === 0 && len >= 4 ? 4 : 2;
     const pieces = (pos, len) => { const out = []; while (len > 0) {
-      if (isTrip(pos) && !(pos % U === 0 && len >= U)) { const sz = (pos % U === 0 || pos % U === 4) && len >= 8 && (pos % U) + 8 <= U ? 8 : 4; out.push({ n: sz, type: sz === 8 ? 'quarter' : 'eighth', dot: 0, tm: true, sb: pos % U === 0, eb: (pos % U) + sz === U }); pos += sz; len -= sz; continue; }
+      if (isTrip(pos) && !(pos % U === 0 && len >= U)) { const sz = tripPiece(pos % U, len); out.push({ n: sz, type: TT[sz][0], dot: TT[sz][1], tm: true, sb: pos % U === 0, eb: (pos % U) + sz === U }); pos += sz; len -= sz; continue; }
       const p = NORM.find(r => r[0] <= len && okSpan(pos, r[0])) || NORM[7]; out.push({ n: p[0], type: p[1], dot: p[2], tm: false }); pos += p[0]; len -= p[0]; } return out; };
     // silences : jamais pointés, et alignés sur leur propre valeur (pas de silence de blanche sur le 2e temps)
     const RPN = [48, 24, 12, 6, 3], RT = { 48: 'whole', 24: 'half', 12: 'quarter', 6: 'eighth', 3: '16th' };
     const restPieces = (rel, abs, len) => { const out = []; while (len > 0) {
-      if (isTrip(abs) && !(rel % U === 0 && len >= U)) { const sz = (abs % U === 0 || abs % U === 4) && len >= 8 && (abs % U) + 8 <= U ? 8 : 4; out.push({ n: sz, type: sz === 8 ? 'quarter' : 'eighth', dot: 0, tm: true, sb: abs % U === 0, eb: (abs % U) + sz === U }); rel += sz; abs += sz; len -= sz; continue; }
+      if (isTrip(abs) && !(rel % U === 0 && len >= U)) { let sz = tripPiece(abs % U, len); if (sz === 6) sz = 4; out.push({ n: sz, type: TT[sz][0], dot: 0, tm: true, sb: abs % U === 0, eb: (abs % U) + sz === U }); rel += sz; abs += sz; len -= sz; continue; }
       const sz = RPN.find(r => r <= len && rel % r === 0 && okSpan(abs, r)) || 3; out.push({ n: sz, type: RT[sz], dot: 0, tm: false }); rel += sz; abs += sz; len -= sz; } return out; };
     const measures = song.measures.map(m => ({ s: Math.round(m.startTick / ppq * U), l: Math.max(1, Math.round(m.lenTick / ppq * U)), num: m.num, den: m.den }));
     const staffNotes = { R: [], L: [] };

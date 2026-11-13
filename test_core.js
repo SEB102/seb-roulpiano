@@ -255,5 +255,18 @@ ${note('C', 3, 2, 5)}${note('E', 3, 2, 5)}${note('G', 3, 2, 5)}${note('C', 4, 2,
     const x = C.injectFingerings(s, n => ({ f: 0 })); assert.ok(/<per-minute>96</.test(x) && /<sound tempo="96/.test(x), 'tempo réglé : 96');
   });
 
+  await t('Sextolets : six doubles-croches par temps écrites comme telles (crochet), sans en inventer dans des doubles-croches régulières', async () => {
+    const vlq = v => { const o = [v & 0x7f]; while ((v >>= 7)) o.unshift((v & 0x7f) | 0x80); return o; };
+    const mk = pairs => { const ev = []; let last = 0; const add = (tk, b) => { ev.push(...vlq(tk - last), ...b); last = tk; }; add(0, [0xff, 0x51, 3, 0x07, 0xa1, 0x20]);
+      const evs = []; pairs.forEach(([st, d, p]) => { evs.push([st, [0x90, p, 80]], [st + d - 4, [0x80, p, 0]]); }); evs.sort((a, b) => a[0] - b[0]); evs.forEach(([tk, b]) => add(tk, b)); add(pairs[pairs.length - 1][0] + 480, [0xff, 0x2f, 0]);
+      const trk = [0x4d, 0x54, 0x72, 0x6b, 0, 0, (ev.length >> 8) & 255, ev.length & 255, ...ev]; return Buffer.from([0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0, ...trk]); };
+    const sex = []; for (let b = 0; b < 4; b++) for (let k = 0; k < 6; k++) sex.push([b * 480 + k * 80, 80, 60 + ((b * 6 + k) % 9)]);
+    const xs = C.injectFingerings(await C.loadSong('sex.mid', mk(sex)), n => ({ f: 0 }));
+    assert.strictEqual((xs.match(/<tuplet type="start"/g) || []).length, 4, 'un crochet par temps'); assert.strictEqual((xs.match(/<type>16th<\/type>/g) || []).length, 24, 'six doubles-croches par temps');
+    const s2 = await C.loadSong('x.musicxml', Buffer.from(xs)); assert.strictEqual(s2.notes.length, 24, 'notes conservées');
+    const bin = []; for (let i = 0; i < 32; i++) bin.push([i * 120, 120, 60 + (i % 7)]);
+    assert.ok(!/time-modification/.test(C.injectFingerings(await C.loadSong('bin.mid', mk(bin)), n => ({ f: 0 }))), 'pas de sextolet dans des doubles-croches régulières');
+  });
+
   console.log(`\n${n} tests passés`);
 })();
