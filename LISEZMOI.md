@@ -3,7 +3,7 @@
 En ligne : https://seb102.github.io/seb-roulpiano-tel/ — même moteur que SEB-ROULPIANO (lecture des partitions, rouleau, doigtés, écriture), interface pensée pour un téléphone tenu d'une main, en portrait.
 
 Ce qui change par rapport à SEB-ROULPIANO :
-- **Barre du bas** à gros boutons : ☰ Menu, ⏮ Début, ◀ ▶ mesure précédente / suivante, ▶ Lecture / ⏸ Pause, Vitesse (¼, ½, ¾, 1 à chaque toucher). En mode Écriture : ☰ Menu, ✏️ Crayon, Durée (change à chaque toucher), ↶ Annuler, 🗑 Supprimer, ▶ Écouter.
+- **Barre du bas** à gros boutons : ☰ Menu, ⏮ Début, ▶ Lecture / ⏸ Pause, curseur de vitesse (de ¼× à 1×). En mode Écriture : ☰ Menu, ✏️ Crayon, Durée (change à chaque toucher), ↶ Annuler, 🗑 Supprimer, ▶ Écouter.
 - **Menu** : le bandeau du haut devient une feuille qui monte du bas (☰), fermée par ✕ ou en touchant ailleurs ; boutons de 44 px au moins.
 - **Mes partitions** : chaque partition ouverte et chaque partition exportée est gardée dans le téléphone (liste en haut du menu, ✕ pour la retirer).
 - **Clavier** : plus bas (environ un quart de l'écran) ; touches **Grandes** d'emblée sur un petit écran (menu Zoom −/+ et ◀ ▶, aussi en écriture) ; 3 octaves en écriture.
