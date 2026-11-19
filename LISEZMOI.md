@@ -1,6 +1,6 @@
 # SEB-ROULPIANO TEL (version téléphone de SEB-ROULPIANO)
 
-En ligne : https://seb102.github.io/seb-roulpiano-tel/ — même moteur que SEB-ROULPIANO (lecture des partitions, rouleau, doigtés, écriture), interface pensée pour un téléphone tenu d'une main, en portrait.
+En ligne : https://seb102.github.io/seb-roulpiano/ — même moteur que SEB-ROULPIANO (lecture des partitions, rouleau, doigtés, écriture), interface pensée pour un téléphone tenu d'une main, en portrait.
 
 Ce qui change par rapport à SEB-ROULPIANO :
 - **Barre du bas** à gros boutons : ☰ Menu, ⏮ Début, ▶ Lecture / ⏸ Pause, curseur de vitesse (de ¼× à 1×). En mode Écriture : ☰ Menu, ✏️ Crayon, Durée (change à chaque toucher), ↶ Annuler, 🗑 Supprimer, ▶ Écouter.
@@ -18,7 +18,7 @@ Ce qui change par rapport à SEB-ROULPIANO :
 
 Deux façons de travailler : **▶ Pas à pas** décompose lentement le geste, un pas par note ou accord, pour anticiper à la fois le mouvement des doigts et le résultat sonore ; **▶ Lecture** (au départ) joue le morceau avec son rythme devant le rouleau de notes.
 
-En ligne : https://seb102.github.io/seb-roulpiano/ — ou en local : ouvrir `index.html` dans Chrome / Safari / Firefox (double-clic). aucune connexion requise : le piano (échantillons Salamander), Tone.js et Three.js sont fournis dans le dossier (`piano-samples.js`, `Tone.js`, `three.min.js`)
+En ligne : https://seb102.github.io/seb-roulpiano-tel/ — ou en local : ouvrir `index.html` dans Chrome / Safari / Firefox (double-clic). aucune connexion requise : le piano (échantillons Salamander), Tone.js et Three.js sont fournis dans le dossier (`piano-samples.js`, `Tone.js`, `three.min.js`)
 (échantillons de piano + Tone.js) ; sans connexion, un synthé de secours prend le relais.
 
 - **Fichiers** : .mid / .midi, .musicxml / .xml, .mxl (partition exportée de MuseScore, Finale, Sibelius…).
