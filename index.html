@@ -138,6 +138,8 @@
   #tSpdBox small { font-size:11px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
   #kz { top:40px; right:6px; } #kz button { min-width:44px; min-height:42px; font-size:16px; }
   button, select { touch-action:manipulation; }
+  #fpop, #gpop { flex-wrap:wrap; justify-content:center; max-width:calc(100vw - 12px); row-gap:6px; }   /* bulle des doigtés : sur un écran étroit, elle passe à la ligne au lieu de déborder */
+  #fpop button, #gpop button { min-height:40px; min-width:40px; }
 </style>
 <script src="Tone.js?v=b1756484"></script>   <!-- Tone.js 14.8.49 (licence MIT), copié dans le dossier : le son fonctionne sans Internet -->
 <script src="three.min.js?v=eb854986"></script>   <!-- Three.js r128 (licence MIT), copié dans le dossier : la vue 3D fonctionne sans Internet -->
