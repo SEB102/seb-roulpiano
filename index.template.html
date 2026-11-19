@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="SEB-ROULPIANO">
-<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0e1120">
 <title>SEB-ROULPIANO TEL</title>
 <style>
@@ -111,6 +111,7 @@
   #saveAsk button { font-size:15px; padding:9px 18px; }
   /* ===== Version téléphone : une main, en portrait ===== */
   footer { display:none; }
+  body { padding-top:env(safe-area-inset-top); padding-left:env(safe-area-inset-left); padding-right:env(safe-area-inset-right); }   /* plein écran : rien sous l'encoche ni la barre d'état */
   #hot { display:none !important; }
   header, body.writing header { position:fixed; top:auto; bottom:0; left:0; right:0; z-index:20; transform:translateY(102%); transition:transform .22s ease; max-height:80vh; overflow:auto; border-radius:16px 16px 0 0; border-top:1px solid var(--line); padding:10px 12px calc(18px + env(safe-area-inset-bottom)); box-shadow:0 -10px 30px rgba(0,0,0,.55); }
   header.open, body.writing header.open { transform:none; }
@@ -2031,6 +2032,10 @@ function telInit() {
     if (mem === null && typeof setKeyLevel === 'function') setKeyLevel(1);
     wRange = '3'; $('wRange').value = '3';
   }
+  // plein écran : au premier toucher (le navigateur l'exige), sauf si l'app est déjà installée sur l'écran d'accueil (elle s'ouvre alors sans barre du navigateur)
+  const installee = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true;
+  if (!installee) { const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (rq) { const go = () => { if (!(document.fullscreenElement || document.webkitFullscreenElement)) { try { const r = rq.call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) {} } removeEventListener('pointerup', go, true); }; addEventListener('pointerup', go, true); } }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // ---------- Démarrage ----------
