@@ -10,7 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="SEB-ROULPIANO">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="theme-color" content="#0e1120">
-<title>SEB-ROULPIANO TEL</title>
+<title>SEB-ROULPIANO</title>
 <style>
   :root { --bg:#0e1120; --panel:#171b30; --line:#2a3050; --text:#e8ebf7; --muted:#8d94b3;
           --R:#ff9a2e; --L:#3b9cff; --accent:#5b7cff; }
@@ -123,6 +123,9 @@
   #libList { display:flex; flex-direction:column; gap:6px; }
   #libList .it { display:flex; gap:6px; } #libList .it button:first-child { flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; }
   #credits { color:var(--muted); font-size:12px; text-align:center; padding-top:10px; } #credits a { color:#a9b6ff; }
+  #wdock { display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px; padding:8px 12px; background:var(--panel); border-top:1px solid var(--line); }
+  #wdock:empty { display:none; }
+  #wdock #wtools { display:flex; }
   #tb { display:flex; align-items:stretch; gap:6px; padding:6px 8px calc(6px + env(safe-area-inset-bottom)); background:var(--panel); border-top:1px solid var(--line); }
   #tb .grp2 { display:flex; gap:6px; flex:1; } #tb .grp2[hidden] { display:none; }
   #tb button { flex:1; min-height:54px; padding:0 2px; font-size:20px; border-radius:12px; touch-action:manipulation; line-height:1.05; }
@@ -283,11 +286,12 @@
   <div id="fpop"><button data-h="L" title="Main gauche (touche G)">M.G.</button><button data-h="R" title="Main droite (touche D)">M.D.</button><span class="sep"></span><span id="rake"></span><span id="nums"><button data-f="1">1</button><button data-f="2">2</button><button data-f="3">3</button><button data-f="4">4</button><button data-f="5">5</button></span><button data-f="0" title="Effacer le doigté">✕</button><span class="sep"></span><span class="sublab" title="Changement de doigt sur la touche tenue : le doigt de départ est remplacé par celui-ci en cours de note">puis</span><span id="nums2"><button data-s="1">1</button><button data-s="2">2</button><button data-s="3">3</button><button data-s="4">4</button><button data-s="5">5</button></span><button data-s="0" title="Pas de changement de doigt">✕</button></div>
   <div id="drop">Déposez un fichier .mid / .musicxml / .mxl / .mscz</div>
 </main>
+<div id="wdock"></div>
 <div id="tb">
   <div class="grp2" id="tbRead"><button id="tMenu" title="Réglages, partitions, mode Écriture">☰<small>Menu</small></button><button id="tRew" title="Retour au début">⏮<small>Début</small></button><button id="tPlay" class="big" title="Lecture / pause">▶<small>Lecture</small></button><label id="tSpdBox" title="Vitesse de lecture (¼× à 1×)"><input type="range" id="tSpdR" min="0.25" max="1" step="0.05" value="1" aria-label="Vitesse"><small id="tSpdV">×1</small></label></div>
   <div class="grp2" id="tbWrite" hidden><button id="wtMenu" title="Réglages, mesure, tonalité, export, mode Lecture">☰<small>Menu</small></button><button id="wtPen" title="Crayon : toucher le rouleau pose une note">✏️<small>Crayon</small></button><button id="wtDur" title="Durée des notes posées">♩<small>Noire</small></button><button id="wtUndo" title="Annuler">↶<small>Annuler</small></button><button id="wtDel" title="Supprimer la note sélectionnée">🗑<small>Suppr.</small></button><button id="wtPlay" class="big" title="Écouter depuis ici">▶<small>Écouter</small></button></div>
 </div>
-<footer>SEB-ROULPIANO TEL · Sébastien Gay · Octobre 2026 · <a href="MODE-D-EMPLOI.html" target="_blank" rel="noopener">Mode d'emploi</a> · <a href="https://github.com/SEB102/seb-roulpiano/blob/main/LICENSE" target="_blank" rel="noopener">Licence CC BY-NC 4.0</a><br>Piano : <a href="https://github.com/sfzinstruments/SalamanderGrandPiano" target="_blank" rel="noopener">Salamander Grand Piano V3</a> par Alexander Holm (<a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>)</footer>
+<footer>SEB-ROULPIANO · Sébastien Gay · Octobre 2026 · <a href="MODE-D-EMPLOI.html" target="_blank" rel="noopener">Mode d'emploi</a> · <a href="https://github.com/SEB102/seb-roulpiano/blob/main/LICENSE" target="_blank" rel="noopener">Licence CC BY-NC 4.0</a><br>Piano : <a href="https://github.com/sfzinstruments/SalamanderGrandPiano" target="_blank" rel="noopener">Salamander Grand Piano V3</a> par Alexander Holm (<a href="https://creativecommons.org/licenses/by/3.0/" target="_blank" rel="noopener">CC BY 3.0</a>)</footer>
 
 <script>
 'use strict';
@@ -1012,7 +1016,7 @@ function drawBand(c, W, H, k) {
   c.fillStyle = '#2a3050'; c.fillRect(0, H, W, 1);
   c.fillStyle = '#8d94b3'; c.font = '12px -apple-system, sans-serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
   if ('letterSpacing' in c) c.letterSpacing = '1.5px';
-  c.fillText('SEB-ROULPIANO TEL · Sébastien Gay · Octobre 2026 · Piano : Salamander Grand Piano V3, Alexander Holm (CC BY 3.0)', W / 2, H + BAND / 2 + 1);
+  c.fillText('SEB-ROULPIANO · Sébastien Gay · Octobre 2026 · Piano : Salamander Grand Piano V3, Alexander Holm (CC BY 3.0)', W / 2, H + BAND / 2 + 1);
   if ('letterSpacing' in c) c.letterSpacing = '0px';
   c.textBaseline = 'alphabetic';
 }
@@ -2013,7 +2017,13 @@ $('tSpdR').oninput = e => setSpeed(+e.target.value);
 $('wtPen').onclick = () => { wPen = !wPen; if (!wPen) wGhost = null; };
 $('wtDur').onclick = () => wSetDur(DUREES[(DUREES.indexOf(wDur) + 1) % DUREES.length]);
 $('wtUndo').onclick = () => wUndoRedo(false); $('wtDel').onclick = () => wDelete();
+function placeWTools() {   // grand écran (plus de 900 px) en écriture : le bandeau d'écriture reste affiché en bas, au-dessus de la barre ; sinon il est dans le menu ☰
+  const t = $('wtools'), dock = $('wdock'), dedans = writeOn && innerWidth > 900;
+  if (dedans && t.parentNode !== dock) dock.appendChild(t);
+  else if (!dedans && t.parentNode === dock) hdr.insertBefore(t, $('credits'));
+}
 function refreshTB() {
+  placeWTools();
   const r = $('tbRead'), w = $('tbWrite'); if (r.hidden !== writeOn) r.hidden = writeOn; if (w.hidden !== !writeOn) w.hidden = !writeOn;
   const pl = !stepMode && playing, lab = (b, big, sm) => { const h = big + '<small>' + sm + '</small>'; if (b.innerHTML !== h) b.innerHTML = h; };
   lab($('tPlay'), pl ? '⏸' : '▶', pl ? 'Pause' : 'Lecture'); lab($('wtPlay'), pl ? '⏸' : '▶', pl ? 'Pause' : 'Écouter');
@@ -2024,7 +2034,7 @@ function refreshTB() {
 }
 // « Mes partitions » : fichiers ouverts et partitions exportées, gardés dans le téléphone (IndexedDB)
 let libDb = null;
-function libOpen() { return libDb || (libDb = new Promise((ok, ko) => { try { const r = indexedDB.open('seb-roulpiano-tel', 1); r.onupgradeneeded = () => r.result.createObjectStore('partitions', { keyPath: 'name' }); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); } catch (e) { ko(e); } })); }
+function libOpen() { return libDb || (libDb = new Promise((ok, ko) => { try { const r = indexedDB.open('seb-roulpiano', 1); r.onupgradeneeded = () => r.result.createObjectStore('partitions', { keyPath: 'name' }); r.onsuccess = () => ok(r.result); r.onerror = () => ko(r.error); } catch (e) { ko(e); } })); }
 async function libTx(mode, f) { const db = await libOpen(); return new Promise((ok, ko) => { const tx = db.transaction('partitions', mode), st = tx.objectStore('partitions'), r = f(st); tx.oncomplete = () => ok(r && r.result); tx.onerror = () => ko(tx.error); }); }
 function libSave(name, buf) { libTx('readwrite', st => st.put({ name, data: buf, t: Date.now() })).then(() => { if (hdr.classList.contains('open')) libRender(); }).catch(() => {}); }
 async function libRender() {

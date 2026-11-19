@@ -1,24 +1,19 @@
-# SEB-ROULPIANO TEL (version téléphone de SEB-ROULPIANO)
-
-En ligne : https://seb102.github.io/seb-roulpiano/ — même moteur que SEB-ROULPIANO (lecture des partitions, rouleau, doigtés, écriture), interface pensée pour un téléphone tenu d'une main, en portrait.
-
-Ce qui change par rapport à SEB-ROULPIANO :
-- **Barre du bas** à gros boutons : ☰ Menu, ⏮ Début, ▶ Lecture / ⏸ Pause, curseur de vitesse (de ¼× à 1×). En mode Écriture : ☰ Menu, ✏️ Crayon, Durée (change à chaque toucher), ↶ Annuler, 🗑 Supprimer, ▶ Écouter.
-- **Menu** : le bandeau du haut devient une feuille qui monte du bas (☰), fermée par ✕ ou en touchant ailleurs ; boutons de 44 px au moins.
-- **Mes partitions** : chaque partition ouverte et chaque partition exportée est gardée dans le téléphone (liste en haut du menu, ✕ pour la retirer).
-- **Clavier** : plus bas (environ un quart de l'écran) ; touches **Grandes** d'emblée sur un petit écran (menu Zoom −/+ et ◀ ▶, aussi en écriture) ; 3 octaves en écriture.
-- **Écriture au doigt** : le crayon est allumé d'emblée (un toucher pose une note) ; l'éteindre pour faire défiler le rouleau en glissant.
-- **Export** : sur téléphone, la feuille de partage s'ouvre (« Enregistrer dans Fichiers », AirDrop, mail…).
-- **Installable et hors connexion** : « Partager › Sur l'écran d'accueil » (iPhone) ; après une première ouverture, l'app fonctionne sans réseau.
-- Le mode d'emploi (MODE-D-EMPLOI.html) est celui de la version ordinateur.
-
----
-
 # SEB-ROULPIANO (piano roll d'apprentissage et décomposition lente des gestes)
+
+En ligne : https://seb102.github.io/seb-roulpiano/ — pensée d'abord pour le **téléphone** (en portrait, tenu d'une main), utilisable aussi sur ordinateur.
+
+- **Barre du bas** à gros boutons : ☰ Menu, ⏮ Début, ▶ Lecture / ⏸ Pause, curseur de vitesse (de ¼× à 1×). En mode Écriture : ☰ Menu, ✏️ Crayon, Durée (change à chaque toucher), ↶ Annuler, 🗑 Supprimer, ▶ Écouter.
+- **Menu ☰** : une feuille qui monte du bas, fermée par ✕ ou en touchant ailleurs ; elle contient tous les réglages (Lecture / Écriture, ouverture d'une partition, tempo, mains, doigtés, vue 3D, export…) et **Mes partitions** (partitions ouvertes ou exportées, gardées dans l'appareil).
+- **Clavier** : environ un quart de l'écran sur téléphone ; touches **Grandes** d'emblée sur un petit écran (menu flottant Zoom −/+ et ◀ ▶) ; une seule main affichée = clavier cadré sur son empan.
+- **Écriture** : au doigt, le crayon est allumé d'emblée (un toucher pose une note) ; à la souris, Alt + clic. Sur un grand écran (plus de 900 px), le bandeau d'écriture reste affiché en bas.
+- **Export** : feuille de partage sur écran tactile (« Enregistrer dans Fichiers », AirDrop, mail…), téléchargement direct à la souris.
+- **Installable, plein écran et hors connexion** : « Partager › Sur l'écran d'accueil » (iPhone) ; plein écran au premier toucher sur Android ; après une première ouverture, l'app fonctionne sans réseau.
+
+## Détails
 
 Deux façons de travailler : **▶ Pas à pas** décompose lentement le geste, un pas par note ou accord, pour anticiper à la fois le mouvement des doigts et le résultat sonore ; **▶ Lecture** (au départ) joue le morceau avec son rythme devant le rouleau de notes.
 
-En ligne : https://seb102.github.io/seb-roulpiano-tel/ — ou en local : ouvrir `index.html` dans Chrome / Safari / Firefox (double-clic). aucune connexion requise : le piano (échantillons Salamander), Tone.js et Three.js sont fournis dans le dossier (`piano-samples.js`, `Tone.js`, `three.min.js`)
+En local : ouvrir `index.html` dans Chrome / Safari / Firefox (double-clic). aucune connexion requise : le piano (échantillons Salamander), Tone.js et Three.js sont fournis dans le dossier (`piano-samples.js`, `Tone.js`, `three.min.js`)
 (échantillons de piano + Tone.js) ; sans connexion, un synthé de secours prend le relais.
 
 - **Fichiers** : .mid / .midi, .musicxml / .xml, .mxl (partition exportée de MuseScore, Finale, Sibelius…).

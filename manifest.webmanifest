@@ -1,7 +1,7 @@
 {
-  "name": "SEB-ROULPIANO TEL",
+  "name": "SEB-ROULPIANO",
   "short_name": "Roulpiano",
-  "description": "Rouleau de piano d'apprentissage, version téléphone",
+  "description": "Rouleau de piano d'apprentissage",
   "start_url": "./index.html",
   "scope": "./",
   "display": "fullscreen",

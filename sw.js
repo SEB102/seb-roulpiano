@@ -1,6 +1,6 @@
 /* Hors connexion : chaque fichier de l'application est gardé au premier chargement.
    Réseau d'abord (les mises à jour arrivent tout de suite) ; sans réseau, la copie gardée est servie. */
-const CACHE = 'roulpiano-tel-v1';
+const CACHE = 'roulpiano-v2';
 self.addEventListener('install', e => { self.skipWaiting(); });
 self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
 self.addEventListener('fetch', e => {
