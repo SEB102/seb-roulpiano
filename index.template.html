@@ -815,7 +815,7 @@ const fingFileName = () => (song.title || 'morceau').replace(/\.(mid|midi|musicx
 const fingXml = () => PianoCore.injectFingerings(song.edited ? wExportSong() : song, n => ({ f: fof(n), f2: n.finger2 || 0, }));   // le fichier d'origine, avec les doigtés affichés (saisis, du fichier ou proposés)
 function downloadXml(xml, name) {
   libSave(name, new TextEncoder().encode(xml).buffer);   // gardée aussi dans « Mes partitions »
-  try { const file = new File([xml], name, { type: 'application/vnd.recordare.musicxml+xml' }); if (navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: name }).catch(() => {}); return; } } catch (e) {}   // téléphone : feuille de partage
+  try { const file = new File([xml], name, { type: 'application/vnd.recordare.musicxml+xml' }); if (matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) { navigator.share({ files: [file], title: name }).catch(() => {}); return; } } catch (e) {}   // écran tactile (téléphone, tablette) : feuille de partage ; à la souris : téléchargement direct
   const blob = new Blob([xml], { type: 'application/vnd.recordare.musicxml+xml' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
