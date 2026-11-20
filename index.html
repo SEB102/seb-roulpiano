@@ -116,6 +116,8 @@
   header, body.writing header { position:fixed; top:auto; bottom:0; left:0; right:0; z-index:20; transform:translateY(102%); transition:transform .22s ease; max-height:80vh; overflow:auto; border-radius:16px 16px 0 0; border-top:1px solid var(--line); padding:10px 12px calc(18px + env(safe-area-inset-bottom)); box-shadow:0 -10px 30px rgba(0,0,0,.55); }
   header.open, body.writing header.open { transform:none; }
   header button, header select, header input[type=number], header .btn { min-height:44px; font-size:16px; }
+  header .grp { flex-wrap:wrap; max-width:100%; }   /* les boutons passent à la ligne au lieu de déborder de l'écran */
+  header .seg { flex-wrap:wrap; max-width:100%; }
   #hmode { justify-content:space-between; }
   #sheetClose { min-width:52px; font-size:20px; }
   #lib { display:flex; flex-direction:column; gap:6px; padding:6px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); }
