@@ -421,11 +421,10 @@ function initSampler() {
   const embedded = window.SALAMANDER_SAMPLES;   // échantillons intégrés (piano-samples.js) : en ligne comme en local, rien n'est téléchargé ; à défaut, ils viennent du serveur de Tone.js
   const urls = embedded || { A0: 'A0.mp3', C8: 'C8.mp3' }; // échantillons Salamander : un tous les 3 demi-tons
   if (!embedded) for (let o = 1; o <= 7; o++) ['C', 'D#', 'F#', 'A'].forEach(n => { urls[n + o] = n.replace('#', 's') + o + '.mp3'; });
-  // Android : marge d'ordonnancement de 150 ms (le processeur lâche moins les notes quand l'écran travaille ; l'image la compense par audioLatency).
   // Contre les craquements : grands tampons audio (latencyHint « playback »), petite marge d'ordonnancement (50 ms au lieu de 100,
   // compensée par la synchro image) et limiteur en sortie pour que les accords et les notes qui se chevauchent ne saturent pas.
   // (après setContext, Tone.context et Tone.Destination restent ceux du contexte d'origine : toujours utiliser getContext() / getDestination())
-  try { Tone.setContext(new Tone.Context({ latencyHint: 'playback', lookAhead: /Android/i.test(navigator.userAgent) ? 0.15 : 0.05 })); } catch (e) {}
+  try { Tone.setContext(new Tone.Context({ latencyHint: 'playback', lookAhead: 0.05 })); } catch (e) {}
   const limiter = new Tone.Limiter(-3).toDestination();
   setSoundStatus('Piano : chargement des échantillons…');
   sampler = new Tone.Sampler({
