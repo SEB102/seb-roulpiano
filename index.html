@@ -434,7 +434,7 @@ function initSampler() {
   }).connect(limiter); sampler.volume.value = -4;
 }
 // Latence audio : tampon du navigateur + sortie matérielle (haut-parleurs, Bluetooth…) + réglage manuel « Synchro ».
-let syncMs = 0;
+let syncMs = /Android/i.test(navigator.userAgent) ? 150 : 0;   // Android : la latence audio annoncée est sous-estimée, le son arrive en retard sur l'image
 try { const v = parseInt(localStorage.getItem('seb-roulpiano-sync'), 10); if (isFinite(v)) syncMs = Math.max(-300, Math.min(1000, v)); } catch (e) {}
 function audioLatency() {
   try {
