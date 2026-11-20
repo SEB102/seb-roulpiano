@@ -232,6 +232,7 @@
     <button id="bHm" title="Mains plus petites (−)">mains −</button>
     <button id="bHp" title="Mains plus grandes (+)">mains +</button>
     <button id="bRoll" title="Afficher le rouleau de notes (R)">rouleau</button>
+    <button id="bEq" title="Touches égales : les touches blanches et noires ont la même largeur dans le rouleau. Éteint : proportions d'un vrai piano">touches égales</button>
   </div>
   <div class="row"><span class="lab" style="min-width:104px;font-weight:600">Doigtés</span>
     <div class="grp"><div id="fingMode" class="seg" role="group" aria-label="Affichage des doigtés" title="Pour saisir un doigté : cliquer sur une note."><span class="seglab">🖐</span><button data-m="off">Masquer les doigtés</button><button data-m="simple">Doigtés simples</button><button data-m="illus">Doigtés illustrés</button></div><button id="fingExp" title="Exporter la partition avec vos doigtés (fichier MusicXML : s'ouvre dans MuseScore, qui peut l'enregistrer en .mscz). Un fichier qui n'est pas déjà une partie de piano à deux portées (MIDI, plusieurs parties…) est réécrit sur deux portées à partir des notes (rythme approximatif)">⤓ partition</button></div>
@@ -337,7 +338,15 @@ setRange(21, 108);
 // Pour que les lignes mi|fa et si|do restent DROITES (même abscisse au fond et à l'avant), le fond est découpé par demi-octave :
 // do→mi : 5 colonnes sur 3 blanches (0,6 chacune) ; fa→si : 7 colonnes sur 4 blanches (4/7 chacune).
 const WIDX12 = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6], colU = m => { const o = Math.floor(m / 12), pc = m - o * 12; return 7 * o + (pc < 5 ? pc * 0.6 : 3 + (pc - 5) * 4 / 7); };
+// Deux affichages (bouton « touches égales ») : réaliste = blanches pleines, noires plus étroites à cheval sur la frontière ; égales = les 12 touches d'un octave ont la même largeur au fond.
+let keysEgales = true; try { const v = localStorage.getItem('amine-touches-egales'); if (v !== null) keysEgales = v === '1'; } catch (e) {}   // réglage d'origine : égales
 function keyRect(m, W) {   // colonne du fond (rouleau, noires)
+  if (!keysEgales) {
+    const ww = W / VIEW.n, o = VIEW.x0 * ww;
+    if (!isBlack(m)) return { x: whiteIdx[m] * ww - o, w: ww, black: false };
+    const bw = ww * 0.4;
+    return { x: (whiteIdx[m - 1] + 1) * ww - bw / 2 - o, w: bw, black: true };
+  }
   const ww = W / VIEW.n, w0 = isBlack(FIRST) ? FIRST + 1 : FIRST, c0 = 7 * Math.floor(w0 / 12) + WIDX12[w0 % 12] - whiteIdx[w0];
   const pc = m % 12;
   return { x: (colU(m) - c0 - VIEW.x0) * ww, w: (pc < 5 ? 0.6 : 4 / 7) * ww, black: isBlack(m) };
@@ -345,6 +354,7 @@ function keyRect(m, W) {   // colonne du fond (rouleau, noires)
 // abscisse des mains : une touche blanche vise le centre de son devant, une noire le centre de sa colonne (interpolation linéaire entre touches voisines)
 let handMap = null;
 function handU(u) {
+  if (!keysEgales) return u - (PianoHands.ux(FIRST) - 0.5);
   const key = FIRST + '/' + LAST;
   if (!handMap || handMap.key !== key) {
     const w0 = isBlack(FIRST) ? FIRST + 1 : FIRST, c0 = 7 * Math.floor(w0 / 12) + WIDX12[w0 % 12] - whiteIdx[w0], a = [], b = [];
@@ -1754,12 +1764,12 @@ const setT = (e, t) => { if (e.textContent !== t) e.textContent = t; };
 function refreshBar() {
   refreshTB();
   { const k = $('kz'), v = song && !view3dOn && rollVisible ? 'flex' : 'none'; if (k.style.display !== v) k.style.display = v; }   // menu flottant des touches : lecture 2D, rouleau affiché
-  ['bAnt', 'bPre', 'bM0', 'bM1', 'bM2', 'bZoom', 'bHm', 'bHp', 'bRoll'].forEach(id => { const b = $(id); if (b && b.disabled !== view3dOn) b.disabled = view3dOn; });   // grisés en vue 3D
+  ['bAnt', 'bPre', 'bM0', 'bM1', 'bM2', 'bZoom', 'bHm', 'bHp', 'bRoll', 'bEq'].forEach(id => { const b = $(id); if (b && b.disabled !== view3dOn) b.disabled = view3dOn; });   // grisés en vue 3D
   { const v = $('vis'); if (v && v.disabled !== view3dOn) v.disabled = view3dOn; }   // le nombre de mesures visibles n'a pas d'effet en 3D
   { const ill = document.querySelector('#fingMode button[data-m="illus"]'); if (ill) ill.style.display = view3dOn ? 'none' : ''; }   // pas de doigtés illustrés en 3D
   const on = (id, v) => $(id).classList.toggle('pressed', !!v);
   on('bLoop', loopOn); on('bRamp', rampOn); on('bPre', stepMode ? stepPre : preListen); on('bCount', countIn); on('bAnt', anticip); on('bM0', handsMode === 'off'); on('bM1', handsMode === 'traj'); on('bM2', handsMode === 'plain');
-  on('bZoom', zoomAuto); on('bRoll', rollVisible); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhL', showL); on('bhR', showR);
+  on('bZoom', zoomAuto); on('bRoll', rollVisible); on('bEq', keysEgales); on('bPanel', panelOpen); on('bKeep', keepOther); on('bhL', showL); on('bhR', showR);
   [['bs25', 0.25], ['bs50', 0.5], ['bs75', 0.75], ['bs100', 1]].forEach(([id, v]) => on(id, Math.abs(speed - v) < 1e-9));
   setT($('bPlay'), !stepMode && playing ? '⏸ Pause' : '▶ Lecture'); setT($('bScroll'), stepMode && stepAuto ? '⏸ Pause' : '▶ Pas à pas');
   setT($('bLoop'), loopRunning() ? '■ Arrêter la boucle' : '↻ Lecture en boucle'); on('bPlay', !stepMode && playing); on('bScroll', stepMode && stepAuto);
@@ -1771,7 +1781,7 @@ function refreshBar() {
   setT($('bInfo'), (song ? [stepMode ? 'un pas toutes les ' + (stepDuration() + stepPause()).toFixed(1).replace('.', ',') + ' s' : '', boucle].filter(Boolean).join('   |   ') : '') );
 }
 $('bPanel').onclick = togglePanel;
-$('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll;
+$('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll; $('bEq').onclick = () => { keysEgales = !keysEgales; try { localStorage.setItem('amine-touches-egales', keysEgales ? '1' : '0'); } catch (e) {} refreshBar(); };
 $('bRew').onclick = rewind; $('bPrev').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepPrev(); }; $('bNext').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepNext(); };   // un pas à la main = mode pas à pas
 $('bPlay').onclick = () => { unlockAudio(); if (playing && !stepMode) pause(); else { enterRoll(); play(); } };
 $('bScroll').onclick = () => { unlockAudio(); if (!stepMode) { if (playing) pause(); enterScroll(); } toggleStepAuto(); };
