@@ -138,7 +138,9 @@
   #tSpdBox input { width:100%; height:30px; margin:0; }
   #tSpdBox input::-webkit-slider-thumb { width:26px; height:26px; }
   #tSpdBox small { font-size:11px; color:var(--muted); text-align:center; font-variant-numeric:tabular-nums; }
-  #kz { top:40px; right:6px; } #kz button { min-width:44px; min-height:42px; font-size:16px; }
+  #kz { top:40px; right:6px; gap:3px; padding:3px 4px; border-radius:8px; } #kz button { min-width:34px; min-height:34px; padding:2px 6px; font-size:16px; }
+  #kz .kzsep { height:16px; }
+  @media (orientation:landscape) and (max-height:520px) { #kz { top:auto; bottom:6px; right:6px; } }   /* téléphone en paysage : la barre de zoom se range en bas à droite, sur le bas du clavier */
   button, select { touch-action:manipulation; }
   #fpop, #gpop { flex-wrap:wrap; justify-content:center; max-width:calc(100vw - 12px); row-gap:6px; }   /* bulle des doigtés : sur un écran étroit, elle passe à la ligne au lieu de déborder */
   #fpop button, #gpop button { min-height:40px; min-width:40px; }
@@ -284,7 +286,7 @@
 </header>
 <main>
   <canvas id="cv"></canvas>
-  <div id="kz" style="display:none"><button id="keyMinus" title="Touches moins grandes (zoom −)">Zoom −</button><button id="keyPlus" title="Touches plus grandes (zoom +) : 2 niveaux, Grandes puis Très grandes">Zoom +</button><span class="kzsep"></span><button id="keyL" title="Clavier vers la gauche (notes graves) : une octave">◀</button><button id="keyR" title="Clavier vers la droite (notes aiguës) : une octave">▶</button></div>
+  <div id="kz" style="display:none"><button id="keyMinus" title="Touches moins grandes (zoom −)">−</button><button id="keyPlus" title="Touches plus grandes (zoom +) : 2 niveaux, Grandes puis Très grandes">+</button><span class="kzsep"></span><button id="keyL" title="Clavier vers la gauche (notes graves) : une octave">◀</button><button id="keyR" title="Clavier vers la droite (notes aiguës) : une octave">▶</button></div>
   <div id="toast"></div>
   <div id="saveAsk" hidden role="dialog" aria-modal="true" aria-labelledby="saveAskT"><div class="box"><p id="saveAskT"><b>Voulez-vous enregistrer la partition avec vos doigtés ?</b></p><p class="sub" id="saveAskS">Vous avez modifié des doigtés sans exporter la partition : ils seront perdus si vous quittez la page.</p><div class="btns"><button id="saveNo">Non</button><button id="saveYes" class="primary">Oui, enregistrer</button></div></div></div>
   <div id="gpop"><span id="gcount"></span><span class="sep"></span><button data-gh="L" title="Affecter ces notes à la main gauche">M.G.</button><button data-gh="R" title="Affecter ces notes à la main droite">M.D.</button><button id="gcopy" title="Copier les doigtés de ces notes, puis cliquer sur la première note du passage où les coller">⎘ copier les doigtés</button><button id="gcancel" title="Annuler la sélection (Échap)">✕</button></div>
