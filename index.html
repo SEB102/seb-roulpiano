@@ -391,8 +391,8 @@ function noteSpan(m, W) {   // largeur utile d'une colonne pour une note rectang
 const hex2 = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const mixHex = (a, b, t) => { const x = hex2(a), y = hex2(b); return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')'; };
 const COL = {
-  R: { near: '#d85a00', far: '#ffd9a0', note: '#ffa800', noteB: '#d9690a', lit: '#ffe58f', key: '#ffb04d', keyB: '#ff8a1f' },
-  L: { near: '#0a3fc4', far: '#a8dcff', note: '#1fb2ff', noteB: '#1f66c9', lit: '#aee0ff', key: '#6bb2ff', keyB: '#3b86ee' },
+  R: { edge: '#9c3f00', near: '#d85a00', far: '#ffd9a0', note: '#ffa800', noteB: '#d9690a', lit: '#ffe58f', key: '#ffb04d', keyB: '#ff8a1f' },
+  L: { edge: '#05257a', near: '#0a3fc4', far: '#a8dcff', note: '#1fb2ff', noteB: '#1f66c9', lit: '#aee0ff', key: '#6bb2ff', keyB: '#3b86ee' },
 };
 
 // ---------- Son ----------
@@ -1151,7 +1151,7 @@ function scene(W, H, dpr) {
         ctx.fillStyle = mixHex(c.near, c.far, Math.max(0, Math.min(1, (n.tick - posTick) / winT)));   // en cours ou juste après : foncé (même couleur en passant la ligne du clavier) ; plus tard : de plus en plus clair
         rrect(x, y0, w, bottom - y0, 5); ctx.fill();
         ctx.restore();
-        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; rrect(x + .5, y0 + .5, w - 1, bottom - y0 - 1, 5); ctx.stroke();
+        ctx.lineWidth = 2; ctx.strokeStyle = c.edge; rrect(x + 1, y0 + 1, w - 2, bottom - y0 - 2, 5); ctx.stroke();   // contour coloré et plus épais
       }
     });
   });
