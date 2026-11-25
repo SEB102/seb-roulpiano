@@ -1135,17 +1135,17 @@ function scene(W, H, dpr) {
   const vis = [], vh = visibleHands();
   for (let i = lowerBoundTick(posTick - song.maxDur); i < song.notes.length && song.notes[i].tick < topTick; i++) {
     const n = song.notes[i];
-    if (n.tick + n.dur <= posTick) continue;
+    if (n.tick + durD(n) <= posTick) continue;   // le rouleau garde la durée écrite, même si la note est écourtée pour le son et le clavier
     if (!vh.includes(noteHand(n))) continue;   // une seule main affichée : on n'affiche rien de ce que joue l'autre (rouleau et clavier), même si on l'entend
     vis.push(n);
-    if (n.tick <= posTick && !(writeOn && !playing)) active.set(n.midi, n);   // en écriture à l'arrêt, rien n'est « en train de sonner »
+    if (n.tick <= posTick && n.tick + n.dur > posTick && !(writeOn && !playing)) active.set(n.midi, n);   // en écriture à l'arrêt, rien n'est « en train de sonner »
   }
   [false, true].forEach(blackPass => {
     vis.forEach(n => {
       const kr = keyRect(n.midi, W); if (kr.black !== blackPass) return;
       const c = COL[noteHand(n)];
       {   // notes rectangulaires : la hauteur donne la durée (sans nom de note)
-        const lit = n.tick <= posTick && !(writeOn && !playing), y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), sp0 = noteSpan(n.midi, W), x = sp0.x, w = sp0.w, bottom = y1 - 1.5;
+        const lit = n.tick <= posTick && !(writeOn && !playing), y1 = y(n.tick), y0 = Math.min(y(n.tick + durD(n)), y1 - 5), sp0 = noteSpan(n.midi, W), x = sp0.x, w = sp0.w, bottom = y1 - 1.5;
         ctx.save();
         ctx.shadowColor = c.note; ctx.shadowBlur = lit ? 16 : 9;   // halo lumineux autour de chaque barre
         ctx.fillStyle = mixHex(c.near, c.far, Math.max(0, Math.min(1, (n.tick - posTick) / winT)));   // en cours ou juste après : foncé (même couleur en passant la ligne du clavier) ; plus tard : de plus en plus clair
@@ -1161,7 +1161,7 @@ function scene(W, H, dpr) {
   // et sont de plus en plus estompées.
   for (let vi = vis.length - 1; vi >= 0; vi--) {
     const n = vis[vi];
-    const kr = keyRect(n.midi, W), kk = kr, y1 = y(n.tick), bottom = y1 - 1.5, y0 = Math.min(y(n.tick + n.dur), y1 - 5), x = noteSpan(n.midi, W).x, w = noteSpan(n.midi, W).w;
+    const kr = keyRect(n.midi, W), kk = kr, y1 = y(n.tick), bottom = y1 - 1.5, y0 = Math.min(y(n.tick + durD(n)), y1 - 5), x = noteSpan(n.midi, W).x, w = noteSpan(n.midi, W).w;
     const rec = { n, x, w, top: y0, bottom };
     const fo = fof(n);
     if (showFing && fo && rollVisible) {
@@ -1313,6 +1313,7 @@ function drawGestureTags(G, sp) {
 // ---------- Mains virtuelles ----------
 // Plan des deux mains (hands.js) : doigtés automatiques pour les notes sans doigté, puis trajectoire de la paume et des 5 doigts de chaque main.
 // Il dépend des doigtés, des mains et du tempo : on le recalcule (planDirty) quand l'un d'eux change.
+const durD = n => n.durO !== undefined ? n.durO : n.dur;   // durée écrite (affichage du rouleau) ; n.dur peut être écourtée pour les notes répétées (son, clavier, mains)
 function ensurePlan() {
   if (!planDirty || !song) return;
   if (writeOn && song.plan && !view3dOn && !showHands && !anticip) return;   // en écriture, le plan des mains et des doigts n'est pas recalculé à chaque note (sur une grosse partition : ~0,7 s de gel) ; il l'est en repassant en lecture
@@ -1585,7 +1586,8 @@ function drawKeyboard(W, top, kbH, active) {
     if (isBlack(m)) continue;
     const r = keyRect(m, W), f = frontRect(m, W), an = active.get(m), hand = an && noteHand(an), yS = top + bh;
     const gr = ctx.createLinearGradient(0, top, 0, top + kbH);
-    if (hand) { gr.addColorStop(0, COL[hand].key); gr.addColorStop(1, COL[hand].lit); } else { gr.addColorStop(0, '#f7f7f9'); gr.addColorStop(1, '#d9dbe3'); }
+    // touche enfoncée : même couleur que la note à son arrivée au clavier (foncée)
+    if (hand) { gr.addColorStop(0, COL[hand].near); gr.addColorStop(1, COL[hand].near); } else { gr.addColorStop(0, '#f7f7f9'); gr.addColorStop(1, '#d9dbe3'); }
     ctx.fillStyle = gr; ctx.beginPath();   // forme en L : fond étroit (colonne), devant large (une blanche)
     ctx.moveTo(r.x + .5, top + 2); ctx.lineTo(r.x + r.w - .5, top + 2); ctx.lineTo(r.x + r.w - .5, yS); ctx.lineTo(f.x + f.w - .5, yS); ctx.lineTo(f.x + f.w - .5, top + kbH - 1); ctx.lineTo(f.x + .5, top + kbH - 1); ctx.lineTo(f.x + .5, yS); ctx.lineTo(r.x + .5, yS); ctx.closePath(); ctx.fill();
     ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1; ctx.stroke();
@@ -1597,7 +1599,7 @@ function drawKeyboard(W, top, kbH, active) {
   for (let m = FIRST; m <= LAST; m++) {
     if (!isBlack(m)) continue;
     const r = keyRect(m, W), an = active.get(m), hand = an && noteHand(an);
-    ctx.fillStyle = hand ? COL[hand].keyB : '#15161f';
+    ctx.fillStyle = hand ? COL[hand].near : '#15161f';
     rrect(r.x, top + 2, r.w, bh, 3); ctx.fill();
     ctx.strokeStyle = '#000'; ctx.lineWidth = 1; ctx.stroke();
   }
