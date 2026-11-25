@@ -343,7 +343,7 @@ setRange(21, 108);
 // do→mi : 5 colonnes sur 3 blanches (0,6 chacune) ; fa→si : 7 colonnes sur 4 blanches (4/7 chacune).
 const WIDX12 = [0, 0, 1, 1, 2, 3, 3, 4, 4, 5, 5, 6], colU = m => { const o = Math.floor(m / 12), pc = m - o * 12; return 7 * o + (pc < 5 ? pc * 0.6 : 3 + (pc - 5) * 4 / 7); };
 // Deux affichages (bouton « touches égales ») : réaliste = blanches pleines, noires plus étroites à cheval sur la frontière ; égales = les 12 touches d'un octave ont la même largeur au fond.
-let keysEgales = true; try { const v = localStorage.getItem('amine-touches-egales'); if (v !== null) keysEgales = v === '1'; } catch (e) {}   // réglage d'origine : égales
+let keysEgales = true; try { const v = localStorage.getItem('roulpiano-touches-egales'); if (v !== null) keysEgales = v === '1'; } catch (e) {}   // réglage d'origine : égales
 function keyRect(m, W) {   // colonne du fond (rouleau, noires)
   if (!keysEgales) {
     const ww = W / VIEW.n, o = VIEW.x0 * ww;
@@ -1785,7 +1785,7 @@ function refreshBar() {
   setT($('bInfo'), (song ? [stepMode ? 'un pas toutes les ' + (stepDuration() + stepPause()).toFixed(1).replace('.', ',') + ' s' : '', boucle].filter(Boolean).join('   |   ') : '') );
 }
 $('bPanel').onclick = togglePanel;
-$('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll; $('bEq').onclick = () => { keysEgales = !keysEgales; try { localStorage.setItem('amine-touches-egales', keysEgales ? '1' : '0'); } catch (e) {} refreshBar(); };
+$('b3d').onclick = toggle3D; $('bRoll').onclick = toggleRoll; $('bEq').onclick = () => { keysEgales = !keysEgales; try { localStorage.setItem('roulpiano-touches-egales', keysEgales ? '1' : '0'); } catch (e) {} refreshBar(); };
 $('bRew').onclick = rewind; $('bPrev').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepPrev(); }; $('bNext').onclick = () => { unlockAudio(); if (!stepMode) toggleStep(); stepNext(); };   // un pas à la main = mode pas à pas
 $('bPlay').onclick = () => { unlockAudio(); if (playing && !stepMode) pause(); else { enterRoll(); play(); } };
 $('bScroll').onclick = () => { unlockAudio(); if (!stepMode) { if (playing) pause(); enterScroll(); } toggleStepAuto(); };
