@@ -1063,8 +1063,9 @@ function scene(W, H, dpr) {
   // les touches noires ont en plus une bande sombre de la largeur de la touche, les Do sont plus marqués
   const ww = W / VIEW.n;
   if (keyLanes) {   // second clavier : colonnes blanches pour les touches blanches, noires pour les noires
+    ctx.fillStyle = '#eef0f4'; ctx.fillRect(0, 0, W, rollH);   // fond blanc d'abord : les arrondis entre colonnes ne laissent plus filtrer le fond sombre (fines barres noires à droite de certaines touches noires)
     for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (!kr.black) { ctx.fillStyle = '#eef0f4'; ctx.fillRect(Math.round(kr.x), 0, Math.ceil(kr.w), rollH); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(kr.x), 0, 1, rollH); } }
-    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (kr.black) { ctx.fillStyle = '#c4c8d1'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); } }
+    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (kr.black) { ctx.fillStyle = '#c4c8d1'; ctx.fillRect(Math.round(kr.x), 0, Math.ceil(kr.w), rollH); } }
   } else {
   const ww = W / VIEW.n;
     for (let m = FIRST; m <= LAST; m++) {
@@ -1151,7 +1152,7 @@ function scene(W, H, dpr) {
         ctx.fillStyle = mixHex(c.near, c.far, Math.max(0, Math.min(1, (n.tick - posTick) / winT)));   // en cours ou juste après : foncé (même couleur en passant la ligne du clavier) ; plus tard : de plus en plus clair
         rrect(x, y0, w, bottom - y0, 5); ctx.fill();
         ctx.restore();
-        ctx.lineWidth = 2; ctx.strokeStyle = c.edge; rrect(x + 1, y0 + 1, w - 2, bottom - y0 - 2, 5); ctx.stroke();   // contour coloré et plus épais
+        const lw = w >= 10 ? 2 : w >= 6 ? 1 : 0.5; ctx.lineWidth = lw; ctx.strokeStyle = c.edge; rrect(x + lw / 2, y0 + lw / 2, w - lw, bottom - y0 - lw, 5); ctx.stroke();   // contour coloré, plus épais ; fin sur les colonnes étroites (sinon il recouvre toute la note : barre noire)
       }
     });
   });
