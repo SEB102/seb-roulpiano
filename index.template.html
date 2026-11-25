@@ -388,9 +388,11 @@ function noteSpan(m, W) {   // largeur utile d'une colonne pour une note rectang
 
 
 // ---------- Couleurs : main droite (M.D.) = orange, main gauche (M.G.) = bleu ; la main est celle du doigté, indépendamment des clés ----------
+const hex2 = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mixHex = (a, b, t) => { const x = hex2(a), y = hex2(b); return 'rgb(' + x.map((v, i) => Math.round(v + (y[i] - v) * t)).join(',') + ')'; };
 const COL = {
-  R: { note: '#ffa933', noteB: '#d9690a', lit: '#ffd08a', key: '#ffb04d', keyB: '#ff8a1f' },
-  L: { note: '#58b0ff', noteB: '#1f66c9', lit: '#a9d3ff', key: '#6bb2ff', keyB: '#3b86ee' },
+  R: { near: '#d85a00', far: '#ffd9a0', note: '#ffa800', noteB: '#d9690a', lit: '#ffe58f', key: '#ffb04d', keyB: '#ff8a1f' },
+  L: { near: '#0a3fc4', far: '#a8dcff', note: '#1fb2ff', noteB: '#1f66c9', lit: '#aee0ff', key: '#6bb2ff', keyB: '#3b86ee' },
 };
 
 // ---------- Son ----------
@@ -1061,8 +1063,8 @@ function scene(W, H, dpr) {
   // les touches noires ont en plus une bande sombre de la largeur de la touche, les Do sont plus marqués
   const ww = W / VIEW.n;
   if (keyLanes) {   // second clavier : colonnes blanches pour les touches blanches, noires pour les noires
-    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (!kr.black) { ctx.fillStyle = '#d9cdb1'; ctx.fillRect(Math.round(kr.x), 0, Math.ceil(kr.w), rollH); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(kr.x), 0, 1, rollH); } }
-    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (kr.black) { ctx.fillStyle = '#70747f'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); } }
+    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (!kr.black) { ctx.fillStyle = '#eef0f4'; ctx.fillRect(Math.round(kr.x), 0, Math.ceil(kr.w), rollH); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(Math.round(kr.x), 0, 1, rollH); } }
+    for (let m = FIRST; m <= LAST; m++) { const kr = keyRect(m, W); if (kr.black) { ctx.fillStyle = '#c4c8d1'; ctx.fillRect(Math.round(kr.x), 0, Math.round(kr.w), rollH); } }
   } else {
   const ww = W / VIEW.n;
     for (let m = FIRST; m <= LAST; m++) {
@@ -1145,8 +1147,8 @@ function scene(W, H, dpr) {
       {   // notes rectangulaires : la hauteur donne la durée (sans nom de note)
         const lit = n.tick <= posTick && !(writeOn && !playing), y1 = y(n.tick), y0 = Math.min(y(n.tick + n.dur), y1 - 5), sp0 = noteSpan(n.midi, W), x = sp0.x, w = sp0.w, bottom = y1 - 1.5;
         ctx.save();
-        if (lit) { ctx.shadowColor = c.note; ctx.shadowBlur = 16; }
-        ctx.fillStyle = lit ? c.lit : (c.note);
+        ctx.shadowColor = c.note; ctx.shadowBlur = lit ? 16 : 9;   // halo lumineux autour de chaque barre
+        ctx.fillStyle = mixHex(c.near, c.far, Math.max(0, Math.min(1, (n.tick - posTick) / winT)));   // en cours ou juste après : foncé (même couleur en passant la ligne du clavier) ; plus tard : de plus en plus clair
         rrect(x, y0, w, bottom - y0, 5); ctx.fill();
         ctx.restore();
         ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,.45)'; rrect(x + .5, y0 + .5, w - 1, bottom - y0 - 1, 5); ctx.stroke();
