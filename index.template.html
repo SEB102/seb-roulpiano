@@ -1677,14 +1677,15 @@ function finishExport() {
 $('export').onclick = () => (exp.active ? stopExport(true) : startExport());
 
 // ---------- Plein écran (toute la page : barre de réglages, rouleau, clavier, bandeau) ----------
+let fsQuitte = false;   // plein écran quitté volontairement avec le bouton : pas de retour automatique
 const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement || null;
 const fsOk = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
 function refreshFs() { $('fs').textContent = fsEl() ? '⛶ Quitter le plein écran' : '⛶ Plein écran'; }
 if (!fsOk) $('fs').style.display = 'none'; // ex. iPhone : pas d'API plein écran pour une page web
 $('fs').onclick = async () => {
   try {
-    if (fsEl()) await (document.exitFullscreen || document.webkitExitFullscreen).call(document);
-    else await (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement);
+    if (fsEl()) { fsQuitte = true; await (document.exitFullscreen || document.webkitExitFullscreen).call(document); }
+    else { fsQuitte = false; await (document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen).call(document.documentElement); }
   } catch (e) { showError('Plein écran refusé par le navigateur.'); }
 };
 document.addEventListener('fullscreenchange', refreshFs); document.addEventListener('webkitfullscreenchange', refreshFs);
@@ -2078,7 +2079,12 @@ function telInit() {
   // plein écran : au premier toucher (le navigateur l'exige), sauf si l'app est déjà installée sur l'écran d'accueil (elle s'ouvre alors sans barre du navigateur)
   const installee = matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches || navigator.standalone === true;
   if (!installee) { const el = document.documentElement, rq = el.requestFullscreen || el.webkitRequestFullscreen;
-    if (rq) { const go = () => { if (!(document.fullscreenElement || document.webkitFullscreenElement)) { try { const r = rq.call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) {} } removeEventListener('pointerup', go, true); }; addEventListener('pointerup', go, true); } }
+    if (rq) {
+      const entrer = () => { if (!fsEl()) { try { const r = rq.call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) {} } };
+      if (/Android/i.test(navigator.userAgent)) {   // Android : plein écran par défaut, et de nouveau au toucher suivant s'il a été quitté (sauf choix volontaire via le bouton)
+        const go = () => { if (!fsQuitte) entrer(); }; addEventListener('pointerup', go, true); addEventListener('touchend', go, true);
+      } else { const go = () => { entrer(); removeEventListener('pointerup', go, true); }; addEventListener('pointerup', go, true); }
+    } }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 // ---------- Démarrage ----------
